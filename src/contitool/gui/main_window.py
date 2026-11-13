@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
         lang = QHBoxLayout()
         lang.setSpacing(0)
         for code, pos in (("ru", "left"), ("zh", "middle"), ("en", "right")):
-            b = QPushButton(code.upper())
+            b = QPushButton("中文" if code == "zh" else code.upper())
             b.setObjectName("SegBtn")
             b.setProperty("pos", pos)
             b.setCheckable(True)

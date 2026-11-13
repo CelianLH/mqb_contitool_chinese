@@ -7,7 +7,7 @@ import os
 import types
 import weakref
 
-_LANG: str = "ru"
+_LANG: str = "zh"
 _LISTENERS: list[Callable[[str], None] | weakref.WeakMethod] = []
 
 
