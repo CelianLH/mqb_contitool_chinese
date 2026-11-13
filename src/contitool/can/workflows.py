@@ -24,9 +24,13 @@ from contitool.can.payloads import (
     BEACON_PAYLOAD,
     DFLASH_BLOCK_SIZE,
     DFLASH_ICUS_RESERVED_OFFSET,
+    EEPROM_M95640_READER_STUB,
     EXPECTED_BEACON_SHA256,
+    EXPECTED_EEPROM_READER_STUB_SHA256,
+    EXPECTED_OPBT_READER_STUB_SHA256,
     EXPECTED_RSA_PROBE_SHA256,
     LOADER_RESET_PAYLOAD,
+    OPBT_READER_STUB,
     RSA_PROBE_PAYLOAD,
     FBL_TESTER_SERIAL,
     STAGE1_OVERRUN,
@@ -62,7 +66,10 @@ from contitool.core.constants import (
     DFLASH_ADDR_START,
     DFLASH_SIZE,
     DFLASH_SWAP_NVM_OFF,
+    EEPROM_SIZE,
+    EXTRA_AREA_SIZE,
     FBL_PRESENCE_MAGIC,
+    OPBT_SIZE,
     UFLASH_ADDR_START,
     UFLASH_RSA_CMP_OFFSET,
     UFLASH_SIZE,
@@ -70,6 +77,12 @@ from contitool.core.constants import (
     ZDC_UDS_UPLOAD_MAP,
 )
 from contitool.core.frf import FrfImage, frf_ident_problems, frf_signature_problem
+from contitool.core.hw_extra import (
+    OPBT_EXTRA_AREA_OFFSET,
+    analyze_eeprom,
+    analyze_opbt,
+    is_plausible_opbt_bytes,
+)
 from contitool.core.patcher import (
     apply_dflash_swap_fecs,
     apply_engineering_patch,
@@ -79,6 +92,7 @@ from contitool.core.patcher import (
 from contitool.core.zdc import (
     MFL_KEYCODE_PRESETS,
     export_zdc_block,
+    parse_cflash_zdc_upload_map,
     parse_zdc_passport,
     sync_gateway_coding_for_zdc,
     zdc_crc32_le,
@@ -109,6 +123,9 @@ def _uninterruptible(fn):  # noqa: ANN001, ANN202
 
     return run
 FED_READS_PER_PAYLOAD = 16  # 64 KB per upload outside DataFlash; verified: full CodeFlash over a CANable2, 0 retries
+# On D-PDU VCIs (VAS 6154A / VNCI over TCP, #28) an unpaused 8,192-frame (2.6 s) burst lets PDUAPI_VW.dll's monitor
+# queue fall seconds behind past ~1 MB; 4 x 4 KB (16 KB = 2,048 frames, ~0.65 s) drains the queue cleanly between bursts.
+DPDU_FED_READS_PER_PAYLOAD = 4
 AREA_READ_RETRIES = 2
 SELFID_OFFSET = 0x0000AB00
 SELFID_SIZE = 16
@@ -158,9 +175,9 @@ def _consume_loader_end_frame(
     timeout: float = 1.5,
     label: str = "RAM-loader",
 ) -> bytes:
-    """Consume the mandatory 2-byte `00 00` status frame emitted by `0x0100120E` after every RAM applet."""
+    """Consume the mandatory exact 2-byte `00 00` status frame emitted by `0x0100120E` after every RAM applet."""
     resp = bytes(link.receive_frame(link.LOADER_RX_ID, timeout=timeout).data)
-    if resp[:2] != b"\x00\x00":
+    if resp != b"\x00\x00":
         raise RuntimeError(f"Unexpected {label} closing frame on 0x6F1: {resp.hex()}")
     return resp
 
@@ -228,6 +245,30 @@ def _hand_back_after_cancel(link: J533CanLink, reporter: OperationReporter) -> N
     """Cancelled outside a write (a read, a backup, before the first erase): do not leave the gateway in the
     RAM-loader with no application running. NULL_REPORTER: the user's cancel must not stop this reset too."""
     reporter.info(tr("Операция отменена — возвращаем шлюз в штатный режим", "Cancelled — returning the gateway to its application", "操作已取消——正在将网关恢复为其应用程序"))
+    with contextlib.suppress(*LINK_ERRORS):
+        _reset_to_application(link, allow_fbl=True)
+
+
+def _hand_back_after_read_error(
+    link: J533CanLink,
+    reporter: OperationReporter,
+    *,
+    active_loader: bool,
+    return_to_app: bool,
+) -> None:
+    """Read-only workflow failed after entering RAM-Loader (#28): return J533 to Application so vehicle CAN / fans recover."""
+    if not active_loader or not return_to_app:
+        return
+    reporter.info(
+        tr(
+            "Сбой чтения — возвращаем шлюз из RAM-Loader в штатный режим…",
+            "Read failed — returning gateway from RAM-Loader to Application mode…",
+        )
+    )
+    drain_quiet = getattr(link, "drain_until_quiet", None)
+    if callable(drain_quiet):
+        with contextlib.suppress(*LINK_ERRORS):
+            drain_quiet(link.LOADER_RX_ID, quiet_window=0.15, max_wait=2.5)
     with contextlib.suppress(*LINK_ERRORS):
         _reset_to_application(link, allow_fbl=True)
 
@@ -483,6 +524,40 @@ def _refuse_memory_via_j2534_wrapper(link: Any) -> None:
     bus = _j2534_wrapper_bus(link)
     if bus is not None:
         raise RuntimeError(_j2534_wrapper_problem(bus))
+    raw_bus = getattr(link, "bus", None)
+    nonraw = getattr(raw_bus, "nonraw", None)
+    if getattr(raw_bus, "uds_only", False) or (nonraw and 0x6F0 not in nonraw):
+        raise RuntimeError(tr(
+            "Этот адаптер D-PDU работает только по UDS ISO-TP (0x710/0x77A) и не даёт канал заводского RAM-Loader "
+            "(0x6F0/0x6F1): диагностика, прошивка FRF / ODX и запись параметрии по UDS доступны, а для чтения и "
+            "записи дампов памяти нужен CANable, candleLight или совместимый VAS 6154 / VNCI с raw CAN.",
+            "This D-PDU adapter works only over UDS ISO-TP (0x710/0x77A) and provides no factory RAM-Loader channel "
+            "(0x6F0/0x6F1): diagnostics, FRF / ODX flashing, and UDS dataset uploads work, while reading and writing "
+            "memory dumps requires CANable, candleLight, or a compatible VAS 6154 / VNCI with raw CAN.",
+        ))
+
+
+def _abort_if_unsupported_ecu(link: J533CanLink) -> None:
+    """When RAM-Loader entry gets an NRC (e.g. `7F 22 31` at Stage 1 on a 5Q0 or Lear gateway), probe standard VAG
+    identification DIDs so CLI and direct callers report the exact unsupported hardware instead of a bare NRC."""
+    ident: list[dict[str, str]] = []
+    for did, ru, en in ECU_IDENT_DIDS:
+        if did not in (0xF187, 0xF191, 0xF189, 0xF1A3, 0xF17C, 0xF19E):
+            continue
+        try:
+            raw = link.request_uds(bytes([0x22, did >> 8, did & 0xFF]), 0x62, timeout=0.6)[3:]
+        except LINK_ERRORS:
+            continue
+        text = raw.rstrip(b"\x00 ").decode("latin-1")
+        value = text.strip() if text and all(32 <= ord(ch) < 127 for ch in text) else raw.hex().upper()
+        ident.append({"did": f"{did:04X}", "label_ru": ru, "label_en": en, "value": value})
+    reason = unsupported_ecu_reason(ident) if ident else None
+    if reason:
+        try:
+            link.request_uds(b"\x11\x01", 0x51, timeout=0.5, resend=False)
+        except LINK_ERRORS:
+            pass
+        raise RuntimeError(reason)
 
 
 def enter_ram_loader(
@@ -498,6 +573,8 @@ def enter_ram_loader(
     except LINK_ERRORS as first_err:
         if isinstance(first_err, (FblKeyLockedError, Stage1SilentError)):
             raise  # a retry would only stage another entry: another key attempt, or the same silence
+        if isinstance(first_err, UdsNegativeResponse):
+            _abort_if_unsupported_ecu(link)
         if allow_already_active:
             try:
                 reporter.info(
@@ -546,18 +623,34 @@ def _stream_loader_read_payload(
     """Execute one reader RAM applet, collect `length` data bytes from 0x6F1, and consume closing `00 00`."""
     link.send_loader_payload(payload)
     data = bytearray()
+    frames = 0
+    suspend_trace = getattr(link, "suspend_rx_trace", contextlib.nullcontext)
+    write_summary = getattr(link, "write_stream_summary", None)
     deadline = time.monotonic() + max(10.0, length / 1000.0, frame_timeout + 1.0)
-    while len(data) < length and time.monotonic() < deadline:
-        try:
-            frame = link.receive_frame(link.LOADER_RX_ID, timeout=frame_timeout)
-        except TimeoutError:
-            if not data:
-                raise
-            # the ECU streams at full bus speed; an adapter that cannot keep up drops frames and the stream "stops"
-            raise TimeoutError(
-                f"Stream from 0x6F1 at 0x{address:08X} stopped after {len(data)}/{length} bytes (frames lost by the adapter?)"
-            ) from None
-        data.extend(bytes(frame.data))
+    with suspend_trace():
+        while len(data) < length and time.monotonic() < deadline:
+            try:
+                frame = link.receive_frame(link.LOADER_RX_ID, timeout=frame_timeout)
+            except TimeoutError:
+                if callable(write_summary):
+                    write_summary(address, length, len(data), frames)
+                if not data:
+                    raise
+                # the ECU streams at full bus speed; an adapter that cannot keep up drops frames and the stream "stops"
+                raise TimeoutError(
+                    f"Stream from 0x6F1 at 0x{address:08X} stopped after {len(data)}/{length} bytes (frames lost by the adapter?)"
+                ) from None
+            raw = bytes(frame.data)
+            frames += 1
+            if length - len(data) >= 8 and len(raw) != 8:
+                if callable(write_summary):
+                    write_summary(address, length, len(data), frames)
+                raise TimeoutError(
+                    f"Stream from 0x6F1 at 0x{address:08X} stopped after {len(data)}/{length} bytes (frames lost by the adapter?)"
+                )
+            data.extend(raw)
+    if callable(write_summary):
+        write_summary(address, length, len(data), frames)
     out = bytes(data[:length])
     if len(out) != length:
         raise RuntimeError(f"Short memory read at 0x{address:08X}: got {len(out)}/{length} bytes")
@@ -657,10 +750,17 @@ def read_memory_area(
     collected = bytearray()
     offset = 0
     in_dflash = start < DFLASH_ADDR_START + DFLASH_SIZE and end > DFLASH_ADDR_START
+    bus_obj = getattr(link, "bus", None)
+    is_dpdu_raw = (
+        getattr(link, "interface", "") == "dpdu"
+        and type(bus_obj).__name__ == "DPduBus"
+        and not getattr(bus_obj, "nonraw", None)
+    )
+    max_reads = DPDU_FED_READS_PER_PAYLOAD if is_dpdu_raw else FED_READS_PER_PAYLOAD
     while offset < total:
         reporter.check_cancelled()
         addr = start + offset
-        reads = 1 if in_dflash else min(FED_READS_PER_PAYLOAD, (total - offset) // READ_CHUNK_BYTES)
+        reads = 1 if in_dflash else min(max_reads, (total - offset) // READ_CHUNK_BYTES)
         size = reads * READ_CHUNK_BYTES
         for attempt in range(AREA_READ_RETRIES + 1):
             try:
@@ -687,6 +787,9 @@ def read_memory_area(
                 )
                 time.sleep(2.5)  # a 64 KB stream lasts ~2.1 s: let a broken one run out before the next sync
                 link.drain_rx(max_frames=100_000)
+                drain_quiet = getattr(link, "drain_until_quiet", None)
+                if callable(drain_quiet):
+                    drain_quiet(link.LOADER_RX_ID, quiet_window=0.15, max_wait=2.0)
         if len(chunk) != size:
             raise RuntimeError(f"Short chunk at 0x{addr:08X}: {len(chunk)}")
         with output_path.open("ab") as fh:
@@ -1251,11 +1354,160 @@ def can_verify(
             report["complete"] = True
             reporter.progress(100, 100)
             return report
+        except OperationCancelledError:
+            _hand_back_after_cancel(link, reporter)
+            raise
         except Exception as exc:
             report["error"] = str(exc)
+            _hand_back_after_read_error(
+                link,
+                reporter,
+                active_loader=bool(report.get("loader_session") or report.get("beacon")),
+                return_to_app=return_to_app,
+            )
             raise
         finally:
             _write_json(out_dir / "verification.json", report)
+
+
+def read_opbt_in_loader(
+    link: J533CanLink,
+    output_path: Path,
+    *,
+    reporter: OperationReporter = NULL_REPORTER,
+) -> dict[str, Any]:
+    """Read 36-byte RH850/F1L Option Bytes (`OPBT0..OPBT8 @ 0xFF300070..0xFF300093`) in active RAM-loader."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()
+
+    reporter.reset_stage_timer()
+    reporter.progress(0, OPBT_SIZE, unit="B", detail="Opbt.bin")
+    reporter.can_log(
+        tr(
+            "Чтение Extra Area / OPBT0..OPBT8 (0xFF300070..0xFF300093) через переключение BFASELR в RAM…",
+            "Reading Extra Area / OPBT0..OPBT8 (0xFF300070..0xFF300093) via RAM BFASELR switch…",
+        )
+    )
+    link.send_loader_payload(OPBT_READER_STUB, reporter=reporter)
+    _consume_loader_end_frame(link, timeout=5.0, label="OPBT reader")
+    hdr = read_memory_bytes(link, 0xFEDE9000, 512)
+    status = int.from_bytes(hdr[0:4], "little")
+    bfaselr_initial = int.from_bytes(hdr[4:8], "little")
+    bfaselr_final = int.from_bytes(hdr[8:12], "little")
+    if status != 1 or bfaselr_final != 0:
+        raise RuntimeError(
+            tr(
+                f"Апплет чтения OPBT вернул ошибку (status={status}, BFASELR={bfaselr_final})",
+                f"OPBT reader applet reported failure (status={status}, BFASELR={bfaselr_final})",
+            )
+        )
+
+    extra_area = hdr[0x100 : 0x100 + EXTRA_AREA_SIZE]
+    opbt_bytes = extra_area[OPBT_EXTRA_AREA_OFFSET : OPBT_EXTRA_AREA_OFFSET + OPBT_SIZE]
+    if not is_plausible_opbt_bytes(opbt_bytes):
+        raise RuntimeError(
+            tr(
+                f"Прочитанные слова OPBT не прошли проверку достоверности RH850/F1L (OPBT0=0x{int.from_bytes(opbt_bytes[:4], 'little'):08X})",
+                f"Read OPBT words failed RH850/F1L plausibility check (OPBT0=0x{int.from_bytes(opbt_bytes[:4], 'little'):08X})",
+            )
+        )
+
+    oinfo = analyze_opbt(opbt_bytes)
+    output_path.write_bytes(opbt_bytes)
+    sha = _digest(opbt_bytes)
+    reporter.progress(OPBT_SIZE, OPBT_SIZE, unit="B", detail="Opbt.bin")
+    reporter.success(
+        tr(
+            f"Opbt.bin: чтение завершено ({len(opbt_bytes)} Б, OPBT0=0x{oinfo.opbt0:08X}, "
+            f"OPBT8={'0x' + format(oinfo.opbt8, '08X') if oinfo.opbt8 is not None else '—'})",
+            f"Opbt.bin: read complete ({len(opbt_bytes)} B, OPBT0=0x{oinfo.opbt0:08X}, "
+            f"OPBT8={'0x' + format(oinfo.opbt8, '08X') if oinfo.opbt8 is not None else '—'})",
+        )
+    )
+    return {
+        "bytes": len(opbt_bytes),
+        "complete": True,
+        "sha256": sha,
+        "output_file": str(output_path),
+        "payload_sha256": EXPECTED_OPBT_READER_STUB_SHA256,
+        "opbt0": f"0x{oinfo.opbt0:08X}",
+        "opbt8": f"0x{oinfo.opbt8:08X}" if oinfo.opbt8 is not None else None,
+        "jtag_enabled": oinfo.jtag_enabled,
+        "icus_activated": oinfo.icus_activated,
+        "bfaselr_initial": bfaselr_initial,
+        "bfaselr_final": bfaselr_final,
+        "flash_commands_sent": False,
+    }
+
+
+def read_eeprom_in_loader(
+    link: J533CanLink,
+    output_path: Path,
+    *,
+    cflash_bytes: bytes | None = None,
+    reporter: OperationReporter = NULL_REPORTER,
+) -> dict[str, Any]:
+    """Read external 8 KB ST M95640 SPI EEPROM (`CSIH1` / `P10.11`) in active RAM-loader (strictly read-only)."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()
+
+    reporter.can_log(
+        tr(
+            "Запуск апплета чтения внешней SPI EEPROM ST M95640 (8 КБ, CSIH1 Mode 0, P10.11 CS#) в ОЗУ…",
+            "Running ST M95640 external SPI EEPROM reader applet (8 KB, CSIH1 Mode 0, P10.11 CS#) in RAM…",
+        )
+    )
+    link.send_loader_payload(EEPROM_M95640_READER_STUB, reporter=reporter)
+    _consume_loader_end_frame(link, timeout=8.0, label="M95640 EEPROM reader")
+    hdr = read_memory_bytes(link, 0xFEDE9000, 512)
+    status = int.from_bytes(hdr[0:4], "little")
+    rdsr_val = int.from_bytes(hdr[4:8], "little") & 0xFF
+    bytes_read = int.from_bytes(hdr[8:12], "little")
+    if status != 1 or bytes_read != EEPROM_SIZE:
+        raise RuntimeError(
+            tr(
+                f"Апплет чтения M95640 по шине CSIH1 завершился с ошибкой (status={status}, прочитано={bytes_read} Б)",
+                f"CSIH1 M95640 reader applet failed (status={status}, bytes_read={bytes_read} B)",
+            )
+        )
+
+    area_res = read_memory_area(
+        link,
+        0xFEDEA000,
+        0xFEDEA000 + EEPROM_SIZE,
+        output_path,
+        label=output_path.name,
+        reporter=reporter,
+    )
+    ee_bytes = output_path.read_bytes()
+    if ee_bytes == b"\x00" * EEPROM_SIZE:
+        output_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            tr(
+                "Линия MISO внешней EEPROM M95640 вернула только 0x00 (микросхема не отвечает по SPI)",
+                "M95640 external EEPROM MISO line returned all 0x00 bytes (SPI device did not respond)",
+            )
+        )
+
+    einfo = analyze_eeprom(ee_bytes, cflash_bytes, rdsr=rdsr_val)
+    port10_restored = hdr[0x100:0x128] == hdr[0x180:0x1A8]
+    return {
+        "bytes": len(ee_bytes),
+        "complete": True,
+        "sha256": area_res["sha256"],
+        "output_file": str(output_path),
+        "payload_sha256": EXPECTED_EEPROM_READER_STUB_SHA256,
+        "rdsr": f"0x{rdsr_val:02X}",
+        "part_number": einfo.part_number,
+        "sw_version": einfo.sw_version,
+        "crc_ok_count": einfo.crc_ok_count,
+        "crc_bad_count": einfo.crc_bad_count,
+        "learned_cp_mask": f"0x{einfo.learned_cp_mask:03X}" if einfo.learned_cp_mask is not None else None,
+        "port10_restored": port10_restored,
+        "flash_commands_sent": False,
+    }
 
 
 def can_backup(
@@ -1264,24 +1516,34 @@ def can_backup(
     interface: str = "slcan",
     session_dir: Path | None = None,
     areas: tuple[str, ...] = ("cflash", "uflash", "dflash"),
+    include_extras: bool | None = None,
     no_enter: bool = False,
     return_to_app: bool = True,
     reporter: OperationReporter = NULL_REPORTER,
 ) -> dict[str, Any]:
-    """Read full Cflash (1.5 MB), Uflash (32 KB), and Dflash (64 KB) over CAN into `session_dir`."""
+    """Read full Cflash (1.5 MB), Uflash (32 KB), Dflash (64 KB), plus optional external M95640 EEPROM & OPBT."""
     verify_payload_self_tests()
     out_dir = session_dir or default_session_dir(None, "backup")
     out_dir.mkdir(parents=True, exist_ok=True)
-    area_map: dict[str, tuple[str, int, int]] = {
+    flash_area_map: dict[str, tuple[str, int, int]] = {
         "cflash": ("Cflash.bin", CFLASH_ADDR_START, CFLASH_ADDR_START + CFLASH_SIZE),
         "uflash": ("Uflash.bin", UFLASH_ADDR_START, UFLASH_ADDR_START + UFLASH_SIZE),
         "dflash": ("Dflash.bin", DFLASH_ADDR_START, DFLASH_ADDR_START + DFLASH_SIZE),
     }
+    extra_names = {"opbt": "Opbt.bin", "eeprom": "Eeprom.bin"}
     selected = [a.lower() for a in areas]
     for a in selected:
-        if a not in area_map:
+        if a not in flash_area_map and a not in extra_names:
             raise ValueError(f"Unknown backup area: {a}")
 
+    if include_extras is None:
+        include_extras = set(selected) == {"cflash", "uflash", "dflash"}
+    if include_extras:
+        for extra_key in ("opbt", "eeprom"):
+            if extra_key not in selected:
+                selected.append(extra_key)
+
+    has_core_flash = any(a in flash_area_map for a in selected)
     total_steps = 1 + len(selected) + (1 if return_to_app else 0)
     manifest: dict[str, Any] = {
         "complete": False,
@@ -1298,32 +1560,85 @@ def can_backup(
                 reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)", "正在检查活动的 RAM-Loader (0x6F0)"))
                 manifest["beacon"] = _probe_beacon_in_loader(link, reporter)
 
+            cflash_cache: bytes | None = None
             for idx, area_key in enumerate(selected, start=2):
-                fname, start_addr, end_addr = area_map[area_key]
-                size_kb = (end_addr - start_addr) // 1024
-                reporter.step(
-                    idx,
-                    total_steps,
-                    tr(
-                        f"Чтение {fname} ({size_kb:,} КБ: 0x{start_addr:08X}..0x{end_addr - 1:08X})",
-                        f"Reading {fname} ({size_kb:,} KB: 0x{start_addr:08X}..0x{end_addr - 1:08X})",
-                        f"正在读取 {fname} ({size_kb:,} KB：0x{start_addr:08X}..0x{end_addr - 1:08X})",
-                    ),
-                )
-                file_path = out_dir / fname
-                res = read_memory_area(
-                    link,
-                    start_addr,
-                    end_addr,
-                    file_path,
-                    label=fname,
-                    reporter=reporter,
-                )
-                manifest["areas"][area_key] = res
+                if area_key in flash_area_map:
+                    fname, start_addr, end_addr = flash_area_map[area_key]
+                    size_kb = (end_addr - start_addr) // 1024
+                    reporter.step(
+                        idx,
+                        total_steps,
+                        tr(
+                            f"Чтение {fname} ({size_kb:,} КБ: 0x{start_addr:08X}..0x{end_addr - 1:08X})",
+                            f"Reading {fname} ({size_kb:,} KB: 0x{start_addr:08X}..0x{end_addr - 1:08X})",
+                            f"正在读取 {fname} ({size_kb:,} KB：0x{start_addr:08X}..0x{end_addr - 1:08X})",
+                        ),
+                    )
+                    file_path = out_dir / fname
+                    res = read_memory_area(
+                        link,
+                        start_addr,
+                        end_addr,
+                        file_path,
+                        label=fname,
+                        reporter=reporter,
+                    )
+                    manifest["areas"][area_key] = res
+                    if area_key == "cflash":
+                        cflash_cache = file_path.read_bytes()
+                    continue
 
-            if "cflash" in manifest["areas"]:
-                cf_info = analyze_cflash((out_dir / "Cflash.bin").read_bytes())
+                fname = extra_names[area_key]
+                file_path = out_dir / fname
+                step_title = (
+                    tr("Чтение Opbt.bin (36 Б: OPBT0..OPBT8 @ 0xFF300070)", "Reading Opbt.bin (36 B: OPBT0..OPBT8 @ 0xFF300070)")
+                    if area_key == "opbt"
+                    else tr("Чтение внешней EEPROM M95640 (8 КБ по SPI CSIH1)", "Reading external M95640 EEPROM (8 KB via SPI CSIH1)")
+                )
+                reporter.step(idx, total_steps, step_title)
+                try:
+                    if area_key == "opbt":
+                        res = read_opbt_in_loader(link, file_path, reporter=reporter)
+                    else:
+                        res = read_eeprom_in_loader(link, file_path, cflash_bytes=cflash_cache, reporter=reporter)
+                    manifest["areas"][area_key] = res
+                except OperationCancelledError:
+                    raise
+                except Exception as exc:
+                    file_path.unlink(missing_ok=True)
+                    if not has_core_flash and not manifest["areas"] and area_key == selected[-1]:
+                        raise
+                    time.sleep(0.2)
+                    with contextlib.suppress(*LINK_ERRORS):
+                        link.drain_rx(max_frames=100_000)
+                    warn_msg = (
+                        tr(
+                            f"ContiTool не смог прочитать OPBT (опционные байты RH850): {exc}. Основной бэкап продолжен.",
+                            f"ContiTool could not read OPBT (RH850 Option Bytes): {exc}. Main backup continues.",
+                        )
+                        if area_key == "opbt"
+                        else tr(
+                            f"ContiTool не смог прочитать внешнюю EEPROM M95640: {exc}. Основной бэкап продолжен.",
+                            f"ContiTool could not read external M95640 EEPROM: {exc}. Main backup continues.",
+                        )
+                    )
+                    reporter.warning(warn_msg)
+                    manifest.setdefault("warnings", []).append(warn_msg)
+                    manifest.setdefault("area_warnings", {})[area_key] = warn_msg
+                    manifest["areas"][area_key] = {
+                        "complete": False,
+                        "optional": True,
+                        "error": str(exc),
+                        "flash_commands_sent": False,
+                    }
+
+            if "cflash" in manifest["areas"] and manifest["areas"]["cflash"].get("complete"):
+                cf_raw = cflash_cache if cflash_cache is not None else (out_dir / "Cflash.bin").read_bytes()
+                cf_info = analyze_cflash(cf_raw)
                 manifest["gateway_identity"] = {
+                    "sw_pn": cf_info.sw_pn,
+                    "sw_ver": cf_info.sw_ver,
+                    "system_name": cf_info.system_name,
                     "hw_pn": cf_info.hw_pn,
                     "hw_ver": cf_info.hw_ver,
                     "fazit": cf_info.fazit,
@@ -1350,9 +1665,135 @@ def can_backup(
             raise
         except Exception as exc:
             manifest["error"] = str(exc)
+            _hand_back_after_read_error(
+                link,
+                reporter,
+                active_loader=bool(manifest.get("loader_session") or manifest.get("beacon")),
+                return_to_app=return_to_app,
+            )
             raise
         finally:
             _write_json(out_dir / "manifest.json", manifest)
+
+
+def can_read_opbt(
+    port: str,
+    output_file: Path,
+    *,
+    interface: str = "slcan",
+    session_dir: Path | None = None,
+    no_enter: bool = False,
+    return_to_app: bool = True,
+    reporter: OperationReporter = NULL_REPORTER,
+) -> dict[str, Any]:
+    """Standalone read-only dump of 36-byte RH850 Option Bytes (`OPBT0..OPBT8`) over Diagnosis CAN."""
+    verify_payload_self_tests()
+    out_dir = session_dir or default_session_dir(None, "read_opbt")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    total_steps = 3 if return_to_app else 2
+    report: dict[str, Any] = {
+        "complete": False,
+        "session_dir": str(out_dir),
+        "output_file": str(output_file),
+        "flash_commands_sent": False,
+    }
+    with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
+        try:
+            if not no_enter:
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение OPBT)", "Entering factory RAM-Loader over CAN (OPBT read)"))
+                report["loader_session"] = enter_ram_loader(link, reporter=reporter)
+            else:
+                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)"))
+                report["beacon"] = _probe_beacon_in_loader(link, reporter)
+
+            reporter.step(2, total_steps, tr("Чтение опционных байтов OPBT0..OPBT8 (36 Б)", "Reading Option Bytes OPBT0..OPBT8 (36 B)"))
+            report["opbt"] = read_opbt_in_loader(link, output_file, reporter=reporter)
+
+            if return_to_app:
+                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)"))
+                report["return_to_app"] = _return_to_application(link, report.get("loader_session"), reporter=reporter)
+
+            report["complete"] = True
+            reporter.progress(100, 100)
+            return report
+        except OperationCancelledError:
+            _hand_back_after_cancel(link, reporter)
+            raise
+        except Exception as exc:
+            report["error"] = str(exc)
+            _hand_back_after_read_error(
+                link,
+                reporter,
+                active_loader=bool(report.get("loader_session") or report.get("beacon")),
+                return_to_app=return_to_app,
+            )
+            raise
+        finally:
+            _write_json(out_dir / "read_opbt.json", report)
+
+
+def can_read_eeprom(
+    port: str,
+    output_file: Path,
+    *,
+    interface: str = "slcan",
+    session_dir: Path | None = None,
+    cflash_bytes: bytes | None = None,
+    no_enter: bool = False,
+    return_to_app: bool = True,
+    reporter: OperationReporter = NULL_REPORTER,
+) -> dict[str, Any]:
+    """Standalone read-only dump of external 8 KB ST M95640 SPI EEPROM over Diagnosis CAN."""
+    verify_payload_self_tests()
+    out_dir = session_dir or default_session_dir(None, "read_eeprom")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    total_steps = 3 if return_to_app else 2
+    report: dict[str, Any] = {
+        "complete": False,
+        "session_dir": str(out_dir),
+        "output_file": str(output_file),
+        "flash_commands_sent": False,
+    }
+    with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
+        try:
+            if not no_enter:
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение M95640 EEPROM)", "Entering factory RAM-Loader over CAN (M95640 EEPROM read)"))
+                report["loader_session"] = enter_ram_loader(link, reporter=reporter)
+            else:
+                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)"))
+                report["beacon"] = _probe_beacon_in_loader(link, reporter)
+
+            reporter.step(2, total_steps, tr("Чтение внешней SPI EEPROM ST M95640 (8 КБ)", "Reading external ST M95640 SPI EEPROM (8 KB)"))
+            report["eeprom"] = read_eeprom_in_loader(
+                link,
+                output_file,
+                cflash_bytes=cflash_bytes,
+                reporter=reporter,
+            )
+
+            if return_to_app:
+                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)"))
+                report["return_to_app"] = _return_to_application(link, report.get("loader_session"), reporter=reporter)
+
+            report["complete"] = True
+            reporter.progress(100, 100)
+            return report
+        except OperationCancelledError:
+            _hand_back_after_cancel(link, reporter)
+            raise
+        except Exception as exc:
+            report["error"] = str(exc)
+            _hand_back_after_read_error(
+                link,
+                reporter,
+                active_loader=bool(report.get("loader_session") or report.get("beacon")),
+                return_to_app=return_to_app,
+            )
+            raise
+        finally:
+            _write_json(out_dir / "read_eeprom.json", report)
 
 
 def can_read_memory(
@@ -1444,6 +1885,12 @@ def can_read_memory(
             raise
         except Exception as exc:
             report["error"] = str(exc)
+            _hand_back_after_read_error(
+                link,
+                reporter,
+                active_loader=bool(report.get("loader_session") or report.get("beacon")),
+                return_to_app=return_to_app,
+            )
             raise
         finally:
             _write_json(out_dir / "read_mem_result.json", report)
@@ -2085,8 +2532,9 @@ def _bcd_byte(val: int) -> int:
 
 def _dpdu_frame_by_frame(link: Any) -> bool:
     """A VAS 6154 / VNCI link that would send UDS frame by frame (no hardware ISO-TP, or it has given way)."""
-    on_dpdu = getattr(link, "interface", "") == "dpdu" or type(getattr(link, "bus", None)).__name__ == "DPduBus"
-    return on_dpdu and not getattr(link, "_hw_uds", False)
+    bus = getattr(link, "bus", None)
+    on_dpdu = getattr(link, "interface", "") == "dpdu" or type(bus).__name__ == "DPduBus"
+    return on_dpdu and not (getattr(link, "_hw_uds", False) or getattr(bus, "uds_only", False))
 
 
 def _uds_session(link: Any) -> Any:
@@ -3037,7 +3485,7 @@ def can_flash_frf(
     out_dir = session_dir or default_session_dir(None, "frf")
     result: dict[str, Any] = {"session_dir": str(out_dir), "frf": frf.name, "frf_version": frf.sw_version}
     try:
-        with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
+        with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link, _uds_session(link):
             reporter.step(1, 3, tr("Идентификация блока (F187 / F189 / F191 / F1A3)", "Identifying the ECU (F187 / F189 / F191 / F1A3)", "正在识别模块 (F187 / F189 / F191 / F1A3)"))
             result["before"] = ecu = _read_ident_dids(link)
             hard, soft = frf_ident_problems(frf, ecu)
@@ -3061,7 +3509,7 @@ def can_flash_frf(
                     "程序中——请通过「写回备份…」（本模块的 CodeFlash）恢复，或刷写匹配的 FRF / ODX。",
                 )) from exc
         time.sleep(3.0)  # the reset that ends the programming
-        with J533CanLink(port, interface=interface, log_path=out_dir / "after.jsonl") as link:
+        with J533CanLink(port, interface=interface, log_path=out_dir / "after.jsonl") as link, _uds_session(link):
             reporter.step(3, 3, tr("Проверка: приложение запущено, новая версия", "Checking: application running, new version", "正在检查：应用程序已运行、版本为新版本"))
             _s, in_fbl = _probe_app_or_fbl(link, attempts=5, allow_fbl=True)
             if in_fbl:
@@ -3328,6 +3776,7 @@ def can_upload_zdc_datasets(
     dflash_bytes: bytes,
     *,
     blocks: tuple[int, ...] | list[int] | None = None,
+    cflash_bytes: bytes | None = None,
     write_passport: bool = True,
     reset_after: bool = True,
     interface: str = "slcan",
@@ -3341,18 +3790,45 @@ def can_upload_zdc_datasets(
     validate_dflash_bytes(dflash_bytes)
     spec_names = {s[0]: s[1] for s in ZDC_DATASET_SPECS}
     cand_blocks = [0, 1, 2, 3, 4, 5, 6] if blocks is None else sorted({int(b) for b in blocks})
+    fw_map = parse_cflash_zdc_upload_map(cflash_bytes)
 
     to_upload: list[tuple[int, str, int, int, bytes]] = []
     for idx in cand_blocks:
         if idx not in ZDC_UDS_UPLOAD_MAP:
             raise ValueError(f"Unsupported ZDC block index: {idx}")
-        uds_addr, uds_len = ZDC_UDS_UPLOAD_MAP[idx]
-        payload = export_zdc_block(dflash_bytes, idx)
-        if all(b == 0xFF for b in payload):
-            continue
+        code_name = spec_names.get(idx, f"ZDC{idx}")
+        if idx in fw_map:
+            uds_addr, uds_len, enabled, df_off, _df_alloc = fw_map[idx]
+            payload = bytes(dflash_bytes[df_off : df_off + uds_len])
+            if all(b == 0xFF for b in payload):
+                continue
+            if not enabled:
+                raise RuntimeError(
+                    tr(
+                        f"Прошивка этого шлюза не разрешает загрузку ZDC #{idx} ({code_name}) по UDS. "
+                        "Используйте «Записать DataFlash целиком…».",
+                        f"This gateway's firmware disables UDS download for ZDC #{idx} ({code_name}). "
+                        "Use “Write the whole DataFlash…” instead.",
+                    )
+                )
+        else:
+            uds_addr, uds_len = ZDC_UDS_UPLOAD_MAP[idx]
+            payload = export_zdc_block(dflash_bytes, idx)
+            if all(b == 0xFF for b in payload):
+                continue
         crc_st = int.from_bytes(payload[-4:], "little")
         crc_ca = zdc_crc32_le(payload[:-4])
         if crc_st != crc_ca:
+            full_pay = export_zdc_block(dflash_bytes, idx)
+            if len(full_pay) != len(payload) and int.from_bytes(full_pay[-4:], "little") == zdc_crc32_le(full_pay[:-4]):
+                raise RuntimeError(
+                    tr(
+                        f"Прошивка этого шлюза принимает ZDC #{idx} ({code_name}) по UDS длиной {uds_len} Б, "
+                        f"а блок в DataFlash собран под формат {len(full_pay)} Б. Запишите DataFlash через RAM-Loader.",
+                        f"This gateway's firmware expects a {uds_len}-byte UDS image for ZDC #{idx} ({code_name}), "
+                        f"whereas DataFlash holds a {len(full_pay)}-byte block. Write DataFlash via RAM-Loader instead.",
+                    )
+                )
             raise ValueError(
                 tr(
                     f"Блок ZDC #{idx} ({spec_names.get(idx, '')}) имеет неверный CRC-32 (0x{crc_st:08X} != 0x{crc_ca:08X}).",
@@ -3360,7 +3836,7 @@ def can_upload_zdc_datasets(
                     f"ZDC 块 #{idx} ({spec_names.get(idx, '')}) 的 CRC-32 无效 (0x{crc_st:08X} != 0x{crc_ca:08X})。",
                 )
             )
-        to_upload.append((idx, spec_names.get(idx, f"ZDC{idx}"), uds_addr, uds_len, payload))
+        to_upload.append((idx, code_name, uds_addr, uds_len, payload))
 
     if not to_upload:
         raise ValueError(
@@ -3403,7 +3879,23 @@ def can_upload_zdc_datasets(
                     ),
                 )
                 req34 = b"\x34\x00\x44" + uds_addr.to_bytes(4, "big") + uds_len.to_bytes(4, "big")
-                dl_resp = link.request_uds(req34, 0x74, timeout=3.0, allow_pending=True)
+                try:
+                    dl_resp = link.request_uds(req34, 0x74, timeout=3.0, allow_pending=True)
+                except UdsNegativeResponse as exc:
+                    if exc.sid == 0x34 and exc.nrc in (0x31, 0x70):
+                        raise RuntimeError(
+                            tr(
+                                f"Прошивка этого шлюза отклонила загрузку ZDC #{idx} ({code}, 0x{uds_addr:08X}, "
+                                f"{uds_len} Б) по UDS (7F 34 {exc.nrc:02X}) — в этой версии ПО таблица адресов/размеров "
+                                "ZDC отличается. Прочитайте память блока целиком (чтобы программа взяла таблицу ZDC из "
+                                "его Cflash.bin) или запишите параметрию через «Записать DataFlash целиком…».",
+                                f"This gateway's firmware rejected the UDS download of ZDC #{idx} ({code}, "
+                                f"0x{uds_addr:08X}, {uds_len} B) with 7F 34 {exc.nrc:02X} — its ZDC address/size table "
+                                "differs from standard. Read the full ECU memory first (so ContiTool takes the ZDC map "
+                                "from its Cflash.bin) or write the dataset via “Write the whole DataFlash…”.",
+                            )
+                        ) from exc
+                    raise
                 # Full-size blocks, as ODIS sends them (1022 + 1022 + 794 after `74 20 04 00`): the gateway answered a
                 # 240-byte block after `74 10 FE` with 7F 36 31 and left the dataset half erased (bench 2026-11-09).
                 chunk_size = _transfer_chunk(dl_resp)

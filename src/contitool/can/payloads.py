@@ -9,6 +9,15 @@ from functools import reduce
 import hashlib
 import struct
 
+from contitool.can.hw_applets import (
+    EEPROM_M95640_READER_STUB,
+    EXPECTED_EEPROM_READER_STUB_SHA256,
+    EXPECTED_OPBT_READER_STUB_SHA256,
+    OPBT_READER_STUB,
+    build_m95640_reader_payload,
+    build_opbt_reader_payload,
+)
+
 from contitool.i18n import tr
 
 LOADER_SYNC = b"\x84\x00\x00\x00\x00"
@@ -523,6 +532,17 @@ def verify_payload_self_tests() -> None:
         raise RuntimeError("Embedded DFLASH_READER_STUB SHA-256 self-test failed")
     if build_fed_reader_payload(0x11223344, 0x1000, 2) != _FED_READER_ASSEMBLED_2X:
         raise RuntimeError("Fed reader builder differs from its assembled template")
+    from contitool.can.hw_applets import (
+        EEPROM_M95640_READER_STUB,
+        EXPECTED_EEPROM_READER_STUB_SHA256,
+        EXPECTED_OPBT_READER_STUB_SHA256,
+        OPBT_READER_STUB,
+    )
+
+    if hashlib.sha256(OPBT_READER_STUB).hexdigest() != EXPECTED_OPBT_READER_STUB_SHA256:
+        raise RuntimeError("Embedded OPBT_READER_STUB SHA-256 self-test failed")
+    if hashlib.sha256(EEPROM_M95640_READER_STUB).hexdigest() != EXPECTED_EEPROM_READER_STUB_SHA256:
+        raise RuntimeError("Embedded EEPROM_M95640_READER_STUB SHA-256 self-test failed")
     sa2_vectors = {
         0x00000001: 0x7DAD27A0,
         0x12345678: 0x7CA16271,

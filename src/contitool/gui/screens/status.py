@@ -329,15 +329,22 @@ def swap_features(ws: Workspace) -> State:
 
 
 def passport_rows(ws: Workspace) -> list[tuple[str, str, str]]:
-    """(label, value, tone) lines for the ECU identity card."""
+    """Atomic (label, value, tone) columns for the ECU identity bar — one field per column, zero middle dots."""
     rows: list[tuple[str, str, str]] = []
     cf = ws.info("cflash")
+    ee = ws.info("eeprom")
+    e = ee.eeprom_info if ee else None
     if cf and cf.cflash_info:
         c = cf.cflash_info
+        sw_pn = c.sw_pn or (e.part_number if e and c.sw_ver and e.sw_version == c.sw_ver else "")
+        if sw_pn:
+            rows.append((tr("Номер ПО", "SW part", "软件零件号"), sw_pn, "muted"))
         if c.sw_ver:
             rows.append((tr("Версия ПО", "Software", "软件"), c.sw_ver, "muted"))
+        if sw_pn and c.hw_pn:
+            rows.append((tr("Железо", "HW part", "硬件零件号"), c.hw_pn, "muted"))
         if c.hw_ver:
-            rows.append((tr("Оборудование", "Hardware", "硬件"), c.hw_ver, "muted"))
+            rows.append((tr("Ревизия HW", "Hardware", "硬件"), c.hw_ver, "muted"))
         rows.append(
             (
                 tr("Контрольная сумма", "Checksum", "校验和"),
@@ -355,4 +362,54 @@ def passport_rows(ws: Workspace) -> list[tuple[str, str, str]]:
             rows.append(("VIN", sw.vin, "muted"))
         if sw.vcrn:
             rows.append(("VCRN", sw.vcrn.hex().upper(), "muted"))
+    if e:
+        if not any(lbl == "VIN" for lbl, _, _ in rows) and e.vin:
+            rows.append(("VIN", e.vin, "muted"))
+        if not cf:
+            if e.part_number:
+                rows.append((tr("Номер ПО (EEPROM)", "SW part (EEPROM)"), e.part_number, "muted"))
+            if e.sw_version:
+                rows.append((tr("Версия ПО (EEPROM)", "Software (EEPROM)"), e.sw_version, "muted"))
     return rows
+
+
+def hardware_extras(ws: Workspace) -> State:
+    """Navigation pill state for the Read-Only Hardware Extras (`hw`: M95640 EEPROM & RH850 OPBT) page."""
+    has_ee = ws.info("eeprom") is not None
+    has_op = ws.info("opbt") is not None
+    warns = ws.read_warnings
+    if warns and not (has_ee and has_op):
+        return State(
+            tr("предупреждение", "warning"),
+            "warn",
+            " ".join(warns.values()),
+            key="warn",
+        )
+    if has_ee and has_op:
+        return State(
+            tr("EEPROM + OPBT", "EEPROM + OPBT"),
+            "ok",
+            tr("Загружены внешняя EEPROM M95640 (8 КБ) и OPBT0..OPBT8 (36 Б).", "External M95640 EEPROM (8 KB) and OPBT0..OPBT8 (36 B) loaded."),
+            key="on",
+        )
+    if has_ee:
+        return State(
+            "EEPROM",
+            "ok",
+            tr("Загружена внешняя SPI EEPROM M95640 (8 КБ).", "External M95640 SPI EEPROM (8 KB) loaded."),
+            key="partial",
+        )
+    if has_op:
+        return State(
+            "OPBT",
+            "ok",
+            tr("Загружены опционные байты RH850 OPBT.", "RH850 Option Bytes (OPBT) loaded."),
+            key="partial",
+        )
+    return State(
+        UNKNOWN,
+        "muted",
+        tr("Дампы Eeprom.bin и Opbt.bin ещё не прочитаны (режим только чтение).", "Eeprom.bin and Opbt.bin are not loaded yet (read-only)."),
+        known=False,
+        key="unknown",
+    )

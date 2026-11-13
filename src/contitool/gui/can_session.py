@@ -102,6 +102,9 @@ class _Tap:
     def __init__(self, bus: Any, record: Any) -> None:
         self._bus, self._record = bus, record
 
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._bus, name)
+
     def send(self, msg: Any, timeout: float | None = None) -> None:
         self._bus.send(msg, timeout=timeout)
         self._record("tx", msg)
@@ -188,20 +191,43 @@ class CanSession(QThread):
 
         _, tx_id, rx_id, payload, timeout = cmd
         link.UDS_TX_ID, link.UDS_RX_ID = tx_id, rx_id
-        link.drain_rx()
         self._push("uds-req", tx_id, payload)
-        link.send_uds(payload)
-        deadline = time.monotonic() + timeout
-        while not self._stop.is_set():  # a 7F xx 78 chain must not keep a disconnect waiting
-            left = deadline - time.monotonic()
-            if left <= 0:
-                raise TimeoutError(tr(f"Нет ответа от 0x{rx_id:X} за {timeout:g} с", f"No reply from 0x{rx_id:X} within {timeout:g} s", f"{timeout:g} 秒内未收到 0x{rx_id:X} 的响应"))
+        retried_fallback = False
+        while not self._stop.is_set():
+            if getattr(link.bus, "uds_only", False):
+                if (tx_id, rx_id) != (0x710, 0x77A):
+                    raise RuntimeError(tr(
+                        "Этот адаптер D-PDU работает только по UDS ISO-TP на 0x710 / 0x77A",
+                        "This D-PDU adapter works only over UDS ISO-TP on 0x710 / 0x77A",
+                        "此 D-PDU 适配器仅通过 0x710 / 0x77A 上的 UDS ISO-TP 工作",
+                    ))
+                resp = link.bus.request_uds(payload, timeout=timeout, allow_pending=True)
+                self._push("uds-resp", rx_id, resp, describe_uds(resp))
+                return
+            link.drain_rx()
             try:
-                resp = link.receive_uds(timeout=left)
+                link.send_uds(payload)
             except TimeoutError:
-                continue  # reported above with a readable message
-            if len(resp) >= 3 and resp[0] == 0x7F and resp[2] == 0x78:
-                deadline = time.monotonic() + P2_STAR_WAIT  # a 7F xx 78 extends the wait by P2*
-                continue
-            self._push("uds-resp", rx_id, resp, describe_uds(resp))
-            return
+                fb = getattr(link.bus, "fallback_from_silent_raw", None) if not retried_fallback else None
+                if (tx_id, rx_id) == (0x710, 0x77A) and callable(fb) and fb():
+                    retried_fallback = True
+                    continue
+                raise TimeoutError(tr(f"Нет ответа от 0x{rx_id:X} за {timeout:g} с", f"No reply from 0x{rx_id:X} within {timeout:g} s", f"{timeout:g} 秒内未收到 0x{rx_id:X} 的响应")) from None
+            deadline = time.monotonic() + timeout
+            while not self._stop.is_set():  # a 7F xx 78 chain must not keep a disconnect waiting
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    fb = getattr(link.bus, "fallback_from_silent_raw", None) if not retried_fallback else None
+                    if (tx_id, rx_id) == (0x710, 0x77A) and callable(fb) and fb():
+                        retried_fallback = True
+                        break
+                    raise TimeoutError(tr(f"Нет ответа от 0x{rx_id:X} за {timeout:g} с", f"No reply from 0x{rx_id:X} within {timeout:g} s", f"{timeout:g} 秒内未收到 0x{rx_id:X} 的响应"))
+                try:
+                    resp = link.receive_uds(timeout=left)
+                except TimeoutError:
+                    continue  # reported above with a readable message
+                if len(resp) >= 3 and resp[0] == 0x7F and resp[2] == 0x78:
+                    deadline = time.monotonic() + P2_STAR_WAIT  # a 7F xx 78 extends the wait by P2*
+                    continue
+                self._push("uds-resp", rx_id, resp, describe_uds(resp))
+                return

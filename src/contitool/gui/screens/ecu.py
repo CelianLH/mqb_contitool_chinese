@@ -9,7 +9,7 @@ import time
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QFontMetrics
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -29,7 +30,9 @@ from contitool.can import (
     can_activate_swap,
     can_health_check,
     can_learn_mfl_button,
+    can_read_eeprom,
     can_read_gateway_coding,
+    can_read_opbt,
     can_swap_status,
     can_upload_zdc_datasets,
     can_sync_zdc_coding,
@@ -37,6 +40,7 @@ from contitool.can import (
     can_write_dflash,
     can_write_uflash,
 )
+from contitool.cli.formatting import Style, format_eeprom_report, format_opbt_report
 from contitool.core import (
     CFLASH_SIZE,
     FpaDataset,
@@ -47,6 +51,8 @@ from contitool.core import (
     UNSUPPORTED_DATASET_WARNING,
     ZDC_UDS_UPLOAD_MAP,
     ZdcAutoParamConfig,
+    analyze_eeprom,
+    analyze_opbt,
     apply_cflash_rsa_modulus,
     apply_dflash_swap_fecs,
     apply_dflash_swap_rsa_modulus,
@@ -74,7 +80,7 @@ from contitool.core import (
 )
 from contitool.core import dtc
 from contitool.core.constants import DFLASH_FSC_BASE_OFF, DFLASH_FSC_STRIDE, DFLASH_SWAP_NVM_OFF, FBL_MOD_OFFSET, UNSUPPORTED_DATASET_ZH, ZDC_DATASET_SPECS
-from contitool.gui.connection import CanConnection, ensure_ready
+from contitool.gui.connection import CanConnection, PathLabel, ensure_ready
 from contitool.gui.dialogs.cp import CpBindDialog
 from contitool.gui.dialogs.crypto import FscDialog, OdxSignDialog, RsaKeyDialog, SwapActivateDialog
 from contitool.gui.dialogs.zdc import (
@@ -86,10 +92,10 @@ from contitool.gui.dialogs.zdc import (
 )
 from contitool.gui.screens import status
 from contitool.gui.screens.status import State
+from contitool.gui import theme
 from contitool.gui.theme import mono_font, set_tone
 from contitool.gui.widgets.page import (
     Callout,
-    Section,
     TextResultDialog,
     button,
     clear_layout,
@@ -100,13 +106,15 @@ from contitool.gui.widgets.page import (
     row,
     run_dialog,
     set_pill,
+    status_readout,
+    vdivider,
 )
 from contitool.gui.worker import OperationRunner
-from contitool.gui.workspace import CANDIDATES, KINDS, NAMES, Workspace
+from contitool.gui.workspace import CANDIDATES, KINDS, NAMES, OPTIONAL_KINDS, Workspace
 from contitool.storage import AREA_FILES, changed_ranges, has_full_read, new_session, record_flashed, unit_of_cflash
 from contitool.i18n import subscribe_lang_change, tr
 
-GROUPS = (("main", ("cp", "eng", "swap", "zdc", "dtc")), ("service", ("boot",)))
+GROUPS = (("main", ("cp", "eng", "swap", "zdc", "dtc")), ("service", ("boot", "hw")))
 
 
 def _restart_note() -> str:
@@ -130,21 +138,28 @@ def _title(key: str) -> str:
         "zdc": tr("Параметрирование", "Parameterization", "参数化"),
         "dtc": tr("Регистратор DTC", "DTC memory", "DTC 记录器"),
         "boot": tr("Загрузчик и подпись", "Bootloader & signing", "引导加载程序与签名"),
+        "hw": tr("EEPROM и OPBT", "EEPROM & OPBT", "EEPROM 与 OPBT"),
     }[key]
 
 
 class _NavRow(QWidget):
-    """Function name with its current state on the right."""
+    """Function name on the left with quiet semantic status text on the right."""
 
     def __init__(self) -> None:
         super().__init__()
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(10, 0, 8, 0)
+        lay.setContentsMargins(10, 0, 10, 0)
         lay.setSpacing(8)
         self.lbl_name = QLabel()
         self.pill = pill()
         lay.addWidget(self.lbl_name, 1)
         lay.addWidget(self.pill, 0, Qt.AlignmentFlag.AlignVCenter)
+
+    def set_active(self, active: bool) -> None:
+        f = self.lbl_name.font()
+        f.setWeight(f.Weight.DemiBold if active else f.Weight.Normal)
+        self.lbl_name.setFont(f)
+        self.lbl_name.setStyleSheet(f"color: {'#FFFFFF' if active else theme.TEXT};")
 
 
 class EcuScreen(QWidget):
@@ -178,11 +193,12 @@ class EcuScreen(QWidget):
         self.actions: dict[str, QPushButton] = {}  # buttons of the page on screen
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(28, 18, 28, 14)
-        outer.setSpacing(12)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
         outer.addWidget(self._build_identity())
         split = QHBoxLayout()
-        split.setSpacing(12)
+        split.setContentsMargins(0, 0, 0, 0)
+        split.setSpacing(0)
         split.addWidget(self._build_nav())
         split.addWidget(self._build_page_area(), 1)
         outer.addLayout(split, 1)
@@ -198,42 +214,59 @@ class EcuScreen(QWidget):
 
     # ────────────────────────────── layout ──────────────────────────────
     def _build_identity(self) -> QWidget:
-        self.sec_id = Section()
-        self.sec_id.body.setContentsMargins(20, 14, 20, 14)
-        self.sec_id.body.setSpacing(8)
+        self.sec_id = QFrame()
+        self.sec_id.setObjectName("IdentityBar")
+        body = QVBoxLayout(self.sec_id)
+        body.setContentsMargins(24, 12, 24, 12)
+        body.setSpacing(10)
+
+        head = QHBoxLayout()
+        head.setSpacing(10)
         self.lbl_pn = QLabel()
         self.lbl_pn.setObjectName("PartNumber")
+        self.lbl_pn.setFont(mono_font(20, bold=True))
         self.lbl_pn.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.pill_source = pill()
-        self.sec_id.head.insertWidget(0, self.lbl_pn)
-        self.sec_id.lbl_title.setVisible(False)
-        self.sec_id.head.insertWidget(1, self.pill_source)
-        self.sec_id.head.setAlignment(self.pill_source, Qt.AlignmentFlag.AlignVCenter)
-        self.btn_export = button("", "GhostBtn", slot=self.export_backup)
-        self.btn_restore = button("", "GhostBtn", slot=self.restore_requested.emit)
-        self.btn_report = button("", "GhostBtn", slot=self.report_requested.emit)
-        self.btn_close = button("", slot=self.close_requested.emit)
-        self.sec_id.head.addWidget(self.btn_export)
-        self.sec_id.head.addWidget(self.btn_restore)
-        self.sec_id.head.addWidget(self.btn_report)
-        self.sec_id.head.addWidget(self.btn_close)
+        self.lbl_sys = QLabel()
+        self.lbl_sys.setObjectName("Hint")
+        self.sep_source = vdivider()
+        self.sep_source.setFixedHeight(14)
+        self.pill_source = QLabel()
+        self.pill_source.setObjectName("Hint")
+        self.lbl_folder = PathLabel()
+        self.lbl_folder.setObjectName("Hint")
+        self.lbl_folder.setFont(mono_font(12))
+        head.addWidget(self.lbl_pn, 0, Qt.AlignmentFlag.AlignVCenter)
+        head.addWidget(self.lbl_sys, 0, Qt.AlignmentFlag.AlignVCenter)
+        head.addWidget(self.sep_source, 0, Qt.AlignmentFlag.AlignVCenter)
+        head.addWidget(self.pill_source, 0, Qt.AlignmentFlag.AlignVCenter)
+        head.addWidget(self.lbl_folder, 1, Qt.AlignmentFlag.AlignVCenter)
+        head.addSpacing(8)
 
-        self.files_row = QHBoxLayout()  # which areas are loaded, and from which folder
-        self.files_row.setSpacing(6)
-        self.sec_id.body.addLayout(self.files_row)
-        self.sec_id.body.addWidget(divider())
+        self.btn_export = button("", slot=self.export_backup)
+        self.btn_restore = button("", slot=self.restore_requested.emit)
+        self.btn_report = button("", slot=self.report_requested.emit)
+        self.btn_close = button("", "GhostBtn", slot=self.close_requested.emit)
+        for b in (self.btn_export, self.btn_restore, self.btn_report, self.btn_close):
+            b.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            head.addWidget(b)
+        body.addLayout(head)
+
+        body.addWidget(divider())
 
         self.grid_id = QGridLayout()
-        self.grid_id.setHorizontalSpacing(36)
-        self.grid_id.setVerticalSpacing(3)
-        self.sec_id.body.addLayout(self.grid_id)
+        self.grid_id.setHorizontalSpacing(22)
+        self.grid_id.setVerticalSpacing(2)
+        body.addLayout(self.grid_id)
         return self.sec_id
 
     def _build_nav(self) -> QWidget:
-        sec = Section()
-        sec.hide_head()
-        sec.body.setContentsMargins(6, 4, 6, 6)
-        sec.setFixedWidth(310)
+        pane = QFrame()
+        pane.setObjectName("NavPane")
+        pane.setFixedWidth(306)
+        lay = QVBoxLayout(pane)
+        lay.setContentsMargins(6, 6, 6, 0)
+        lay.setSpacing(0)
         self.nav = QListWidget()
         self.nav.setObjectName("Nav")
         self.nav_rows: dict[str, _NavRow] = {}
@@ -242,39 +275,48 @@ class EcuScreen(QWidget):
         for group, keys in GROUPS:
             head = QListWidgetItem(self.nav)
             head.setFlags(Qt.ItemFlag.NoItemFlags)
-            head.setSizeHint(QSize(0, 30))
+            head.setSizeHint(QSize(0, 26))
             lbl = group_label()
-            lbl.setContentsMargins(10, 10, 0, 0)
+            lbl.setContentsMargins(12, 8, 0, 0)
             self.nav.setItemWidget(head, lbl)
             self._group_labels[group] = lbl
             for key in keys:
                 item = QListWidgetItem(self.nav)
                 item.setData(Qt.ItemDataRole.UserRole, key)
-                item.setSizeHint(QSize(0, 38))
+                item.setSizeHint(QSize(0, 33))
                 nav_row = _NavRow()
                 self.nav.setItemWidget(item, nav_row)
                 self.nav_rows[key] = nav_row
                 self._nav_items[key] = item
         self.nav.currentItemChanged.connect(self._on_nav)
-        sec.body.addWidget(self.nav)
-        return sec
+        lay.addWidget(self.nav, 1)
+
+        self.nav_dumps = QFrame()
+        self.nav_dumps.setObjectName("NavDumps")
+        nd_lay = QVBoxLayout(self.nav_dumps)
+        nd_lay.setContentsMargins(16, 10, 16, 12)
+        nd_lay.setSpacing(4)
+        self.lbl_dumps_hdr = group_label()
+        nd_lay.addWidget(self.lbl_dumps_hdr)
+        self.dumps_list = QVBoxLayout()
+        self.dumps_list.setContentsMargins(0, 1, 0, 0)
+        self.dumps_list.setSpacing(3)
+        nd_lay.addLayout(self.dumps_list)
+        lay.addWidget(self.nav_dumps)
+        return pane
 
     def _build_page_area(self) -> QWidget:
-        sec = Section()
-        sec.hide_head()
-        sec.body.setContentsMargins(0, 0, 0, 0)
         self.page_area = QScrollArea()
         self.page_area.setWidgetResizable(True)
         self.page_area.setFrameShape(QFrame.Shape.NoFrame)
         self.page_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        sec.body.addWidget(self.page_area)
-        return sec
+        return self.page_area
 
     def _build_changes(self) -> QWidget:
         bar = QFrame()
         bar.setObjectName("WriteBar")
         lay = QVBoxLayout(bar)
-        lay.setContentsMargins(16, 10, 14, 10)
+        lay.setContentsMargins(24, 10, 24, 10)
         lay.setSpacing(6)
         top = QHBoxLayout()
         top.setSpacing(8)
@@ -285,12 +327,12 @@ class EcuScreen(QWidget):
         self.btn_revert = button("", "GhostBtn", slot=self._revert)
         self.btn_save = button("", slot=self._save_dumps)
         self.btn_write = button("", "PrimaryBtn", slot=self._write_pending)
-        self.btn_write_df = button("", "GhostBtn", slot=self._write_to_ecu)  # dataset-only edits: the RAM-Loader way
+        self.btn_write_df = button("", slot=self._write_to_ecu)  # dataset-only edits: the RAM-Loader way
         for b in (self.btn_revert, self.btn_save, self.btn_write_df, self.btn_write):
             top.addWidget(b)
         lay.addLayout(top)
         self.grid_changes = QGridLayout()
-        self.grid_changes.setHorizontalSpacing(14)
+        self.grid_changes.setHorizontalSpacing(16)
         self.grid_changes.setVerticalSpacing(3)
         lay.addLayout(self.grid_changes)
         bar.setVisible(False)
@@ -323,21 +365,66 @@ class EcuScreen(QWidget):
         key = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         if key:
             self._key = key
+            for k, nav_row in self.nav_rows.items():
+                nav_row.set_active(k == key)
             self._render_page()
+
+    @staticmethod
+    def _fmt_dump_size(path: Path) -> str:
+        try:
+            n = path.stat().st_size
+        except OSError:
+            return "—"
+        if n >= 1024 * 1024 and n % (512 * 1024) == 0:
+            return f"{n / (1024 * 1024):.1f} MB"
+        if n >= 1024:
+            return f"{n // 1024} KB"
+        return f"{n} B"
+
+    @staticmethod
+    def _dump_ledger_row(name: str, val: str, tone: str = "muted", tip: str = "") -> QWidget:
+        w = QWidget()
+        if tip:
+            w.setToolTip(tip)
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        lbl_n = QLabel(name)
+        lbl_n.setObjectName("Hint")
+        if tone == "muted":
+            set_tone(lbl_n, "muted")
+        lbl_v = QLabel(val)
+        lbl_v.setFont(mono_font(11))
+        set_tone(lbl_v, tone if tone in ("warn", "err", "info") else "muted")
+        lay.addWidget(lbl_n, 1)
+        lay.addWidget(lbl_v, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        return w
 
     def _refresh_identity(self) -> None:
         self.lbl_pn.setText(self.ws.part_number or tr("Блок не определён", "Unknown ECU", "未识别的模块"))
-        set_pill(
-            self.pill_source,
-            tr("считан по CAN", "read over CAN", "通过 CAN 读取") if self.ws.source == "can" else tr("из файлов", "from files", "来自文件"),
-            "info" if self.ws.source == "can" else "muted",
+        cf_inf = self.ws.info("cflash")
+        sys_name = (cf_inf.cflash_info.system_name if (cf_inf and cf_inf.cflash_info) else "").strip()
+        self.lbl_sys.setText(sys_name)
+        self.lbl_sys.setVisible(bool(sys_name))
+        folder = self.ws.folder
+        is_can = self.ws.source == "can"
+        self.pill_source.setVisible(is_can or not folder)
+        self.pill_source.setText(
+            tr("Считан по CAN", "Read over CAN", "通过 CAN 读取") if is_can else tr("Открыт из файлов", "Opened from files", "从文件打开")
         )
-        self.btn_export.setText(tr("Экспортировать бэкап…", "Export backup…", "导出备份…"))
+        set_tone(self.pill_source, "info" if is_can else "muted")
+        self.lbl_folder.setVisible(bool(folder))
+        if folder:
+            self.lbl_folder.set_path(folder.name)
+            self.lbl_folder.setToolTip(str(folder))
+        else:
+            self.lbl_folder.set_path("")
+        self.btn_export.setText(tr("Экспорт бэкапа…", "Export backup…", "导出备份…"))
         self.btn_export.setToolTip(tr("Копирует дампы в том виде, как они считаны, в выбранную папку", "Copies the dumps as read to a folder you pick", "将转储按读取时的原样复制到所选文件夹"))
-        self.btn_restore.setText(tr("Залить бэкап в блок…", "Write backup to ECU…", "将备份写入模块…"))
+        self.btn_restore.setText(tr("Залить бэкап…", "Write backup…", "写入备份…"))
         self.btn_restore.setEnabled(not self.runner.is_busy)
         self.btn_report.setText(tr("Подробный отчёт", "Full report", "详细报告"))
-        self.btn_close.setText(tr("Закрыть блок", "Close ECU", "关闭模块"))
+        self.btn_close.setText(tr("Закрыть", "Close", "关闭"))
 
         clear_layout(self.grid_id)
         rows = status.passport_rows(self.ws)
@@ -345,7 +432,7 @@ class EcuScreen(QWidget):
             cap = QLabel(label.upper())
             cap.setObjectName("GroupLabel")
             val = QLabel(value)
-            val.setFont(mono_font(13))
+            val.setFont(mono_font(12))
             val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             if tone != "muted":
                 set_tone(val, tone)
@@ -353,20 +440,24 @@ class EcuScreen(QWidget):
             self.grid_id.addWidget(val, 1, col)
         self.grid_id.setColumnStretch(len(rows), 1)
 
-        clear_layout(self.files_row)
+        self.lbl_dumps_hdr.setText(tr("ФАЙЛЫ ПАМЯТИ", "MEMORY DUMPS"))
+        clear_layout(self.dumps_list)
         for k in KINDS:
-            have = self.ws.path(k) is not None
-            chip = pill(NAMES[k] if have else tr(f"{NAMES[k]}: нет", f"{NAMES[k]}: missing", f"{NAMES[k]}：缺失"), "ok" if have else "warn")
-            chip.setToolTip(str(self.ws.path(k) or tr("Файла нет в папке", "Not in the folder", "不在该文件夹中")))
-            self.files_row.addWidget(chip)
-        folder = self.ws.folder
-        if folder:
-            where = hint(tr(f"Папка: {folder.name}", f"Folder: {folder.name}", f"文件夹：{folder.name}"))
-            where.setWordWrap(False)
-            where.setToolTip(str(folder))
-            self.files_row.addSpacing(10)
-            self.files_row.addWidget(where)
-        self.files_row.addStretch(1)
+            p_k = self.ws.path(k)
+            if p_k is not None:
+                self.dumps_list.addWidget(self._dump_ledger_row(NAMES[k], self._fmt_dump_size(p_k), "ok", str(p_k)))
+            else:
+                self.dumps_list.addWidget(
+                    self._dump_ledger_row(NAMES[k], tr("нет", "missing", "缺失"), "warn", tr("Файла нет в папке", "Not in the folder", "不在该文件夹中"))
+                )
+        for k in OPTIONAL_KINDS:
+            p_opt = self.ws.path(k)
+            if p_opt is not None:
+                self.dumps_list.addWidget(self._dump_ledger_row(NAMES[k], self._fmt_dump_size(p_opt), "ok", str(p_opt)))
+            elif k in self.ws.read_warnings:
+                self.dumps_list.addWidget(
+                    self._dump_ledger_row(NAMES[k], tr("сбой", "warning", "警告"), "warn", self.ws.read_warnings[k])
+                )
 
     def _state(self, key: str) -> State:
         if key == "cp":
@@ -379,6 +470,8 @@ class EcuScreen(QWidget):
             return status.parameterization(self.ws)
         if key == "boot":
             return status.bootloader(self.ws)
+        if key == "hw":
+            return status.hardware_extras(self.ws)
         if self._dtc is None:
             return State(tr("по запросу", "on request", "按需"), "muted")
         groups = self._dtc_groups()
@@ -402,6 +495,7 @@ class EcuScreen(QWidget):
         for key, nav_row in self.nav_rows.items():
             st = self._state(key)
             nav_row.lbl_name.setText(_title(key))
+            nav_row.set_active(key == self._key)
             set_pill(nav_row.pill, st.text, st.tone)
         if self.nav.currentItem() is not self._nav_items[self._key]:
             self.nav.setCurrentItem(self._nav_items[self._key])
@@ -411,8 +505,14 @@ class EcuScreen(QWidget):
         if not self.ws.is_open:
             return
         page = QWidget()
-        lay = QVBoxLayout(page)
-        lay.setContentsMargins(24, 18, 24, 20)
+        page.setObjectName("PageCanvas")
+        outer = QHBoxLayout(page)
+        outer.setContentsMargins(28, 20, 28, 24)
+        outer.setSpacing(0)
+        column = QWidget()
+        column.setMaximumWidth(960)
+        lay = QVBoxLayout(column)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
         self.actions = {}
         pages = {
@@ -422,20 +522,23 @@ class EcuScreen(QWidget):
             "zdc": self._page_zdc,
             "dtc": self._page_dtc,
             "boot": self._page_boot,
+            "hw": self._page_hw,
         }
         pages[self._key](lay)
         lay.addStretch(1)
+        outer.addWidget(column, 1)
+        outer.addStretch(0)
         self.page_area.setWidget(page)  # the scroll area deletes the previous page
 
     def _head(self, lay: QVBoxLayout, key: str) -> State:
         st = self._state(key)
         h = QHBoxLayout()
-        h.setSpacing(10)
+        h.setSpacing(12)
         t = QLabel(_title(key))
         t.setObjectName("PageTitle")
         h.addWidget(t)
-        h.addWidget(pill(st.text, st.tone), 0, Qt.AlignmentFlag.AlignVCenter)
         h.addStretch(1)
+        h.addWidget(status_readout(st.text, st.tone), 0, Qt.AlignmentFlag.AlignVCenter)
         lay.addLayout(h)
         return st
 
@@ -454,6 +557,7 @@ class EcuScreen(QWidget):
 
     def _btn(self, key: str, text: str, slot: Any, kind: str = "", enabled: bool = True, tip: str = "") -> QPushButton:
         b = button(text, kind, slot=slot)
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
         b.setEnabled(enabled and not self.runner.is_busy)
         b.setToolTip(tip)
         self.actions[key] = b
@@ -462,60 +566,107 @@ class EcuScreen(QWidget):
     def _block(
         self, lay: QVBoxLayout, title: str, state: State | None, text: str, *btns: QPushButton, num: str = ""
     ) -> None:
-        """A bordered part of a page: optional step number, title with state, explanation, buttons."""
+        """Unified single-surface architectural card: aligned right status readout, inline action (1 btn) or bottom row (2+ btns)."""
         frame = QFrame()
         frame.setObjectName("Step")
-        g = QGridLayout(frame)
-        g.setContentsMargins(14, 12, 14, 12)
-        g.setHorizontalSpacing(12)
-        g.setVerticalSpacing(6)
-        col = 0
+        outer = QVBoxLayout(frame)
+        outer.setContentsMargins(18, 15, 18, 16)
+        outer.setSpacing(7)
+
+        h = QHBoxLayout()
+        h.setSpacing(9)
         if num:
             n = QLabel(num)
             n.setObjectName("StepNum")
-            n.setFixedSize(22, 22)
+            n.setFixedSize(20, 20)
             n.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            g.addWidget(n, 0, 0, Qt.AlignmentFlag.AlignTop)
-            col = 1
-        h = QHBoxLayout()
-        h.setSpacing(8)
+            h.addWidget(n, 0, Qt.AlignmentFlag.AlignVCenter)
         t = QLabel(title)
         t.setObjectName("FieldLabel")
         h.addWidget(t)
-        if state is not None:
-            h.addWidget(pill(state.text, state.tone), 0, Qt.AlignmentFlag.AlignVCenter)
         h.addStretch(1)
-        g.addLayout(h, 0, col)
-        r = 1
-        if text:
-            g.addWidget(self._label(text), r, col)
-            r += 1
-        if btns:
-            g.addLayout(row(*btns), r, col)
-        g.setColumnStretch(col, 1)
+        if state is not None:
+            h.addWidget(status_readout(state.text, state.tone), 0, Qt.AlignmentFlag.AlignVCenter)
+        outer.addLayout(h)
+
+        if len(btns) == 1 and not num and text:
+            row_lay = QHBoxLayout()
+            row_lay.setSpacing(20)
+            row_lay.addWidget(self._label(text), 1)
+            btns[0].setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            row_lay.addWidget(btns[0], 0, Qt.AlignmentFlag.AlignVCenter)
+            outer.addLayout(row_lay)
+        else:
+            if text:
+                outer.addWidget(self._label(text))
+            if btns:
+                outer.addSpacing(3)
+                f_lay = QHBoxLayout()
+                f_lay.setSpacing(8)
+                for b in btns:
+                    f_lay.addWidget(b)
+                f_lay.addStretch(1)
+                outer.addLayout(f_lay)
         lay.addWidget(frame)
 
     @staticmethod
     def _table(lay: QVBoxLayout, title: str, rows: list[tuple[str, ...]], muted: bool = False) -> None:
-        """Small read-only list: the first column in monospace, a third column muted."""
+        """Clean single-surface inspector table with subtle hairline dividers."""
         frame = QFrame()
         frame.setObjectName("Step")
-        g = QGridLayout(frame)
-        g.setContentsMargins(14, 10, 14, 12)
-        g.setHorizontalSpacing(16)
-        g.setVerticalSpacing(4)
-        g.addWidget(group_label(title.upper()), 0, 0, 1, 3)
-        for r, cells in enumerate(rows, start=1):
-            for c, text in enumerate(cells):
-                lbl = QLabel(text)
-                if c == 0:
-                    lbl.setFont(mono_font(13))
-                elif c == 1:
-                    lbl.setWordWrap(True)  # long descriptions wrap instead of widening the page
-                if muted or c == 2:
-                    lbl.setObjectName("Hint")
-                g.addWidget(lbl, r, c)
-        g.setColumnStretch(1, 1)
+        outer = QVBoxLayout(frame)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        hdr = QFrame()
+        hdr.setObjectName("TableHead")
+        h = QHBoxLayout(hdr)
+        h.setContentsMargins(18, 10, 18, 8)
+        h.setSpacing(8)
+        h.addWidget(group_label(title.upper()))
+        h.addStretch(1)
+        cnt = QLabel(str(len(rows)))
+        cnt.setFont(mono_font(11))
+        cnt.setObjectName("Hint")
+        h.addWidget(cnt)
+        outer.addWidget(hdr)
+
+        col0_font = mono_font(12)
+        fm = QFontMetrics(col0_font)
+        col0_w = min(max((fm.horizontalAdvance(c[0]) for c in rows if c), default=100) + 14, 240)
+        col0_w = max(col0_w, 125)
+
+        for idx, cells in enumerate(rows):
+            r_frame = QFrame()
+            r_frame.setObjectName("TableRow")
+            if idx == len(rows) - 1:
+                r_frame.setProperty("last", True)
+            rl = QHBoxLayout(r_frame)
+            rl.setContentsMargins(18, 7, 18, 7)
+            rl.setSpacing(16)
+
+            lbl0 = QLabel(cells[0] if cells else "")
+            lbl0.setFont(col0_font)
+            lbl0.setFixedWidth(col0_w)
+            lbl0.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            if muted:
+                lbl0.setObjectName("Hint")
+            rl.addWidget(lbl0, 0, Qt.AlignmentFlag.AlignTop)
+
+            lbl1 = QLabel(cells[1] if len(cells) > 1 else "")
+            lbl1.setWordWrap(True)
+            lbl1.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            if muted:
+                lbl1.setObjectName("Hint")
+            rl.addWidget(lbl1, 1)
+
+            if len(cells) > 2 and cells[2]:
+                lbl2 = QLabel(cells[2])
+                lbl2.setFont(mono_font(11))
+                lbl2.setObjectName("Hint")
+                lbl2.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+                rl.addWidget(lbl2, 0, Qt.AlignmentFlag.AlignTop)
+            outer.addWidget(r_frame)
         lay.addWidget(frame)
 
     @staticmethod
@@ -559,8 +710,6 @@ class EcuScreen(QWidget):
             ),
             tone="warn",
         )
-        if st.detail:
-            self._text(lay, st.detail, primary=True)
         inf = self.ws.info("dflash")
         bound = [
             (s.spec.ecu_addr, tr(s.spec.short_ru, s.spec.short_en, s.spec.short_zh))
@@ -570,7 +719,18 @@ class EcuScreen(QWidget):
         if bound:
             self._table(lay, tr("Привязаны по ключу", "Bound by key", "按键绑定"), bound)
         ok, tip = self._need("cflash", "dflash")
-        lay.addLayout(row(self._btn("cp", tr("Адаптировать модули…", "Adapt modules…", "适配模块…"), self._bind_modules, "PrimaryBtn", ok, tip)))
+        self._block(
+            lay,
+            tr("Таблица ведомых модулей IKA", "Slave module IKA table", "从属模块 IKA 表"),
+            None,
+            st.detail
+            or tr(
+                "Настройка слотов ведомых модулей в CodeFlash и DataFlash без затрагивания заводских блоков.",
+                "Configure slave module slots in CodeFlash and DataFlash without touching factory modules.",
+                "在 CodeFlash 和 DataFlash 中配置从属模块槽位，不涉及原厂模块。",
+            ),
+            self._btn("cp", tr("Адаптировать модули…", "Adapt modules…", "适配模块…"), self._bind_modules, "PrimaryBtn", ok, tip),
+        )
         self._note(
             lay,
             tr(
@@ -582,18 +742,15 @@ class EcuScreen(QWidget):
 
     def _page_eng(self, lay: QVBoxLayout) -> None:
         st = self._head(lay, "eng")
-        self._text(
-            lay,
-            tr(
-                "Включает заводские инженерные службы шлюза: функции 0x80/0x81/0x83, ASAM CCP (чтение и запись "
-                "памяти по CAN) и RAM-Loader 0x6F0.",
-                "Enables the gateway's factory engineering services: functions 0x80/0x81/0x83, ASAM CCP (memory "
-                "read and write over CAN) and the 0x6F0 RAM-Loader.",
-                "启用网关的原厂工程服务：0x80/0x81/0x83 功能、ASAM CCP（通过 CAN 读写内存）以及 0x6F0 RAM-Loader。",
-            ),
+        desc = tr(
+            "Включает заводские инженерные службы шлюза: функции 0x80/0x81/0x83, ASAM CCP (чтение и запись "
+            "памяти по CAN) и RAM-Loader 0x6F0.",
+            "Enables the gateway's factory engineering services: functions 0x80/0x81/0x83, ASAM CCP (memory "
+            "read and write over CAN) and the 0x6F0 RAM-Loader.",
+            "启用网关的原厂工程服务：0x80/0x81/0x83 功能、ASAM CCP（通过 CAN 读写内存）以及 0x6F0 RAM-Loader。",
         )
-        if st.key == "partial":
-            self._text(lay, st.detail, primary=True)
+        if st.key == "partial" and st.detail:
+            desc = f"{desc}\n\n{st.detail}"
         ok, tip = self._need("cflash")
         if st.key == "on":
             btns = [self._btn("eng_off", tr("Выключить", "Turn off", "关闭"), lambda: self._patch_engineering(True), "", ok, tip)]
@@ -603,7 +760,13 @@ class EcuScreen(QWidget):
                 btns.append(
                     self._btn("eng_off", tr("Вернуть заводское", "Restore factory", "恢复原厂"), lambda: self._patch_engineering(True), "GhostBtn", ok)
                 )
-        lay.addLayout(row(*btns))
+        self._block(
+            lay,
+            tr("Инженерные службы и RAM-Loader", "Engineering services & RAM-Loader"),
+            None,
+            desc,
+            *btns,
+        )
         self._note(lay, tr(
             "Меняется только CodeFlash; в блок он записывается кнопкой «Записать в блок».",
             "Only CodeFlash changes; it goes into the ECU with “Write to ECU”.",
@@ -789,7 +952,7 @@ class EcuScreen(QWidget):
             "swap_check",
             tr("Проверить в блоке", "Check in the ECU", "在模块中检查") if self._swap_live is None else tr("Проверить снова", "Check again", "再次检查"),
             self._swap_check,
-            "PrimaryBtn" if self._swap_live is None else "GhostBtn",
+            "" if self._swap_live is None else "GhostBtn",
         )
         if self._swap_live is None:
             self._block(
@@ -809,20 +972,34 @@ class EcuScreen(QWidget):
 
         frame = QFrame()
         frame.setObjectName("Step")
-        g = QGridLayout(frame)
-        g.setContentsMargins(14, 10, 14, 12)
+        outer = QVBoxLayout(frame)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        hdr = QFrame()
+        hdr.setObjectName("TableHead")
+        h = QHBoxLayout(hdr)
+        h.setContentsMargins(18, 12, 18, 10)
+        h.setSpacing(10)
+        t = QLabel(tr("Состояние в блоке", "State in the ECU"))
+        t.setObjectName("FieldLabel")
+        h.addWidget(t)
+        h.addStretch(1)
+        h.addWidget(hint(tr(f"проверено в {self._swap_at}", f"checked at {self._swap_at}")))
+        h.addWidget(btn)
+        outer.addWidget(hdr)
+
+        body = QWidget()
+        g = QGridLayout(body)
+        g.setContentsMargins(18, 12, 18, 16)
         g.setHorizontalSpacing(14)
         g.setVerticalSpacing(7)
-        g.addLayout(
-            row(group_label(tr("СОСТОЯНИЕ В БЛОКЕ", "STATE IN THE ECU", "模块中的状态")), 1, hint(tr(f"проверено в {self._swap_at}", f"checked at {self._swap_at}", f"检查于 {self._swap_at}")), btn),
-            0, 0, 1, 3,
-        )
+
         summary = status.swap_live_summary(self._swap_live, self.ws)
         box = Callout("info" if summary.tone == "muted" else summary.tone)
         box.label.setTextFormat(Qt.TextFormat.PlainText)
         box.label.setText(("✓  " if summary.key == "on" else "✕  " if summary.key == "err" else "") + summary.text)
         box.label.setObjectName("FieldLabel")
-        g.addWidget(box, 1, 0, 1, 3)
+        g.addWidget(box, 0, 0, 1, 3)
 
         def code_label(code: int) -> QLabel:
             num = hint(f"{code:08X}")
@@ -830,9 +1007,9 @@ class EcuScreen(QWidget):
             return num
 
         states = [(status.swap_live_state(f["status"]), f["fsid"]) for f in self._swap_live]
-        r = 2
+        r = 1
         for st, code in sorted((s for s in states if s[0].key != "off"), key=lambda x: (x[0].key != "on", x[1])):
-            g.addWidget(pill(st.text, st.tone), r, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            g.addWidget(status_readout(st.text, st.tone), r, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             cell = QVBoxLayout()
             cell.setSpacing(1)
             cell.addWidget(self._label(status.fec_name(code), primary=True))
@@ -859,6 +1036,7 @@ class EcuScreen(QWidget):
                 g.addWidget(self._label(status.fec_name(code)), r, 1)
                 g.addWidget(code_label(code), r, 2, Qt.AlignmentFlag.AlignRight)
         g.setColumnStretch(1, 1)
+        outer.addWidget(body)
         lay.addWidget(frame)
 
     def _page_zdc(self, lay: QVBoxLayout) -> None:
@@ -873,14 +1051,13 @@ class EcuScreen(QWidget):
                 "网关的 ZDC 数据集：驾驶模式和 MODE 与方向盘按钮、疲劳监测 (MKE)、屏幕上的起停消息、发电机 (BEM)。",
             ),
         )
-        if st.detail:
-            self._text(lay, st.detail, primary=True)
-
         ok_df, tip_df = self._need("dflash")
         df_path = self.ws.path("dflash")
         raw_df = df_path.read_bytes() if (ok_df and df_path is not None and df_path.is_file()) else None
 
         unsup_active = status.unsupported_active_fecs(self.ws)
+        if st.detail and not (unsup_active and raw_df is not None):
+            self._text(lay, st.detail, primary=True)
         if unsup_active and raw_df is not None:
             unsup_names = ", ".join(status.fec_name(c) for c in unsup_active)
             self._note(
@@ -962,9 +1139,10 @@ class EcuScreen(QWidget):
             ssa = parse_ssa_block(raw_df)
             if ssa.crc_ok:
                 ssa_lbl = {
-                    0: tr("скрыты", "hidden", "隐藏"),
+                    0: tr("только причины", "reasons only", "仅原因"),
                     1: tr("стандартно", "standard", "标准"),
-                    3: tr("подробно", "detailed", "详细"),
+                    2: tr("подробно", "detailed", "详细"),
+                    3: tr("скрыты", "hidden", "隐藏"),
                 }.get(ssa.bap_output_mode, tr("включены", "enabled", "已启用"))
                 ssa_st = State(ssa_lbl, "ok", key="on")
             else:
@@ -1009,7 +1187,7 @@ class EcuScreen(QWidget):
             self._btn("zdc_export", tr("Экспорт…", "Export…", "导出…"), self._export_zdc, "", ok_df, tip_df),
             self._btn("zdc_import_odis", tr("Импорт ODIS…", "Import ODIS…", "导入 ODIS…"), self._import_odis_zdc, "", ok_df, tip_df),
             self._btn("zdc_passport", tr("Паспорт и разделы…", "Passport & sections…", "护照与分区…"), self._open_passport_editor,
-                      "GhostBtn", ok_df, tip_df),
+                      "", ok_df, tip_df),
         )
         self._block(
             lay,
@@ -1020,7 +1198,7 @@ class EcuScreen(QWidget):
                 "zdc_fpa",
                 tr("Настроить профили и кнопки…", "Configure profiles & buttons…", "配置模式与按钮…"),
                 self._open_fpa_editor,
-                "PrimaryBtn",
+                "",
                 ok_df,
                 tip_df,
             ),
@@ -1028,7 +1206,7 @@ class EcuScreen(QWidget):
                 "zdc_learn_mfl",
                 tr("Проверить кнопку руля по CAN…", "Test wheel button over CAN…", "通过 CAN 测试方向盘按钮…"),
                 self._test_mfl_button_live,
-                "GhostBtn",
+                "",
             ),
         )
         self._block(
@@ -1069,19 +1247,18 @@ class EcuScreen(QWidget):
 
     def _page_dtc(self, lay: QVBoxLayout) -> None:
         self._head(lay, "dtc")
-        self._text(
+        dtc_st = State(tr(f"прочитано в {self._dtc_at}", f"read at {self._dtc_at}"), "info") if self._dtc is not None else None
+        self._block(
             lay,
+            tr("Опрос регистратора событий (UDS 0x19 / 0x14)", "Event memory query (UDS 0x19 / 0x14)"),
+            dtc_st,
             tr(
-                "Коды неисправностей читаются из блока по CAN; в дампах их нет.",
-                "Trouble codes are read from the ECU over CAN; dumps do not contain them.",
-                "故障码通过 CAN 从模块读取；转储中不包含故障码。",
+                "Коды неисправностей читаются напрямую из блока по CAN; в файлах дампов они не хранятся.",
+                "Trouble codes are read directly from the ECU over CAN; dump files do not store them.",
+                "故障码直接通过 CAN 从模块读取；转储文件中不存储故障码。",
             ),
-        )
-        lay.addLayout(
-            row(
-                self._btn("dtc", tr("Прочитать ошибки", "Read codes", "读取故障码"), lambda: self._dtc_run(False), "PrimaryBtn"),
-                self._btn("dtc_clear", tr("Стереть ошибки", "Clear codes", "清除故障码"), lambda: self._dtc_run(True), "GhostBtn"),
-            )
+            self._btn("dtc", tr("Прочитать ошибки", "Read codes", "读取故障码"), lambda: self._dtc_run(False), "PrimaryBtn"),
+            self._btn("dtc_clear", tr("Стереть ошибки", "Clear codes", "清除故障码"), lambda: self._dtc_run(True)),
         )
         if self._dtc is None:
             return
@@ -1195,7 +1372,7 @@ class EcuScreen(QWidget):
         ok, tip = self._need("cflash")
         btns = [
             self._btn("fbl_key", tr("Вшить свой ключ…", "Embed your key…", "写入自己的密钥…"), lambda: self._replace_key("fbl"), "", ok, tip),
-            self._btn("odx", tr("Подписать прошивку для ODX…", "Sign firmware for ODX…", "为 ODX 签署固件…"), self._sign_odx, "GhostBtn", ok, tip),
+            self._btn("odx", tr("Подписать прошивку для ODX…", "Sign firmware for ODX…", "为 ODX 签署固件…"), self._sign_odx, "", ok, tip),
         ]
         if fbl.key == "custom":
             btns.append(self._btn("fbl_stock", tr("Вернуть ключ VAG", "Restore VAG key", "恢复 VAG 密钥"), lambda: self._restore_key("fbl"), "GhostBtn", ok))
@@ -1214,6 +1391,319 @@ class EcuScreen(QWidget):
             ),
             *btns,
         )
+
+    def _page_hw(self, lay: QVBoxLayout) -> None:
+        self._head(lay, "hw")
+        self._text(
+            lay,
+            tr(
+                "Внешняя SPI EEPROM ST M95640 (8 КБ на шине CSIH1) хранит паспорт блока, VIN, кодировку 0x0600, "
+                "список оборудования 0x04A3, данные АКБ BEM и блок состояния безопасности NvM 0x5E. Опционные "
+                "байты RH850/F1L (OPBT0..OPBT8, 36 Б) задают режим отладки JTAG/LPD, сторожевые таймеры WDTA0/1, "
+                "монитор питания CVM и активацию криптомодуля ICU-S.",
+                "The external ST M95640 SPI EEPROM (8 KB on CSIH1) stores the ECU passport, VIN, coding 0x0600, "
+                "installation list 0x04A3, BEM battery data, and the NvM 0x5E security state block. The RH850/F1L "
+                "Option Bytes (OPBT0..OPBT8, 36 B) configure JTAG/LPD debug mode, WDTA0/1 watchdogs, CVM voltage "
+                "monitoring, and ICU-S cryptographic activation.",
+            ),
+        )
+        self._note(
+            lay,
+            tr(
+                "Режим только для чтения и диагностики: запись в OPBT и внешнюю EEPROM намеренно не предусмотрена. "
+                "Некорректное значение OPBT необратимо блокирует запуск и отладку процессора RH850, а записи "
+                "безопасности NvM 0x5E/0x5F в M95640 защищены аппаратными тегами AES-CMAC (ICU-S).",
+                "Diagnostic read-only mode: writing to OPBT or the external EEPROM is intentionally disabled. "
+                "Invalid OPBT values can lock RH850 boot and debug access, and security records NvM 0x5E/0x5F in "
+                "M95640 are paired with hardware ICU-S AES-CMAC tags.",
+            ),
+        )
+        if self.ws.read_warnings:
+            warn_lines = [w for w in self.ws.read_warnings.values() if w]
+            if warn_lines:
+                self._note(lay, "\n\n".join(warn_lines), tone="warn")
+
+        cf_path = self.ws.path("cflash")
+        try:
+            cf_bytes = cf_path.read_bytes() if cf_path is not None else None
+        except OSError:
+            cf_bytes = None
+
+        # ── External SPI EEPROM (ST M95640, 8 KB) ──
+        ee_path = self.ws.path("eeprom")
+        ee_summary = None
+        if ee_path is not None:
+            try:
+                ee_summary = analyze_eeprom(ee_path.read_bytes(), cf_bytes)
+            except (OSError, ValueError):
+                ee_summary = None
+        if ee_summary is not None:
+            ee_state = State(
+                tr("8 КБ загружено", "8 KB loaded"),
+                "ok" if ee_summary.crc_bad_count == 0 and not ee_summary.blank else "warn",
+            )
+        elif "eeprom" in self.ws.read_warnings:
+            ee_state = State(tr("не удалось считать", "read warning"), "warn")
+        else:
+            ee_state = State(tr("не загружен", "not loaded"), "muted")
+
+        ee_btns = [
+            self._btn(
+                "hw_read_eeprom",
+                tr("Считать EEPROM по CAN", "Read EEPROM over CAN"),
+                self._read_eeprom_live,
+                "PrimaryBtn" if ee_path is None else "",
+            ),
+            self._btn(
+                "hw_open_eeprom",
+                tr("Открыть файл…", "Open file…"),
+                lambda: self._pick_optional_file("eeprom"),
+            ),
+        ]
+        if ee_path is not None:
+            ee_btns.append(
+                self._btn(
+                    "hw_report_eeprom",
+                    tr("Подробный отчёт EEPROM", "Full EEPROM report"),
+                    self._show_eeprom_report,
+                )
+            )
+        self._block(
+            lay,
+            tr("Внешняя SPI EEPROM (ST M95640, 8 КБ)", "External SPI EEPROM (ST M95640, 8 KB)"),
+            ee_state,
+            tr(
+                "Читается по шине SPI CSIH1 в режиме RAM-Loader (без модификации регистров и памяти) и автоматически "
+                "снимается при полном чтении блока.",
+                "Read over the CSIH1 SPI bus inside RAM-Loader (read-only, restoring all registers) and included "
+                "automatically in a full ECU backup.",
+            ),
+            *ee_btns,
+        )
+        if ee_summary is not None:
+            ee_rows: list[tuple[str, ...]] = []
+            pn_sw = (ee_summary.part_number or "—") + (f"  SW {ee_summary.sw_version}" if ee_summary.sw_version else "")
+            ee_rows.append((tr("Паспорт NvM 0x00", "Passport NvM 0x00"), pn_sw, f"{ee_summary.asam_id or '—'} {ee_summary.odx_version}".strip()))
+            src_lbl = tr("таблица NvM из Cflash", "Cflash NvM table") if ee_summary.from_cflash_table else tr("TLV-сканер", "TLV scan")
+            ee_rows.append(
+                (
+                    tr("Записи и CRC-16", "Records & CRC-16"),
+                    f"CRC OK: {ee_summary.crc_ok_count}, CRC ERR: {ee_summary.crc_bad_count}",
+                    f"{src_lbl}, {tr('пустых', 'erased')}: {ee_summary.erased_count}",
+                )
+            )
+            if ee_summary.vin:
+                ee_rows.append(("VIN (NvM 0x0F)", ee_summary.vin, ""))
+            if ee_summary.long_coding:
+                lc_spaced = " ".join(f"{b:02X}" for b in ee_summary.long_coding)
+                ee_rows.append((tr("Кодировка 0x0600", "Coding 0x0600"), lc_spaced, "NvM 0x0D"))
+            if ee_summary.prog_date or ee_summary.prog_counter is not None or ee_summary.workshop_hex:
+                cnt_txt = f"#{ee_summary.prog_counter}" if ee_summary.prog_counter is not None else ""
+                ee_rows.append(
+                    (
+                        tr("Прошивки (F199/F198)", "Flashing (F199/F198)"),
+                        f"{ee_summary.prog_date or '—'} {cnt_txt}".strip(),
+                        ee_summary.workshop_hex or "",
+                    )
+                )
+            if ee_summary.bem_capacity_ah is not None or ee_summary.bem_vendor or ee_summary.bem_serial:
+                cap_txt = f"{ee_summary.bem_capacity_ah} Ah" if ee_summary.bem_capacity_ah is not None else "—"
+                ee_rows.append(
+                    (
+                        tr("АКБ BEM (NvM 0x27)", "BEM battery (0x27)"),
+                        f"{cap_txt}  {ee_summary.bem_vendor}".strip(),
+                        f"SN {ee_summary.bem_serial}" if ee_summary.bem_serial else "",
+                    )
+                )
+            if ee_summary.nvm_5e_present and ee_summary.learned_cp_mask is not None:
+                slots_txt = ", ".join(s.ecu_addr for s in ee_summary.learned_cp_slots) or tr("нет ведомых", "no slaves")
+                m_txt = tr("Мастер CP: обучен", "Master CP: learned") if ee_summary.master_cp_learned else tr("Мастер CP: нет", "Master CP: no")
+                if ee_summary.showroom_mode_active:
+                    m_txt += ", Showroom ON"
+                ee_rows.append(
+                    (
+                        tr("CP в NvM 0x5E", "CP in NvM 0x5E"),
+                        f"0x{ee_summary.learned_cp_mask:03X} ({len(ee_summary.learned_cp_slots)}/12: {slots_txt})",
+                        m_txt,
+                    )
+                )
+                if ee_summary.eng_disable_mask is not None:
+                    f_txt = (
+                        f"0x80={'ON' if ee_summary.feat_80_enabled else 'OFF'}, "
+                        f"0x81={'ON' if ee_summary.feat_81_enabled else 'OFF'}, "
+                        f"0x83={'ON' if ee_summary.feat_83_enabled else 'OFF'}"
+                    )
+                    ee_rows.append(
+                        (
+                            tr("Инженерная маска", "Engineering mask"),
+                            f"0x{ee_summary.eng_disable_mask:04X}",
+                            f_txt,
+                        )
+                    )
+            self._table(lay, tr("Сводка внешней EEPROM", "External EEPROM summary"), ee_rows)
+
+        # ── Renesas RH850/F1L Option Bytes (OPBT0..OPBT8, 36 B) ──
+        op_path = self.ws.path("opbt")
+        op_summary = None
+        if op_path is not None:
+            try:
+                op_summary = analyze_opbt(op_path.read_bytes())
+            except (OSError, ValueError):
+                op_summary = None
+        if op_summary is not None:
+            op_state = State(
+                f"{len(op_summary.words)} × 32-bit",
+                "ok" if op_summary.reserved_bits_ok and not op_summary.blank else "warn",
+            )
+        elif "opbt" in self.ws.read_warnings:
+            op_state = State(tr("не удалось считать", "read warning"), "warn")
+        else:
+            op_state = State(tr("не загружен", "not loaded"), "muted")
+
+        op_btns = [
+            self._btn(
+                "hw_read_opbt",
+                tr("Считать OPBT по CAN", "Read OPBT over CAN"),
+                self._read_opbt_live,
+                "PrimaryBtn" if op_path is None else "",
+            ),
+            self._btn(
+                "hw_open_opbt",
+                tr("Открыть файл…", "Open file…"),
+                lambda: self._pick_optional_file("opbt"),
+            ),
+        ]
+        if op_path is not None:
+            op_btns.append(
+                self._btn(
+                    "hw_report_opbt",
+                    tr("Подробный отчёт OPBT", "Full OPBT report"),
+                    self._show_opbt_report,
+                )
+            )
+        self._block(
+            lay,
+            tr("Опционные байты RH850/F1L (OPBT0..OPBT8, 36 Б)", "RH850/F1L Option Bytes (OPBT0..OPBT8, 36 B)"),
+            op_state,
+            tr(
+                "Считываются через окно Extra Area (BFASELR=1 @ 0x01000070) с полным сохранением состояния кэша и буфера предвыборки.",
+                "Read via the Extra Area flash window (BFASELR=1 @ 0x01000070) while saving and restoring I-cache and prefetch state.",
+            ),
+            *op_btns,
+        )
+        if op_summary is not None:
+            op_rows: list[tuple[str, ...]] = [
+                (
+                    "OPBT0",
+                    f"0x{op_summary.opbt0:08X}",
+                    tr("резервные биты OK", "reserved bits OK")
+                    if op_summary.reserved_bits_ok
+                    else tr("нестандартные биты", "non-standard bits"),
+                )
+            ]
+            if len(op_summary.words) >= 2:
+                op_rows.append(("OPBT1", f"0x{op_summary.words[1]:08X}", tr("тактирование / PLL0", "clock / PLL0")))
+            if op_summary.opbt8 is not None:
+                icus_txt = (
+                    tr("ICU-S активен", "ICU-S active")
+                    if op_summary.icus_activated
+                    else tr("ICU-S выключен (bit 31 = 1)", "ICU-S disabled (bit 31 = 1)")
+                )
+                op_rows.append(("OPBT8 (ICU-S)", f"0x{op_summary.opbt8:08X}", icus_txt))
+            for fld in op_summary.fields:
+                op_rows.append((f"[{fld.bits}] {fld.name}", fld.value_text, f"0x{fld.raw_value:X}"))
+            self._table(lay, tr("Расшифровка OPBT", "Decoded OPBT"), op_rows)
+
+    def _pick_optional_file(self, kind: str) -> None:
+        title = (
+            tr("Файл внешней EEPROM M95640 (8 КБ)", "External M95640 EEPROM dump (8 KB)")
+            if kind == "eeprom"
+            else tr("Файл опционных байтов OPBT (32 / 36 / 256 Б)", "RH850 OPBT dump (32 / 36 / 256 B)")
+        )
+        chosen, _ = QFileDialog.getOpenFileName(
+            self,
+            title,
+            str(self.ws.folder or Path.cwd()),
+            "Binary (*.bin *.raw);;All Files (*)",
+        )
+        if not chosen:
+            return
+        err = self.ws.replace(kind, Path(chosen))
+        if err is not None:
+            QMessageBox.warning(self, title, err)
+
+    def _adopt_optional_read(self, kind: str, session_file: Path) -> None:
+        if not session_file.is_file():
+            return
+        target = session_file
+        if self.ws.folder is not None and self.ws.folder.is_dir():
+            cand = self.ws.folder / CANDIDATES[kind][0]
+            if not cand.exists():
+                try:
+                    shutil.copy2(session_file, cand)
+                    target = cand
+                except OSError:
+                    target = session_file
+        self.ws.replace(kind, target)
+        self.note.emit(tr(f"Считано и загружено: {target}", f"Read and loaded: {target}"))
+
+    def _read_eeprom_live(self) -> None:
+        if not ensure_ready(self.conn, self):
+            return
+        port, iface = self.conn.port, self.conn.interface
+        sdir = self._session("read_eeprom")
+        out_file = sdir / "Eeprom.bin"
+        cf_path = self.ws.path("cflash")
+        try:
+            cf_bytes = cf_path.read_bytes() if cf_path is not None else None
+        except OSError:
+            cf_bytes = None
+        self.runner.run_task(
+            tr("Чтение внешней EEPROM M95640 (8 КБ)", "Reading external M95640 EEPROM (8 KB)"),
+            lambda rep: can_read_eeprom(
+                port,
+                out_file,
+                interface=iface,
+                session_dir=sdir,
+                cflash_bytes=cf_bytes,
+                reporter=rep,
+            ),
+            on_success=self._here(lambda _res: self._adopt_optional_read("eeprom", out_file)),
+        )
+
+    def _read_opbt_live(self) -> None:
+        if not ensure_ready(self.conn, self):
+            return
+        port, iface = self.conn.port, self.conn.interface
+        sdir = self._session("read_opbt")
+        out_file = sdir / "Opbt.bin"
+        self.runner.run_task(
+            tr("Чтение опционных байтов OPBT (36 Б)", "Reading RH850 Option Bytes OPBT (36 B)"),
+            lambda rep: can_read_opbt(
+                port,
+                out_file,
+                interface=iface,
+                session_dir=sdir,
+                reporter=rep,
+            ),
+            on_success=self._here(lambda _res: self._adopt_optional_read("opbt", out_file)),
+        )
+
+    def _show_eeprom_report(self) -> None:
+        p = self.ws.path("eeprom")
+        if p is None:
+            return
+        cf_path = self.ws.path("cflash")
+        cf_bytes = cf_path.read_bytes() if cf_path is not None and cf_path.is_file() else None
+        txt = format_eeprom_report(analyze_eeprom(p.read_bytes(), cf_bytes), Style(False), str(p))
+        run_dialog(TextResultDialog(self, tr("Подробный отчёт EEPROM", "Full EEPROM report"), txt, self.ws.part_number))
+
+    def _show_opbt_report(self) -> None:
+        p = self.ws.path("opbt")
+        if p is None:
+            return
+        txt = format_opbt_report(analyze_opbt(p.read_bytes()), Style(False), str(p))
+        run_dialog(TextResultDialog(self, tr("Подробный отчёт OPBT", "Full OPBT report"), txt, self.ws.part_number))
 
     # ────────────────────────────── changed dumps ──────────────────────────────
     def _fbl_key_changed(self) -> bool:
@@ -1300,7 +1790,7 @@ class EcuScreen(QWidget):
             name = QLabel(NAMES[kind])
             name.setObjectName("FieldLabel")
             self.grid_changes.addWidget(name, r, 0)
-            self.grid_changes.addWidget(pill(tag, tone), r, 1, Qt.AlignmentFlag.AlignLeft)
+            self.grid_changes.addWidget(status_readout(tag, tone), r, 1, Qt.AlignmentFlag.AlignLeft)
             self.grid_changes.addWidget(hint(how), r, 2)
         self.grid_changes.setColumnStretch(2, 1)
 
@@ -1609,12 +2099,28 @@ class EcuScreen(QWidget):
             on_success=self._here(lambda pre: QTimer.singleShot(0, lambda: self._zdc_upload_plan(df_bytes, pre))),
         )
 
+    def _zdc_blocks_to_upload(self, df_bytes: bytes) -> list[int]:
+        """Upload only the ZDC blocks edited since the base DataFlash read; fall back to all populated blocks when
+        uploading an untouched standalone dump directly."""
+        non_empty = [i for i in sorted(ZDC_UDS_UPLOAD_MAP) if any(b != 0xFF for b in export_zdc_block(df_bytes, i))]
+        orig = self.ws.original.get("dflash")
+        if orig is not None:
+            try:
+                orig_bytes = orig.read_bytes()
+            except OSError:
+                orig_bytes = b""
+            if len(orig_bytes) == len(df_bytes):
+                changed = [i for i in non_empty if export_zdc_block(df_bytes, i) != export_zdc_block(orig_bytes, i)]
+                if changed:
+                    return changed
+        return non_empty
+
     def _zdc_upload_plan(self, df_bytes: bytes, pre: dict[str, Any]) -> None:
         self._swap_live, self._swap_at = list(pre["features"]), time.strftime("%H:%M")
         active = {f["fsid"] for f in pre["features"] if status.swap_live_state(f["status"]).key == "on"}
-        required = fecs_required_by_dataset(df_bytes)
+        blocks = self._zdc_blocks_to_upload(df_bytes)
+        required = fecs_required_by_dataset(df_bytes, blocks=blocks)
         missing = [c for c in required if c not in active]
-        blocks = [i for i in sorted(ZDC_UDS_UPLOAD_MAP) if any(b != 0xFF for b in export_zdc_block(df_bytes, i))]
         coding = bytes(pre["coding"])
         want = sync_gateway_coding_for_zdc(df_bytes, coding, blocks=blocks)
         diff = [i for i in range(len(want)) if want[i] != coding[i]]
@@ -1655,19 +2161,32 @@ class EcuScreen(QWidget):
         box.exec()
         clicked = box.clickedButton()
         if clicked is not None and clicked in (act, only):
-            self._zdc_upload_run(df_bytes, missing if clicked is act else [])
+            self._zdc_upload_run(df_bytes, missing if clicked is act else [], blocks=blocks)
         else:
             self.refresh()
 
-    def _zdc_upload_run(self, df_bytes: bytes, activate: list[int]) -> None:
+    def _zdc_upload_run(self, df_bytes: bytes, activate: list[int], *, blocks: list[int] | None = None) -> None:
         port, iface = self.conn.port, self.conn.interface
         sdir = self._session("zdc_upload")
+        cf_path = self.ws.path("cflash")
+        try:
+            cflash_bytes = cf_path.read_bytes() if cf_path is not None else None
+        except OSError:
+            cflash_bytes = None
 
         def task(rep: Any) -> dict[str, Any]:
             out: dict[str, Any] = {"session_dir": str(sdir)}
             if activate:
                 out["swap"] = can_activate_swap(port, activate, interface=iface, session_dir=sdir / "swap", reporter=rep)
-            out["upload"] = can_upload_zdc_datasets(port, df_bytes, interface=iface, session_dir=sdir / "upload", reporter=rep)
+            out["upload"] = can_upload_zdc_datasets(
+                port,
+                df_bytes,
+                blocks=blocks,
+                cflash_bytes=cflash_bytes,
+                interface=iface,
+                session_dir=sdir / "upload",
+                reporter=rep,
+            )
             out["features"] = can_swap_status(port, interface=iface, reporter=rep)["features"]  # did the ECU take them?
             return out
 

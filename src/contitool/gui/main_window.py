@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFileDialog,
@@ -37,6 +37,8 @@ from contitool.cli.formatting import (
     Style,
     format_cflash_report,
     format_dflash_report,
+    format_eeprom_report,
+    format_opbt_report,
     format_uflash_report,
 )
 from contitool.core import (
@@ -49,6 +51,8 @@ from contitool.core import (
     analyze_dflash,
     analyze_dflash_datasets,
     analyze_dflash_swap,
+    analyze_eeprom,
+    analyze_opbt,
     analyze_uflash,
 )
 from contitool.gui.connection import CanConnection, ConnectionDialog, ensure_ready
@@ -61,7 +65,7 @@ from contitool.gui.screens.terminal import TerminalScreen
 from contitool.gui import theme
 from contitool.gui.theme import build_app_icon, dot_icon, mono_font
 from contitool.gui.widgets.execution_panel import ExecutionPanel
-from contitool.gui.widgets.page import Callout, Dialog, TextResultDialog, button, hint, run_dialog
+from contitool.gui.widgets.page import Callout, Dialog, TextResultDialog, button, hint, run_dialog, vdivider
 from contitool.gui.update_check import UpdateChecker
 from contitool.gui.worker import OperationRunner
 from contitool.gui.workspace import NAMES, Workspace
@@ -116,12 +120,14 @@ class MainWindow(QMainWindow):
         self.ecu_screen.terminal_requested.connect(self._open_in_terminal)
 
         self.console = ExecutionPanel(self.runner)
-        self.console.setMinimumHeight(110)
+        self.console.setMinimumHeight(120)
+        self.console.setVisible(False)
         self.ecu_screen.note.connect(self.console.note)
+        self.ecu_screen.note.connect(lambda _m: self._ensure_console_visible())
         self.splitter.addWidget(self.stack)
         self.splitter.addWidget(self.console)
         self.splitter.setStretchFactor(0, 1)
-        self.splitter.setSizes([640, 170])
+        self.splitter.setSizes([660, 180])
 
         self.terminal = TerminalScreen(self.conn, self.runner)
         self.conn.in_use = self._adapter_in_use
@@ -129,14 +135,15 @@ class MainWindow(QMainWindow):
         self.modes.addWidget(self.splitter)
         self.modes.addWidget(self.terminal)
         lay.addWidget(self.modes, 1)
+        lay.addWidget(self.console.status_widget)
 
         self._build_menu()
-        self.statusBar().setSizeGripEnabled(False)
-        self.statusBar().addWidget(self.console.status_widget, 1)
 
         self.ws.changed.connect(self._refresh_header)
         self.ws.changed.connect(self._refresh_screen)
         self.conn.changed.connect(self._refresh_header)
+        self.console.btn_toggle_log.toggled.connect(self._set_console_visible)
+        self.console.btn_hide.clicked.connect(lambda: self._set_console_visible(False))
         self.runner.operation_started.connect(self._ensure_console_visible)
         self.runner.busy_changed.connect(self._on_busy)
         self.runner.operation_finished.connect(self._on_operation_finished)
@@ -153,17 +160,26 @@ class MainWindow(QMainWindow):
         bar = QFrame()
         bar.setObjectName("Header")
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(16, 0, 16, 0)
-        lay.setSpacing(8)
+        lay.setContentsMargins(18, 0, 18, 0)
+        lay.setSpacing(10)
 
         logo = QLabel()
-        logo.setPixmap(build_app_icon().pixmap(QSize(18, 18)))
-        lay.addWidget(logo)
+        logo.setPixmap(build_app_icon().pixmap(QSize(20, 20)))
+        lay.addWidget(logo, 0, Qt.AlignmentFlag.AlignVCenter)
         self.lbl_app = QLabel("ContiTool")
         self.lbl_app.setObjectName("AppName")
-        lay.addWidget(self.lbl_app)
-        lay.addSpacing(18)
+        lay.addWidget(self.lbl_app, 0, Qt.AlignmentFlag.AlignVCenter)
+        lay.addSpacing(4)
+        sep = vdivider()
+        sep.setFixedHeight(16)
+        lay.addWidget(sep, 0, Qt.AlignmentFlag.AlignVCenter)
+        lay.addSpacing(4)
 
+        track = QFrame()
+        track.setObjectName("ModeTrack")
+        track_lay = QHBoxLayout(track)
+        track_lay.setContentsMargins(2, 2, 2, 2)
+        track_lay.setSpacing(2)
         self.tab_ecu = QPushButton()
         self.tab_term = QPushButton()
         tabs = QButtonGroup(self)
@@ -173,14 +189,14 @@ class MainWindow(QMainWindow):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(lambda _c=False, m=mode: self.set_mode(m))
             tabs.addButton(b)
-            lay.addWidget(b)
+            track_lay.addWidget(b)
         self.tab_ecu.setChecked(True)
+        lay.addWidget(track, 0, Qt.AlignmentFlag.AlignVCenter)
         lay.addStretch(1)
 
         self.btn_conn = button("", "Chip", slot=self.show_connection)
         self.btn_conn.setCursor(Qt.CursorShape.PointingHandCursor)
-        lay.addWidget(self.btn_conn)
-        lay.addSpacing(4)
+        lay.addWidget(self.btn_conn, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self._lang_buttons: dict[str, QPushButton] = {}
         lang_group = QButtonGroup(self)
@@ -226,8 +242,14 @@ class MainWindow(QMainWindow):
         self.menu_view = mb.addMenu("")
         self.act_mode_ecu = act(lambda: self.set_mode("ecu"), "Ctrl+1")
         self.act_mode_term = act(lambda: self.set_mode("terminal"), "Ctrl+2")
+        self.act_log = QAction(self)
+        self.act_log.setCheckable(True)
+        self.act_log.setShortcut(QKeySequence("Ctrl+J"))
+        self.act_log.toggled.connect(self._set_console_visible)
         self.menu_view.addAction(self.act_mode_ecu)
         self.menu_view.addAction(self.act_mode_term)
+        self.menu_view.addSeparator()
+        self.menu_view.addAction(self.act_log)
 
         self.menu_help = mb.addMenu("")
         self.act_guide = act(self.show_guide, QKeySequence.StandardKey.HelpContents)
@@ -250,16 +272,16 @@ class MainWindow(QMainWindow):
         self.act_close.setEnabled(open_)
         if self.conn.port or self.conn.title:
             self.btn_conn.setText(self.conn.display())
-            self.btn_conn.setIcon(dot_icon(theme.OK if self.conn.ready else theme.WARN))
+            self.btn_conn.setIcon(dot_icon(theme.OK if self.conn.ready else theme.WARN, 6))
             self.btn_conn.setToolTip(
                 tr("Адаптер готов", "Adapter ready", "适配器就绪")
                 if self.conn.ready
                 else tr("Подтвердите схему подключения", "Confirm the bench wiring", "请确认台架接线")
             )
         else:
-            self.btn_conn.setText(tr("Адаптер не настроен", "No adapter set up", "未配置适配器"))
-            self.btn_conn.setIcon(dot_icon(theme.TEXT_MUTED))
-            self.btn_conn.setToolTip(tr("Настроить подключение к блоку", "Set up the ECU connection", "设置模块连接"))
+            self.btn_conn.setText(tr("Подключение…", "Connection…", "连接…"))
+            self.btn_conn.setIcon(QIcon())
+            self.btn_conn.setToolTip(tr("Настроить адаптер и подключение к блоку", "Set up the CAN adapter and ECU connection", "设置 CAN 适配器和模块连接"))
 
     def set_mode(self, mode: str) -> None:
         """Switch between the ECU workspace and the CAN terminal. Leaving the terminal frees the adapter."""
@@ -268,6 +290,9 @@ class MainWindow(QMainWindow):
             self.terminal.disconnect_bus()
         self.modes.setCurrentWidget(self.terminal if term else self.splitter)
         (self.tab_term if term else self.tab_ecu).setChecked(True)
+        self.console.status_divider.setVisible(not term)
+        self.console.btn_toggle_log.setVisible(not term)
+        self.act_log.setEnabled(not term)
 
     def _open_in_terminal(self, request: str) -> None:
         self.set_mode("terminal")
@@ -284,11 +309,20 @@ class MainWindow(QMainWindow):
         if not self.ws.is_open:
             self.start_screen.refresh_recent()
 
-    def _ensure_console_visible(self, _title: str) -> None:
-        sizes = self.splitter.sizes()
-        if len(sizes) == 2 and sizes[1] < 160:
-            total = sum(sizes)
-            self.splitter.setSizes([max(340, total - 190), 190])
+    def _set_console_visible(self, show: bool) -> None:
+        self.console.setVisible(show)
+        for ctrl in (self.console.btn_toggle_log, self.act_log):
+            ctrl.blockSignals(True)
+            ctrl.setChecked(show)
+            ctrl.blockSignals(False)
+        if show:
+            sizes = self.splitter.sizes()
+            total = sum(sizes) or max(540, self.height() - 80)
+            if len(sizes) == 2 and sizes[1] < 160:
+                self.splitter.setSizes([max(340, total - 185), 185])
+
+    def _ensure_console_visible(self, _title: str = "") -> None:
+        self._set_console_visible(True)
 
     # ────────────────────────────── loading ──────────────────────────────
     def open_folder(self, folder: str = "") -> None:
@@ -320,9 +354,9 @@ class MainWindow(QMainWindow):
                 self,
                 tr("Это не дампы шлюза", "Not gateway dumps", "这不是网关转储"),
                 tr(
-                    "Ни один файл не опознан как CodeFlash, DataFlash или Uflash этого шлюза.",
-                    "None of the files is a CodeFlash, DataFlash or Uflash of this gateway.",
-                    "没有文件被识别为该网关的 CodeFlash、DataFlash 或 Uflash。",
+                    "Ни один файл не опознан как CodeFlash, DataFlash, Uflash, EEPROM или OPBT этого шлюза.",
+                    "None of the files is a CodeFlash, DataFlash, Uflash, EEPROM or OPBT dump of this gateway.",
+                    "没有文件被识别为该网关的 CodeFlash、DataFlash、Uflash、EEPROM 或 OPBT 转储。",
                 ),
             )
         elif rejected:
@@ -345,6 +379,7 @@ class MainWindow(QMainWindow):
             )
         elif missing:
             names = ", ".join(NAMES[k] for k in missing)
+            self._ensure_console_visible()
             self.console.note(
                 tr(
                     f"Не найдено в папке: {names}. Часть функций будет недоступна.",
@@ -387,8 +422,28 @@ class MainWindow(QMainWindow):
         def done(res: dict[str, Any]) -> None:
             folder = Path(str(res.get("session_dir", sdir)))
             self._report_missing(self.ws.open_folder(folder, source="can"), folder)
+            area_warns = res.get("area_warnings")
+            if isinstance(area_warns, dict) and area_warns:
+                self.ws.read_warnings.update({k: str(v) for k, v in area_warns.items() if v})
+                self.ws.changed.emit()
+            warns = [str(w) for w in (res.get("warnings") or []) if w]
+            if warns:
+                QTimer.singleShot(0, lambda w=warns: self._show_backup_warnings(w))
 
         self.runner.run_task(tr("Чтение памяти блока", "Reading the ECU memory", "正在读取模块存储器"), task, on_success=done)
+
+    def _show_backup_warnings(self, warnings: list[str]) -> None:
+        QMessageBox.warning(
+            self,
+            tr("Предупреждение при чтении EEPROM / OPBT", "EEPROM / OPBT read warning"),
+            tr(
+                "Основная память шлюза (CodeFlash, Uflash, DataFlash) успешно считана и сохранена, "
+                "однако дополнительные области прочитать не удалось:\n\n",
+                "The gateway's main flash areas (CodeFlash, Uflash, DataFlash) were read and saved "
+                "successfully, however optional hardware areas could not be read:\n\n",
+            )
+            + "\n\n".join(f"• {w}" for w in warnings),
+        )
 
     def _adapter_in_use(self) -> str:
         if self.runner.is_busy:
@@ -607,14 +662,14 @@ class MainWindow(QMainWindow):
             tr(
                 f"<b>ContiTool {__version__}</b><br>Сервисный инструмент для шлюза VAG MQB J533.<br><br>"
                 f"{AUTHOR_CREDIT}<br>"
-                f'<a href="{AUTHOR_SITE_URL}">{AUTHOR_SITE_SHORT}</a> · '
-                f'<a href="{AUTHOR_DRIVE2_URL}">Drive2</a> · <a href="{AUTHOR_TG_URL}">Telegram</a><br><br>'
+                f'<a href="{AUTHOR_SITE_URL}">{AUTHOR_SITE_SHORT}</a>&nbsp;&nbsp;|&nbsp;&nbsp;'
+                f'<a href="{AUTHOR_DRIVE2_URL}">Drive2</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="{AUTHOR_TG_URL}">Telegram</a><br><br>'
                 "Бесплатный инструмент сообщества, не для продажи. Программа предоставляется «как есть», "
                 "без каких-либо гарантий.",
                 f"<b>ContiTool {__version__}</b><br>Service tool for the VAG MQB J533 gateway.<br><br>"
                 f"{AUTHOR_CREDIT}<br>"
-                f'<a href="{AUTHOR_SITE_URL}">{AUTHOR_SITE_SHORT}</a> · '
-                f'<a href="{AUTHOR_DRIVE2_URL}">Drive2</a> · <a href="{AUTHOR_TG_URL}">Telegram</a><br><br>'
+                f'<a href="{AUTHOR_SITE_URL}">{AUTHOR_SITE_SHORT}</a>&nbsp;&nbsp;|&nbsp;&nbsp;'
+                f'<a href="{AUTHOR_DRIVE2_URL}">Drive2</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="{AUTHOR_TG_URL}">Telegram</a><br><br>'
                 "Free community tool, not for sale. Provided “as is”, without warranty of any kind.",
                 f"<b>ContiTool {__version__}</b><br>VAG MQB J533 网关服务工具。<br><br>"
                 f"{AUTHOR_CREDIT}<br>"
@@ -630,6 +685,8 @@ class MainWindow(QMainWindow):
             return
         plain = Style(False)
         sections: list[str] = []
+        cf_path = self.ws.path("cflash")
+        cf_raw = cf_path.read_bytes() if cf_path is not None and cf_path.is_file() else None
         for kind, build in (
             ("cflash", lambda raw, p: format_cflash_report(analyze_cflash(raw), plain, p)),
             ("uflash", lambda raw, p: format_uflash_report(analyze_uflash(raw), plain, p)),
@@ -643,6 +700,8 @@ class MainWindow(QMainWindow):
                     dataset_summary=analyze_dflash_datasets(raw),
                 ),
             ),
+            ("eeprom", lambda raw, p: format_eeprom_report(analyze_eeprom(raw, cf_raw), plain, p)),
+            ("opbt", lambda raw, p: format_opbt_report(analyze_opbt(raw), plain, p)),
         ):
             path = self.ws.path(kind)
             if path is not None:
@@ -674,6 +733,7 @@ class MainWindow(QMainWindow):
         self.menu_view.setTitle(tr("Вид", "View", "视图"))
         self.act_mode_ecu.setText(tr("Блок", "ECU", "模块"))
         self.act_mode_term.setText(tr("CAN-терминал", "CAN terminal", "CAN 终端"))
+        self.act_log.setText(tr("Журнал операций", "Operation log", "操作日志"))
         self.menu_help.setTitle(tr("Справка", "Help", "帮助"))
         self.act_guide.setText(tr("Памятка по стенду", "Bench guide", "台架指南"))
         self.act_problem.setText(tr("Сообщить о проблеме…", "Report a problem…", "报告问题…"))
@@ -799,11 +859,14 @@ class EcuFoundDialog(Dialog):
             self.body.addWidget(
                 hint(
                     tr(
-                        "Будет снята полная копия памяти: CodeFlash, Uflash и DataFlash, около полутора минут. "
-                        "Блок перейдёт в режим загрузчика и потом вернётся в обычный режим; в память ничего не пишется.",
-                        "A full memory copy will be taken: CodeFlash, Uflash and DataFlash, about a minute and a half. "
-                        "The ECU switches to its loader and back to normal afterwards; nothing is written to its memory.",
-                        "将读取完整的存储器副本：CodeFlash、Uflash 和 DataFlash，大约一分半钟。模块将进入引导加载程序模式，随后恢复正常；不会向存储器写入任何内容。",
+                        "Будет снята полная копия памяти: CodeFlash, Uflash, DataFlash, а также внешняя EEPROM и OPBT "
+                        "(около полутора минут). Блок перейдёт в режим загрузчика и потом вернётся в обычный режим; "
+                        "в память ничего не пишется.",
+                        "A full memory copy will be taken: CodeFlash, Uflash, DataFlash, plus external EEPROM and OPBT "
+                        "(about a minute and a half). The ECU switches to its loader and back to normal afterwards; "
+                        "nothing is written to its memory.",
+                        "将读取完整的存储器副本：CodeFlash、Uflash、DataFlash，以及外部 EEPROM 和 OPBT（大约一分半钟）。"
+                        "模块将进入引导加载程序模式，随后恢复正常；不会向存储器写入任何内容。",
                     )
                 )
             )

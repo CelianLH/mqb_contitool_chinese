@@ -95,6 +95,67 @@ def _release_win_timer() -> None:
                     pass
 
 
+SLCAN_RX_BUFFER = 262_144  # 256 KB (>11,900 SLCAN frames = >93 KB of flash): keeps Windows usbser.sys from NAKing Bulk IN
+SLCAN_TX_BUFFER = 65_536
+
+
+def _pop_slcan_line(buf: bytearray) -> str | None:
+    """Pop one complete `\\r`- or `\\x07`-terminated SLCAN line from `buf`, leaving any partial tail intact."""
+    cr = buf.find(13)  # b"\r" (_OK / frame terminator)
+    bel = buf.find(7)  # b"\x07" (_ERROR)
+    if cr < 0 and bel < 0:
+        return None
+    cut = cr if bel < 0 else (bel if cr < 0 else min(cr, bel))
+    line = bytes(buf[: cut + 1]).decode("ascii", errors="replace")
+    del buf[: cut + 1]
+    return line
+
+
+def _tune_slcan_bus(bus: Any) -> None:
+    """Replace python-can's byte-by-byte `serialPortOrig.read(1)` loop and enlarge Windows `usbser.sys` RX FIFO.
+
+    `python-can`'s `slcanBus._read` calls `serialPortOrig.read(1)` once per ASCII byte — 22 Win32 overlapped `ReadFile`
+    + `ClearCommError` + `GetOverlappedResult` kernel calls per 8-byte CAN frame (~70,000 IRPs/s during a 500 kbit/s
+    RAM-Loader stream), capping Windows throughput around ~1,530 fps (~30 KB of a 64 KB block) and overflowing
+    `usbser.sys`'s default 4 KB RX buffer even on a native USB-CDC CANable (`0x16D0:0x117E`). Reading `in_waiting`
+    bytes in one bulk `ReadFile` and enlarging `SetupComm` to 256 KB cuts Win32 syscalls >100x so 64 KB bursts arrive
+    with zero frame loss.
+    """
+    ser = getattr(bus, "serialPortOrig", None)
+    buf = getattr(bus, "_buffer", None)
+    if ser is None or not callable(getattr(ser, "read", None)) or not isinstance(buf, bytearray):
+        return
+    set_buf = getattr(ser, "set_buffer_size", None)
+    if callable(set_buf):
+        with contextlib.suppress(Exception):
+            set_buf(rx_size=SLCAN_RX_BUFFER, tx_size=SLCAN_TX_BUFFER)
+
+    from can.interfaces.slcan import error_check
+
+    def _bulk_read(timeout: float | None) -> str | None:
+        line = _pop_slcan_line(buf)
+        if line is not None:
+            return line
+        deadline = None if timeout is None else (time.monotonic() + max(0.0, timeout))
+        with error_check("Could not read from serial device"):
+            while True:
+                waiting = ser.in_waiting
+                chunk = ser.read(waiting if waiting > 0 else 1)
+                if chunk:
+                    buf.extend(chunk)
+                    if waiting == 0:
+                        more = ser.in_waiting
+                        if more > 0:
+                            buf.extend(ser.read(more))
+                    line = _pop_slcan_line(buf)
+                    if line is not None:
+                        return line
+                if deadline is not None and time.monotonic() >= deadline:
+                    return None
+
+    bus._read = _bulk_read
+
+
 class J533CanLink:
     """Clean, logged CAN bus link for Continental J533 Diagnosis CAN (500 kbit/s)."""
 
@@ -124,6 +185,7 @@ class J533CanLink:
         self._borrowed: Any = None  # a kept-open bus this link only borrows, handed back in close()
         self.on_hw_fallback: Any = None  # called with a short reason when hardware ISO-TP gives way to software
         self._recycle_held = 0  # >0 inside a window where no TX link reopen may pause the stream
+        self._rx_trace_suspended = 0  # >0 while streaming 200k 0x6F1 memory frames so json.dumps never starves RX
         if log_path is not None:
             log_path.parent.mkdir(parents=True, exist_ok=True)
             self._log_file = log_path.open("a", encoding="utf-8", buffering=1)
@@ -156,6 +218,8 @@ class J533CanLink:
                 kwargs["tty_baudrate"] = tty_baudrate
                 kwargs["listen_only"] = listen_only
             self.bus = can.interface.Bus(**kwargs)
+            if interface == "slcan":
+                _tune_slcan_bus(self.bus)
             self._owns_bus = True
         self._timer_held = _acquire_win_timer()
 
@@ -188,7 +252,7 @@ class J533CanLink:
         self.close()
 
     def _write_trace(self, direction: str, arb_id: int, dlc: int, data: bytes) -> None:
-        if self._log_file is not None:
+        if self._log_file is not None and not (direction == "rx" and self._rx_trace_suspended):
             self._log_file.write(
                 json.dumps(
                     {
@@ -202,16 +266,58 @@ class J533CanLink:
                 + "\n"
             )
 
-    def drain_rx(self, max_frames: int = 64, *, quick: bool = False) -> None:
+    @contextlib.contextmanager
+    def suspend_rx_trace(self) -> Iterator[None]:
+        """Skip per-frame JSONL writes during 200k-frame memory streams so disk I/O / GIL never starves VCI RX (#28)."""
+        self._rx_trace_suspended += 1
+        try:
+            yield
+        finally:
+            self._rx_trace_suspended -= 1
+
+    def write_stream_summary(self, address: int, expected: int, received: int, frames: int) -> None:
+        """Record one compact summary line in `can.jsonl` for a streamed `0x6F1` memory burst."""
+        if self._log_file is not None:
+            self._log_file.write(
+                json.dumps(
+                    {
+                        "time": time.time(),
+                        "direction": "rx_stream",
+                        "id": f"0x{self.LOADER_RX_ID:x}",
+                        "address": f"0x{address:08x}",
+                        "expected_bytes": expected,
+                        "received_bytes": received,
+                        "frames": frames,
+                    }
+                )
+                + "\n"
+            )
+
+    def drain_rx(self, max_frames: int = 64, *, quick: bool = False) -> int:
         """Drain any stale buffered frames before starting a fresh handshake.
 
         `quick`: return at once when an slcan port has nothing waiting. python-can's slcan answers recv(timeout=0)
         only after one read at the serial port's own timeout (0.1 s) then; before every UDS request that was 0.1 s
         per `36` block (3.9 KB/s). The RAM-loader packets keep that read: their pacing on slcan was verified with it."""
-        port = getattr(self.bus, "serialPortOrig", None) if quick else None
+        def _waiting(ser: Any) -> int:
+            try:
+                return int(ser.in_waiting)
+            except can.CanError:
+                raise
+            except Exception as exc:
+                raise can.CanOperationError(f"Could not inspect serial input queue: {exc}") from exc
+
+        slcan_port = getattr(self.bus, "serialPortOrig", None)
+        port = slcan_port if quick else None
         parsed = getattr(self.bus, "_queue", None)  # slcan: lines already read from the port
-        for _ in range(max_frames):
-            if port is not None and not port.in_waiting and not (parsed and parsed.qsize()):
+        raw_buf = getattr(self.bus, "_buffer", None)
+        drained = 0
+        polls = 0
+        max_polls = max_frames * 4 + 256
+        while drained < max_frames and polls < max_polls:
+            polls += 1
+            has_buf_line = isinstance(raw_buf, bytearray) and (13 in raw_buf or 7 in raw_buf)
+            if port is not None and not _waiting(port) and not (parsed and parsed.qsize()) and not has_buf_line:
                 break
             try:
                 msg = self.bus.recv(timeout=0.0)
@@ -220,12 +326,57 @@ class J533CanLink:
 
                 if not isinstance(exc, FrameError):
                     raise
+                drained += 1
                 continue  # a result of the stale stream the bus could not interpret: thrown away with the rest
             if msg is None:
+                still_queued = (
+                    (isinstance(raw_buf, bytearray) and (13 in raw_buf or 7 in raw_buf))
+                    or bool(parsed and parsed.qsize())
+                    or (slcan_port is not None and callable(getattr(slcan_port, "read", None)) and _waiting(slcan_port) > 0)
+                )
+                if still_queued:
+                    continue  # e.g. an slcan TX ack (`z\r` / `\r`) sat ahead of buffered or waiting RX frames
                 break
             raw = bytes(msg.data)
             self.rx_frames += 1
-            self._write_trace("rx", msg.arbitration_id, msg.dlc, raw)
+            drained += 1
+            if drained <= 32:
+                self._write_trace("rx", msg.arbitration_id, msg.dlc, raw)
+        return drained
+
+    def drain_until_quiet(
+        self,
+        identifier: int | None = None,
+        *,
+        quiet_window: float = 0.08,
+        max_wait: float = 2.5,
+    ) -> int:
+        """Drain frames until `identifier` (or the whole bus) stays silent for `quiet_window` seconds."""
+        deadline = time.monotonic() + max_wait
+        quiet_since = time.monotonic()
+        discarded = 0
+        while time.monotonic() < deadline:
+            rem_quiet = quiet_window - (time.monotonic() - quiet_since)
+            if rem_quiet <= 0:
+                break
+            wait = min(0.02, max(0.002, rem_quiet), max(0.001, deadline - time.monotonic()))
+            try:
+                msg = self.bus.recv(timeout=wait)
+            except can.CanOperationError as exc:
+                from contitool.can.dpdu import FrameError
+
+                if not isinstance(exc, FrameError):
+                    raise
+                discarded += 1
+                quiet_since = time.monotonic()
+                continue
+            if msg is None:
+                continue
+            self.rx_frames += 1
+            if identifier is None or msg.arbitration_id == identifier:
+                discarded += 1
+                quiet_since = time.monotonic()
+        return discarded
 
     def send_frame(self, identifier: int, data: bytes | bytearray, pad: int | None = None) -> None:
         import can
@@ -387,7 +538,7 @@ class J533CanLink:
 
         The adapter only proves it can segment once a real multi-block transfer runs, and by then the application
         is already erased — so a failure there must be recoverable, not fatal. Returns True if it was active."""
-        if not self._hw_uds:
+        if getattr(self.bus, "uds_only", False) or not self._hw_uds:
             return False
         self._hw_uds = False
         end = getattr(self.bus, "end_uds_session", None)
@@ -412,7 +563,8 @@ class J533CanLink:
         if not req:
             raise ValueError("Empty UDS payload")
         req_sid = req[0]
-        if self._hw_uds:
+        uds_only = bool(getattr(self.bus, "uds_only", False)) and (self.UDS_TX_ID, self.UDS_RX_ID) == (0x710, 0x77A)
+        if self._hw_uds or uds_only:
             self._write_trace("uds_tx", self.UDS_TX_ID, len(req), req[:16])
             self.tx_frames += 1
             try:
@@ -424,7 +576,8 @@ class J533CanLink:
                 # goes again on the verified software path instead of ending the operation. The ECU refusing
                 # (a 7F answer) is not caught here: that is its answer, and no transport would change it.
                 self.drop_hw_uds()
-                self._write_trace("uds_hw_fallback", self.UDS_TX_ID, len(req), req[:16])
+                if not uds_only:
+                    self._write_trace("uds_hw_fallback", self.UDS_TX_ID, len(req), req[:16])
                 if getattr(self.bus, "spent", False):
                     # The VCI itself is gone (it reboots, #19-#22): the software path would only fail on the next
                     # frame with "this link no longer works", after promising to carry on.
@@ -454,33 +607,51 @@ class J533CanLink:
                         "继续。如果当时正在刷写，模块会停留在 FBL 引导加载程序中且没有应用程序——这是可以修复的："
                         f"给模块和 VCI 重新上电，{again}",
                     )) from exc
+                if uds_only:
+                    raise
                 if self.on_hw_fallback is not None:
                     self.on_hw_fallback(f"{req[:3].hex(' ').upper()}: {exc}")
             else:
                 self._write_trace("uds_rx", self.UDS_RX_ID, len(resp), resp[:16])
                 self.rx_frames += 1
                 return _checked_response(req_sid, resp, expected_sid)
-        self.drain_rx(quick=True)  # a late answer to an earlier request must not be read as the answer to this one
-        self.send_uds(req)
-        deadline = time.monotonic() + timeout
-        wait = 2.5
-        while True:
-            rem = deadline - time.monotonic()
-            if rem <= 0:
-                raise TimeoutError(f"UDS response timeout ({timeout:.1f}s) for {req[:8].hex()}")
-            resp = self.receive_uds(timeout=min(wait, rem))
-            if (
-                allow_pending
-                and len(resp) >= 3
-                and resp[0] == 0x7F
-                and resp[1] == req_sid
-                and resp[2] == 0x78
-            ):
-                # After 78 the ECU has P2* (5000 ms, from `50 xx 00 32 01 F4`) for the next frame; the FBL repeats
-                # 78 every ~2.5 s, so waiting only 2.5 s raced it and broke an erase over a slower adapter.
-                wait = P2_STAR_WAIT
-                continue
-            return _checked_response(req_sid, resp, expected_sid)
+        try:
+            self.drain_rx(quick=True)  # a late answer to an earlier request must not be read as the answer to this one
+            self.send_uds(req)
+            deadline = time.monotonic() + timeout
+            wait = 2.5
+            while True:
+                rem = deadline - time.monotonic()
+                if rem <= 0:
+                    raise TimeoutError(f"UDS response timeout ({timeout:.1f}s) for {req[:8].hex()}")
+                resp = self.receive_uds(timeout=min(wait, rem))
+                if (
+                    allow_pending
+                    and len(resp) >= 3
+                    and resp[0] == 0x7F
+                    and resp[1] == req_sid
+                    and resp[2] == 0x78
+                ):
+                    # After 78 the ECU has P2* (5000 ms, from `50 xx 00 32 01 F4`) for the next frame; the FBL repeats
+                    # 78 every ~2.5 s, so waiting only 2.5 s raced it and broke an erase over a slower adapter.
+                    wait = P2_STAR_WAIT
+                    continue
+                return _checked_response(req_sid, resp, expected_sid)
+        except TimeoutError:
+            fb = (
+                getattr(self.bus, "fallback_from_silent_raw", None)
+                if (resend and not self._recycle_held and (self.UDS_TX_ID, self.UDS_RX_ID) == (0x710, 0x77A))
+                else None
+            )
+            if callable(fb) and fb():
+                return self.request_uds(
+                    req,
+                    expected_sid,
+                    timeout=timeout,
+                    allow_pending=allow_pending,
+                    resend=False,
+                )
+            raise
 
     def send_loader_payload(
         self,
@@ -493,9 +664,19 @@ class J533CanLink:
         """Synchronize (`84 00 00 00 00`) and stream a framed RAM-loader packet over 0x6F0."""
         packet = build_loader_packet(payload)
         self._maybe_recycle_tx()
-        self.drain_rx()
+        if self.drain_rx(max_frames=16_384):
+            self.drain_until_quiet(self.LOADER_RX_ID, quiet_window=0.06, max_wait=2.0)
         self.send_frame(self.LOADER_TX_ID, LOADER_SYNC)
+        sync_deadline = time.monotonic() + 2.0
         sync_rx = bytes(self.receive_frame(self.LOADER_RX_ID, timeout=2.0).data)
+        while sync_rx != LOADER_SYNC:
+            rem = min(0.15, sync_deadline - time.monotonic())
+            if rem <= 0:
+                break
+            try:
+                sync_rx = bytes(self.receive_frame(self.LOADER_RX_ID, timeout=rem).data)
+            except TimeoutError:
+                break
         if sync_rx != LOADER_SYNC:
             raise RuntimeError(f"Factory loader sync failed: got {sync_rx.hex()}")
         total = len(packet)
