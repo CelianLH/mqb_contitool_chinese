@@ -27,7 +27,7 @@ def test_first_complete_read_becomes_base_read_and_writes_record_what_changed(tm
     (read / "manifest.json").write_text(json.dumps({"areas": {"cflash": {"output_file": str(read / "Cflash.bin")}}}))
     base = storage.keep_as_base(read)
     assert base == root / "PN_FZ" / "dumps" / "base_read" and not read.exists()
-    assert json.loads((base / "manifest.json").read_text())["areas"]["cflash"]["output_file"] == str(base / "Cflash.bin")
+    assert json.loads((base / "manifest.json").read_text(encoding="utf-8"))["areas"]["cflash"]["output_file"] == str(base / "Cflash.bin")
     again = storage.new_session(root, "PN_FZ", "read", dumps=True)
     for name, raw in images.items():
         (again / name).write_bytes(raw)
@@ -40,7 +40,7 @@ def test_first_complete_read_becomes_base_read_and_writes_record_what_changed(tm
     now[0x300] = 0xFF
     (write / "Dflash_readback.bin").write_bytes(now)
     flashed = storage.record_flashed(root / "PN_FZ", {"Dflash.bin": write / "Dflash_readback.bin"}, write, {})
-    m = json.loads((flashed / "manifest.json").read_text())
+    m = json.loads((flashed / "manifest.json").read_text(encoding="utf-8"))
     assert flashed.parent == root / "PN_FZ" / "dumps" and flashed.name.endswith("_flashed") and m["base"] == "base_read"
     assert m["areas"]["Dflash.bin"]["changed_ranges"] == ["0x000010..0x000013", "0x000300..0x000300"]
     assert (flashed / "Dflash.bin").read_bytes() == bytes(now)
@@ -54,7 +54,7 @@ def test_without_a_base_read_the_backups_before_the_write_become_it(tmp_path: Pa
     (write / "Dflash_readback.bin").write_bytes(b"\x05" + bytes(63))
     flashed = storage.record_flashed(root / unit, {"Dflash.bin": write / "Dflash_readback.bin"}, write, {})
     assert (root / unit / "dumps" / "base_read" / "Dflash.bin").read_bytes() == bytes(64)
-    assert json.loads((flashed / "manifest.json").read_text())["areas"]["Dflash.bin"]["changed_bytes"] == 1
+    assert json.loads((flashed / "manifest.json").read_text(encoding="utf-8"))["areas"]["Dflash.bin"]["changed_bytes"] == 1
 
 
 def test_runs_folder_sits_next_to_the_program(tmp_path: Path, monkeypatch) -> None:

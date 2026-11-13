@@ -67,7 +67,7 @@ def test_a_cancel_held_back_by_the_uflash_write_leaves_the_write_on_record(
     mcu = _sim(monkeypatch, synth_cflash, synth_uflash, synth_dflash)
     with pytest.raises(OperationCancelledError):  # step 4 is the FACI write: the cancel waits for it
         can_write_uflash("mock0", session_dir=tmp_path / "s", reporter=_cancel_at_step(4))
-    res = json.loads((tmp_path / "s" / "uflash_write_result.json").read_text())
+    res = json.loads((tmp_path / "s" / "uflash_write_result.json").read_text(encoding="utf-8"))
     assert bytes(mcu.uflash) != synth_uflash  # the engineering bootloader is in the ECU…
     assert res["write_performed"] is True and res["packets"]  # …and the record says so
 
@@ -80,7 +80,7 @@ def test_a_cancel_held_back_by_the_dflash_write_leaves_the_write_on_record(
     target[0x0200:0x0240] = b"\x5a" * 64
     with pytest.raises(OperationCancelledError):
         can_write_dflash("mock0", bytes(target), session_dir=tmp_path / "s", reporter=_cancel_at_step(4))
-    res = json.loads((tmp_path / "s" / "dflash_write_result.json").read_text())
+    res = json.loads((tmp_path / "s" / "dflash_write_result.json").read_text(encoding="utf-8"))
     assert bytes(mcu.dflash[0x0200:0x0240]) == b"\x5a" * 64
     assert res["write_performed"] is True and res["packets"]
 
@@ -104,7 +104,7 @@ def test_a_restore_cancelled_after_the_engineering_bootloader_says_it_stays(
                            reporter=OperationReporter(on_log=lambda e: logs.append(e.message)))
     assert calls == ["uflash_eng", "cflash"]
     assert any("engineering bootloader stays" in m for m in logs)
-    owner = json.loads((tmp_path / "run" / "owner" / "owner.json").read_text())
+    owner = json.loads((tmp_path / "run" / "owner" / "owner.json").read_text(encoding="utf-8"))
     assert owner["uflash_engineering"]["write_performed"] is True
 
 

@@ -230,7 +230,7 @@ def test_a_cancel_raised_by_the_engineering_bootloader_write_still_says_it_stays
                            reporter=OperationReporter(on_log=lambda e: logs.append(e.message)))
     assert calls == ["uflash_eng"]
     assert any("engineering bootloader stays" in m for m in logs)
-    owner = json.loads((tmp_path / "run" / "owner" / "owner.json").read_text())
+    owner = json.loads((tmp_path / "run" / "owner" / "owner.json").read_text(encoding="utf-8"))
     assert owner["uflash_engineering"]["write_performed"] is True
 
 
@@ -247,7 +247,7 @@ def test_a_cancel_held_back_by_the_raw_faci_cflash_write_leaves_the_write_on_rec
     path.write_bytes(cand)
     with pytest.raises(OperationCancelledError):  # step 3 is the FACI write: the cancel waits for it
         can_write_cflash("mock0", path, raw_faci=True, session_dir=tmp_path / "s", reporter=_cancel_at_step(3))
-    res = json.loads((tmp_path / "s" / "cflash_write_result.json").read_text())
+    res = json.loads((tmp_path / "s" / "cflash_write_result.json").read_text(encoding="utf-8"))
     assert bytes(mcu.cflash[0xA000:0xC000]) == cand[0xA000:0xC000]  # written…
     assert res["faci_blocks"]  # …and on record
 

@@ -388,7 +388,7 @@ def test_the_driver_that_ships_with_contitool_is_the_64_bit_27_2_with_its_vci_fi
     folder = Path(dpdu.__file__).resolve().parents[3] / "dpdu" / "VW_PDUAPI_27.2"
     assert dpdu._is_x64_dll(folder / "PDUAPI_VW.dll")
     assert 'FILE_VERSION="27.2.0"' in (folder / "MDF_VW.xml").read_text(encoding="utf-8")[:400]
-    para = dict(line.split("=", 1) for line in (folder / "VAS6154/VAS6154-D-PDU_API-27.2.0.para").read_text().splitlines())
+    para = dict(line.split("=", 1) for line in (folder / "VAS6154/VAS6154-D-PDU_API-27.2.0.para").read_text(encoding="utf-8").splitlines())
     para = {k.strip(): v.strip() for k, v in para.items()}
     assert para["Module Version"] == "27.2.0"
     # what the driver flashes into the adapter on connect: without these two it cannot bring the VCI to its version
