@@ -435,12 +435,13 @@ class MainWindow(QMainWindow):
     def _show_backup_warnings(self, warnings: list[str]) -> None:
         QMessageBox.warning(
             self,
-            tr("Предупреждение при чтении EEPROM / OPBT", "EEPROM / OPBT read warning"),
+            tr("Предупреждение при чтении EEPROM / OPBT", "EEPROM / OPBT read warning", "EEPROM / OPBT 读取警告"),
             tr(
                 "Основная память шлюза (CodeFlash, Uflash, DataFlash) успешно считана и сохранена, "
                 "однако дополнительные области прочитать не удалось:\n\n",
                 "The gateway's main flash areas (CodeFlash, Uflash, DataFlash) were read and saved "
                 "successfully, however optional hardware areas could not be read:\n\n",
+                "网关的主存储区（CodeFlash、Uflash、DataFlash）已成功读取并保存，但可选硬件区域未能读取：\n\n",
             )
             + "\n\n".join(f"• {w}" for w in warnings),
         )

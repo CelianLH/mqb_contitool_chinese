@@ -440,7 +440,7 @@ class EcuScreen(QWidget):
             self.grid_id.addWidget(val, 1, col)
         self.grid_id.setColumnStretch(len(rows), 1)
 
-        self.lbl_dumps_hdr.setText(tr("ФАЙЛЫ ПАМЯТИ", "MEMORY DUMPS"))
+        self.lbl_dumps_hdr.setText(tr("ФАЙЛЫ ПАМЯТИ", "MEMORY DUMPS", "内存转储"))
         clear_layout(self.dumps_list)
         for k in KINDS:
             p_k = self.ws.path(k)
@@ -762,7 +762,7 @@ class EcuScreen(QWidget):
                 )
         self._block(
             lay,
-            tr("Инженерные службы и RAM-Loader", "Engineering services & RAM-Loader"),
+            tr("Инженерные службы и RAM-Loader", "Engineering services & RAM-Loader", "工程服务与 RAM-Loader"),
             None,
             desc,
             *btns,
@@ -980,11 +980,11 @@ class EcuScreen(QWidget):
         h = QHBoxLayout(hdr)
         h.setContentsMargins(18, 12, 18, 10)
         h.setSpacing(10)
-        t = QLabel(tr("Состояние в блоке", "State in the ECU"))
+        t = QLabel(tr("Состояние в блоке", "State in the ECU", "模块中的状态"))
         t.setObjectName("FieldLabel")
         h.addWidget(t)
         h.addStretch(1)
-        h.addWidget(hint(tr(f"проверено в {self._swap_at}", f"checked at {self._swap_at}")))
+        h.addWidget(hint(tr(f"проверено в {self._swap_at}", f"checked at {self._swap_at}", f"检查于 {self._swap_at}")))
         h.addWidget(btn)
         outer.addWidget(hdr)
 
@@ -1247,10 +1247,10 @@ class EcuScreen(QWidget):
 
     def _page_dtc(self, lay: QVBoxLayout) -> None:
         self._head(lay, "dtc")
-        dtc_st = State(tr(f"прочитано в {self._dtc_at}", f"read at {self._dtc_at}"), "info") if self._dtc is not None else None
+        dtc_st = State(tr(f"прочитано в {self._dtc_at}", f"read at {self._dtc_at}", f"读取于 {self._dtc_at}"), "info") if self._dtc is not None else None
         self._block(
             lay,
-            tr("Опрос регистратора событий (UDS 0x19 / 0x14)", "Event memory query (UDS 0x19 / 0x14)"),
+            tr("Опрос регистратора событий (UDS 0x19 / 0x14)", "Event memory query (UDS 0x19 / 0x14)", "事件记录器查询 (UDS 0x19 / 0x14)"),
             dtc_st,
             tr(
                 "Коды неисправностей читаются напрямую из блока по CAN; в файлах дампов они не хранятся.",
@@ -1405,6 +1405,9 @@ class EcuScreen(QWidget):
                 "installation list 0x04A3, BEM battery data, and the NvM 0x5E security state block. The RH850/F1L "
                 "Option Bytes (OPBT0..OPBT8, 36 B) configure JTAG/LPD debug mode, WDTA0/1 watchdogs, CVM voltage "
                 "monitoring, and ICU-S cryptographic activation.",
+                "外部 ST M95640 SPI EEPROM（8 KB，位于 CSIH1 总线）存储模块识别信息、VIN、编码 0x0600、安装列表 0x04A3、"
+                "BEM 蓄电池数据以及 NvM 0x5E 安全状态块。RH850/F1L 选项字节（OPBT0..OPBT8，36 B）配置 JTAG/LPD 调试模式、"
+                "WDTA0/1 看门狗、CVM 电压监控以及 ICU-S 加密激活。",
             ),
         )
         self._note(
@@ -1416,6 +1419,8 @@ class EcuScreen(QWidget):
                 "Diagnostic read-only mode: writing to OPBT or the external EEPROM is intentionally disabled. "
                 "Invalid OPBT values can lock RH850 boot and debug access, and security records NvM 0x5E/0x5F in "
                 "M95640 are paired with hardware ICU-S AES-CMAC tags.",
+                "诊断只读模式：刻意不支持写入 OPBT 或外部 EEPROM。无效的 OPBT 值会不可逆地锁定 RH850 的启动与调试访问，"
+                "M95640 中的安全记录 NvM 0x5E/0x5F 与硬件 ICU-S AES-CMAC 标签配对。",
             ),
         )
         if self.ws.read_warnings:
@@ -1439,24 +1444,24 @@ class EcuScreen(QWidget):
                 ee_summary = None
         if ee_summary is not None:
             ee_state = State(
-                tr("8 КБ загружено", "8 KB loaded"),
+                tr("8 КБ загружено", "8 KB loaded", "已加载 8 KB"),
                 "ok" if ee_summary.crc_bad_count == 0 and not ee_summary.blank else "warn",
             )
         elif "eeprom" in self.ws.read_warnings:
-            ee_state = State(tr("не удалось считать", "read warning"), "warn")
+            ee_state = State(tr("не удалось считать", "read warning", "读取警告"), "warn")
         else:
-            ee_state = State(tr("не загружен", "not loaded"), "muted")
+            ee_state = State(tr("не загружен", "not loaded", "未加载"), "muted")
 
         ee_btns = [
             self._btn(
                 "hw_read_eeprom",
-                tr("Считать EEPROM по CAN", "Read EEPROM over CAN"),
+                tr("Считать EEPROM по CAN", "Read EEPROM over CAN", "通过 CAN 读取 EEPROM"),
                 self._read_eeprom_live,
                 "PrimaryBtn" if ee_path is None else "",
             ),
             self._btn(
                 "hw_open_eeprom",
-                tr("Открыть файл…", "Open file…"),
+                tr("Открыть файл…", "Open file…", "打开文件…"),
                 lambda: self._pick_optional_file("eeprom"),
             ),
         ]
@@ -1464,44 +1469,45 @@ class EcuScreen(QWidget):
             ee_btns.append(
                 self._btn(
                     "hw_report_eeprom",
-                    tr("Подробный отчёт EEPROM", "Full EEPROM report"),
+                    tr("Подробный отчёт EEPROM", "Full EEPROM report", "EEPROM 详细报告"),
                     self._show_eeprom_report,
                 )
             )
         self._block(
             lay,
-            tr("Внешняя SPI EEPROM (ST M95640, 8 КБ)", "External SPI EEPROM (ST M95640, 8 KB)"),
+            tr("Внешняя SPI EEPROM (ST M95640, 8 КБ)", "External SPI EEPROM (ST M95640, 8 KB)", "外部 SPI EEPROM (ST M95640, 8 KB)"),
             ee_state,
             tr(
                 "Читается по шине SPI CSIH1 в режиме RAM-Loader (без модификации регистров и памяти) и автоматически "
                 "снимается при полном чтении блока.",
                 "Read over the CSIH1 SPI bus inside RAM-Loader (read-only, restoring all registers) and included "
                 "automatically in a full ECU backup.",
+                "通过 CSIH1 SPI 总线在 RAM-Loader 模式（只读，恢复所有寄存器）下读取，并自动包含在完整模块备份中。",
             ),
             *ee_btns,
         )
         if ee_summary is not None:
             ee_rows: list[tuple[str, ...]] = []
             pn_sw = (ee_summary.part_number or "—") + (f"  SW {ee_summary.sw_version}" if ee_summary.sw_version else "")
-            ee_rows.append((tr("Паспорт NvM 0x00", "Passport NvM 0x00"), pn_sw, f"{ee_summary.asam_id or '—'} {ee_summary.odx_version}".strip()))
-            src_lbl = tr("таблица NvM из Cflash", "Cflash NvM table") if ee_summary.from_cflash_table else tr("TLV-сканер", "TLV scan")
+            ee_rows.append((tr("Паспорт NvM 0x00", "Passport NvM 0x00", "NvM 0x00 识别信息"), pn_sw, f"{ee_summary.asam_id or '—'} {ee_summary.odx_version}".strip()))
+            src_lbl = tr("таблица NvM из Cflash", "Cflash NvM table", "Cflash 中的 NvM 表") if ee_summary.from_cflash_table else tr("TLV-сканер", "TLV scan", "TLV 扫描")
             ee_rows.append(
                 (
-                    tr("Записи и CRC-16", "Records & CRC-16"),
+                    tr("Записи и CRC-16", "Records & CRC-16", "记录与 CRC-16"),
                     f"CRC OK: {ee_summary.crc_ok_count}, CRC ERR: {ee_summary.crc_bad_count}",
-                    f"{src_lbl}, {tr('пустых', 'erased')}: {ee_summary.erased_count}",
+                    f"{src_lbl}, {tr('пустых', 'erased', '已擦除')}: {ee_summary.erased_count}",
                 )
             )
             if ee_summary.vin:
                 ee_rows.append(("VIN (NvM 0x0F)", ee_summary.vin, ""))
             if ee_summary.long_coding:
                 lc_spaced = " ".join(f"{b:02X}" for b in ee_summary.long_coding)
-                ee_rows.append((tr("Кодировка 0x0600", "Coding 0x0600"), lc_spaced, "NvM 0x0D"))
+                ee_rows.append((tr("Кодировка 0x0600", "Coding 0x0600", "编码 0x0600"), lc_spaced, "NvM 0x0D"))
             if ee_summary.prog_date or ee_summary.prog_counter is not None or ee_summary.workshop_hex:
                 cnt_txt = f"#{ee_summary.prog_counter}" if ee_summary.prog_counter is not None else ""
                 ee_rows.append(
                     (
-                        tr("Прошивки (F199/F198)", "Flashing (F199/F198)"),
+                        tr("Прошивки (F199/F198)", "Flashing (F199/F198)", "刷写记录 (F199/F198)"),
                         f"{ee_summary.prog_date or '—'} {cnt_txt}".strip(),
                         ee_summary.workshop_hex or "",
                     )
@@ -1510,19 +1516,19 @@ class EcuScreen(QWidget):
                 cap_txt = f"{ee_summary.bem_capacity_ah} Ah" if ee_summary.bem_capacity_ah is not None else "—"
                 ee_rows.append(
                     (
-                        tr("АКБ BEM (NvM 0x27)", "BEM battery (0x27)"),
+                        tr("АКБ BEM (NvM 0x27)", "BEM battery (0x27)", "BEM 蓄电池 (NvM 0x27)"),
                         f"{cap_txt}  {ee_summary.bem_vendor}".strip(),
                         f"SN {ee_summary.bem_serial}" if ee_summary.bem_serial else "",
                     )
                 )
             if ee_summary.nvm_5e_present and ee_summary.learned_cp_mask is not None:
-                slots_txt = ", ".join(s.ecu_addr for s in ee_summary.learned_cp_slots) or tr("нет ведомых", "no slaves")
-                m_txt = tr("Мастер CP: обучен", "Master CP: learned") if ee_summary.master_cp_learned else tr("Мастер CP: нет", "Master CP: no")
+                slots_txt = ", ".join(s.ecu_addr for s in ee_summary.learned_cp_slots) or tr("нет ведомых", "no slaves", "无从设备")
+                m_txt = tr("Мастер CP: обучен", "Master CP: learned", "CP 主节点：已学习") if ee_summary.master_cp_learned else tr("Мастер CP: нет", "Master CP: no", "CP 主节点：未学习")
                 if ee_summary.showroom_mode_active:
                     m_txt += ", Showroom ON"
                 ee_rows.append(
                     (
-                        tr("CP в NvM 0x5E", "CP in NvM 0x5E"),
+                        tr("CP в NvM 0x5E", "CP in NvM 0x5E", "NvM 0x5E 中的 CP"),
                         f"0x{ee_summary.learned_cp_mask:03X} ({len(ee_summary.learned_cp_slots)}/12: {slots_txt})",
                         m_txt,
                     )
@@ -1535,12 +1541,12 @@ class EcuScreen(QWidget):
                     )
                     ee_rows.append(
                         (
-                            tr("Инженерная маска", "Engineering mask"),
+                            tr("Инженерная маска", "Engineering mask", "工程掩码"),
                             f"0x{ee_summary.eng_disable_mask:04X}",
                             f_txt,
                         )
                     )
-            self._table(lay, tr("Сводка внешней EEPROM", "External EEPROM summary"), ee_rows)
+            self._table(lay, tr("Сводка внешней EEPROM", "External EEPROM summary", "外部 EEPROM 摘要"), ee_rows)
 
         # ── Renesas RH850/F1L Option Bytes (OPBT0..OPBT8, 36 B) ──
         op_path = self.ws.path("opbt")
@@ -1556,20 +1562,20 @@ class EcuScreen(QWidget):
                 "ok" if op_summary.reserved_bits_ok and not op_summary.blank else "warn",
             )
         elif "opbt" in self.ws.read_warnings:
-            op_state = State(tr("не удалось считать", "read warning"), "warn")
+            op_state = State(tr("не удалось считать", "read warning", "读取警告"), "warn")
         else:
-            op_state = State(tr("не загружен", "not loaded"), "muted")
+            op_state = State(tr("не загружен", "not loaded", "未加载"), "muted")
 
         op_btns = [
             self._btn(
                 "hw_read_opbt",
-                tr("Считать OPBT по CAN", "Read OPBT over CAN"),
+                tr("Считать OPBT по CAN", "Read OPBT over CAN", "通过 CAN 读取 OPBT"),
                 self._read_opbt_live,
                 "PrimaryBtn" if op_path is None else "",
             ),
             self._btn(
                 "hw_open_opbt",
-                tr("Открыть файл…", "Open file…"),
+                tr("Открыть файл…", "Open file…", "打开文件…"),
                 lambda: self._pick_optional_file("opbt"),
             ),
         ]
@@ -1577,17 +1583,18 @@ class EcuScreen(QWidget):
             op_btns.append(
                 self._btn(
                     "hw_report_opbt",
-                    tr("Подробный отчёт OPBT", "Full OPBT report"),
+                    tr("Подробный отчёт OPBT", "Full OPBT report", "OPBT 详细报告"),
                     self._show_opbt_report,
                 )
             )
         self._block(
             lay,
-            tr("Опционные байты RH850/F1L (OPBT0..OPBT8, 36 Б)", "RH850/F1L Option Bytes (OPBT0..OPBT8, 36 B)"),
+            tr("Опционные байты RH850/F1L (OPBT0..OPBT8, 36 Б)", "RH850/F1L Option Bytes (OPBT0..OPBT8, 36 B)", "RH850/F1L 选项字节 (OPBT0..OPBT8, 36 B)"),
             op_state,
             tr(
                 "Считываются через окно Extra Area (BFASELR=1 @ 0x01000070) с полным сохранением состояния кэша и буфера предвыборки.",
                 "Read via the Extra Area flash window (BFASELR=1 @ 0x01000070) while saving and restoring I-cache and prefetch state.",
+                "通过 Extra Area 闪存窗口（BFASELR=1 @ 0x01000070）读取，同时保存并恢复 I-cache 和预取状态。",
             ),
             *op_btns,
         )
@@ -1596,29 +1603,29 @@ class EcuScreen(QWidget):
                 (
                     "OPBT0",
                     f"0x{op_summary.opbt0:08X}",
-                    tr("резервные биты OK", "reserved bits OK")
+                    tr("резервные биты OK", "reserved bits OK", "保留位正常")
                     if op_summary.reserved_bits_ok
-                    else tr("нестандартные биты", "non-standard bits"),
+                    else tr("нестандартные биты", "non-standard bits", "非标准位"),
                 )
             ]
             if len(op_summary.words) >= 2:
-                op_rows.append(("OPBT1", f"0x{op_summary.words[1]:08X}", tr("тактирование / PLL0", "clock / PLL0")))
+                op_rows.append(("OPBT1", f"0x{op_summary.words[1]:08X}", tr("тактирование / PLL0", "clock / PLL0", "时钟 / PLL0")))
             if op_summary.opbt8 is not None:
                 icus_txt = (
-                    tr("ICU-S активен", "ICU-S active")
+                    tr("ICU-S активен", "ICU-S active", "ICU-S 已激活")
                     if op_summary.icus_activated
-                    else tr("ICU-S выключен (bit 31 = 1)", "ICU-S disabled (bit 31 = 1)")
+                    else tr("ICU-S выключен (bit 31 = 1)", "ICU-S disabled (bit 31 = 1)", "ICU-S 已禁用 (bit 31 = 1)")
                 )
                 op_rows.append(("OPBT8 (ICU-S)", f"0x{op_summary.opbt8:08X}", icus_txt))
             for fld in op_summary.fields:
                 op_rows.append((f"[{fld.bits}] {fld.name}", fld.value_text, f"0x{fld.raw_value:X}"))
-            self._table(lay, tr("Расшифровка OPBT", "Decoded OPBT"), op_rows)
+            self._table(lay, tr("Расшифровка OPBT", "Decoded OPBT", "OPBT 解码"), op_rows)
 
     def _pick_optional_file(self, kind: str) -> None:
         title = (
-            tr("Файл внешней EEPROM M95640 (8 КБ)", "External M95640 EEPROM dump (8 KB)")
+            tr("Файл внешней EEPROM M95640 (8 КБ)", "External M95640 EEPROM dump (8 KB)", "外部 M95640 EEPROM 转储文件 (8 KB)")
             if kind == "eeprom"
-            else tr("Файл опционных байтов OPBT (32 / 36 / 256 Б)", "RH850 OPBT dump (32 / 36 / 256 B)")
+            else tr("Файл опционных байтов OPBT (32 / 36 / 256 Б)", "RH850 OPBT dump (32 / 36 / 256 B)", "RH850 OPBT 转储文件 (32 / 36 / 256 B)")
         )
         chosen, _ = QFileDialog.getOpenFileName(
             self,
@@ -1645,7 +1652,7 @@ class EcuScreen(QWidget):
                 except OSError:
                     target = session_file
         self.ws.replace(kind, target)
-        self.note.emit(tr(f"Считано и загружено: {target}", f"Read and loaded: {target}"))
+        self.note.emit(tr(f"Считано и загружено: {target}", f"Read and loaded: {target}", f"已读取并加载：{target}"))
 
     def _read_eeprom_live(self) -> None:
         if not ensure_ready(self.conn, self):
@@ -1659,7 +1666,7 @@ class EcuScreen(QWidget):
         except OSError:
             cf_bytes = None
         self.runner.run_task(
-            tr("Чтение внешней EEPROM M95640 (8 КБ)", "Reading external M95640 EEPROM (8 KB)"),
+            tr("Чтение внешней EEPROM M95640 (8 КБ)", "Reading external M95640 EEPROM (8 KB)", "正在读取外部 M95640 EEPROM (8 KB)"),
             lambda rep: can_read_eeprom(
                 port,
                 out_file,
@@ -1678,7 +1685,7 @@ class EcuScreen(QWidget):
         sdir = self._session("read_opbt")
         out_file = sdir / "Opbt.bin"
         self.runner.run_task(
-            tr("Чтение опционных байтов OPBT (36 Б)", "Reading RH850 Option Bytes OPBT (36 B)"),
+            tr("Чтение опционных байтов OPBT (36 Б)", "Reading RH850 Option Bytes OPBT (36 B)", "正在读取 RH850 选项字节 OPBT (36 B)"),
             lambda rep: can_read_opbt(
                 port,
                 out_file,
@@ -1696,14 +1703,14 @@ class EcuScreen(QWidget):
         cf_path = self.ws.path("cflash")
         cf_bytes = cf_path.read_bytes() if cf_path is not None and cf_path.is_file() else None
         txt = format_eeprom_report(analyze_eeprom(p.read_bytes(), cf_bytes), Style(False), str(p))
-        run_dialog(TextResultDialog(self, tr("Подробный отчёт EEPROM", "Full EEPROM report"), txt, self.ws.part_number))
+        run_dialog(TextResultDialog(self, tr("Подробный отчёт EEPROM", "Full EEPROM report", "EEPROM 详细报告"), txt, self.ws.part_number))
 
     def _show_opbt_report(self) -> None:
         p = self.ws.path("opbt")
         if p is None:
             return
         txt = format_opbt_report(analyze_opbt(p.read_bytes()), Style(False), str(p))
-        run_dialog(TextResultDialog(self, tr("Подробный отчёт OPBT", "Full OPBT report"), txt, self.ws.part_number))
+        run_dialog(TextResultDialog(self, tr("Подробный отчёт OPBT", "Full OPBT report", "OPBT 详细报告"), txt, self.ws.part_number))
 
     # ────────────────────────────── changed dumps ──────────────────────────────
     def _fbl_key_changed(self) -> bool:

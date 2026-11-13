@@ -353,6 +353,7 @@ class ExecutionPanel(QFrame):
                 tr(
                     "Журнал операций пуст — ход чтения, записи и диагностики отображается здесь.",
                     "Operation log is empty — read, write, and diagnostic progress appears here.",
+                    "操作日志为空——读取、写入和诊断进度将显示在这里。",
                 )
             )
             self.txt_short.setHtml(f"<div style='color:{muted}; padding-top:2px'>{idle}</div>")

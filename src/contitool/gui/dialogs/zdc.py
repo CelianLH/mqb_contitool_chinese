@@ -687,8 +687,8 @@ class FpaEditorDialog(Dialog):
                 "Offroad",
                 "Eco",
                 "Race",
-                tr("Вкл", "On"),
-                tr("Выкл", "Off"),
+                tr("Вкл", "On", "开"),
+                tr("Выкл", "Off", "关"),
                 "DCC 1–15",
             ]
         )
@@ -698,6 +698,7 @@ class FpaEditorDialog(Dialog):
                 tr(
                     "15-ступенчатый слайдер жёсткости подвески DCC в меню Individual",
                     "15-step DCC damper stiffness slider in Individual menu",
+                    "Individual 菜单中的 15 级 DCC 减震器刚度滑块",
                 )
             )
         self.tbl_s033.setAlternatingRowColors(True)
@@ -1231,11 +1232,11 @@ class FpaEditorDialog(Dialog):
         self.tbl_s031.setHorizontalHeaderLabels([_slot_short_name(s.slot) for s in act_slots])
         self.tbl_s031.setVerticalHeaderLabels([name for _lidx, _fg, name in groups])
         dcc_step_notes = {
-            1: tr(" (мягче)", " (softest)"),
+            1: tr(" (мягче)", " (softest)", "（更软）"),
             3: " (Comfort)",
             8: " (Normal)",
             13: " (Sport)",
-            15: tr(" (жёстче)", " (stiffest)"),
+            15: tr(" (жёстче)", " (stiffest)", "（更硬）"),
         }
         for r, (lidx, fg, _name) in enumerate(groups):
             is_slider = fg in self._SLIDER_CAPABLE_FGS and self.fpa.get_individual_mask(lidx) == 0xFFFE

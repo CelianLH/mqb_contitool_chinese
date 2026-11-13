@@ -263,6 +263,7 @@ def _hand_back_after_read_error(
         tr(
             "Сбой чтения — возвращаем шлюз из RAM-Loader в штатный режим…",
             "Read failed — returning gateway from RAM-Loader to Application mode…",
+            "读取失败——正在将网关从 RAM-Loader 恢复为应用程序模式…",
         )
     )
     drain_quiet = getattr(link, "drain_until_quiet", None)
@@ -534,6 +535,9 @@ def _refuse_memory_via_j2534_wrapper(link: Any) -> None:
             "This D-PDU adapter works only over UDS ISO-TP (0x710/0x77A) and provides no factory RAM-Loader channel "
             "(0x6F0/0x6F1): diagnostics, FRF / ODX flashing, and UDS dataset uploads work, while reading and writing "
             "memory dumps requires CANable, candleLight, or a compatible VAS 6154 / VNCI with raw CAN.",
+            "此 D-PDU 适配器仅通过 UDS ISO-TP (0x710/0x77A) 工作，不提供工厂 RAM-Loader 通道 "
+            "(0x6F0/0x6F1)：诊断、FRF / ODX 刷写和 UDS 数据集上传可用，而读取和写入内存转储需要 "
+            "CANable、candleLight 或兼容的 VAS 6154 / VNCI（带 raw CAN）。",
         ))
 
 
@@ -541,7 +545,7 @@ def _abort_if_unsupported_ecu(link: J533CanLink) -> None:
     """When RAM-Loader entry gets an NRC (e.g. `7F 22 31` at Stage 1 on a 5Q0 or Lear gateway), probe standard VAG
     identification DIDs so CLI and direct callers report the exact unsupported hardware instead of a bare NRC."""
     ident: list[dict[str, str]] = []
-    for did, ru, en in ECU_IDENT_DIDS:
+    for did, ru, en, zh in ECU_IDENT_DIDS:
         if did not in (0xF187, 0xF191, 0xF189, 0xF1A3, 0xF17C, 0xF19E):
             continue
         try:
@@ -550,7 +554,7 @@ def _abort_if_unsupported_ecu(link: J533CanLink) -> None:
             continue
         text = raw.rstrip(b"\x00 ").decode("latin-1")
         value = text.strip() if text and all(32 <= ord(ch) < 127 for ch in text) else raw.hex().upper()
-        ident.append({"did": f"{did:04X}", "label_ru": ru, "label_en": en, "value": value})
+        ident.append({"did": f"{did:04X}", "label_ru": ru, "label_en": en, "label_zh": zh, "value": value})
     reason = unsupported_ecu_reason(ident) if ident else None
     if reason:
         try:
@@ -1387,6 +1391,7 @@ def read_opbt_in_loader(
         tr(
             "Чтение Extra Area / OPBT0..OPBT8 (0xFF300070..0xFF300093) через переключение BFASELR в RAM…",
             "Reading Extra Area / OPBT0..OPBT8 (0xFF300070..0xFF300093) via RAM BFASELR switch…",
+            "正在通过 RAM 中的 BFASELR 切换读取 Extra Area / OPBT0..OPBT8 (0xFF300070..0xFF300093)…",
         )
     )
     link.send_loader_payload(OPBT_READER_STUB, reporter=reporter)
@@ -1400,6 +1405,7 @@ def read_opbt_in_loader(
             tr(
                 f"Апплет чтения OPBT вернул ошибку (status={status}, BFASELR={bfaselr_final})",
                 f"OPBT reader applet reported failure (status={status}, BFASELR={bfaselr_final})",
+                f"OPBT 读取小程序返回错误 (status={status}，BFASELR={bfaselr_final})",
             )
         )
 
@@ -1410,6 +1416,7 @@ def read_opbt_in_loader(
             tr(
                 f"Прочитанные слова OPBT не прошли проверку достоверности RH850/F1L (OPBT0=0x{int.from_bytes(opbt_bytes[:4], 'little'):08X})",
                 f"Read OPBT words failed RH850/F1L plausibility check (OPBT0=0x{int.from_bytes(opbt_bytes[:4], 'little'):08X})",
+                f"读取到的 OPBT 字未通过 RH850/F1L 可信度校验 (OPBT0=0x{int.from_bytes(opbt_bytes[:4], 'little'):08X})",
             )
         )
 
@@ -1422,6 +1429,8 @@ def read_opbt_in_loader(
             f"Opbt.bin: чтение завершено ({len(opbt_bytes)} Б, OPBT0=0x{oinfo.opbt0:08X}, "
             f"OPBT8={'0x' + format(oinfo.opbt8, '08X') if oinfo.opbt8 is not None else '—'})",
             f"Opbt.bin: read complete ({len(opbt_bytes)} B, OPBT0=0x{oinfo.opbt0:08X}, "
+            f"OPBT8={'0x' + format(oinfo.opbt8, '08X') if oinfo.opbt8 is not None else '—'})",
+            f"Opbt.bin：读取完成 ({len(opbt_bytes)} B，OPBT0=0x{oinfo.opbt0:08X}，"
             f"OPBT8={'0x' + format(oinfo.opbt8, '08X') if oinfo.opbt8 is not None else '—'})",
         )
     )
@@ -1457,6 +1466,7 @@ def read_eeprom_in_loader(
         tr(
             "Запуск апплета чтения внешней SPI EEPROM ST M95640 (8 КБ, CSIH1 Mode 0, P10.11 CS#) в ОЗУ…",
             "Running ST M95640 external SPI EEPROM reader applet (8 KB, CSIH1 Mode 0, P10.11 CS#) in RAM…",
+            "正在 RAM 中运行 ST M95640 外部 SPI EEPROM 读取小程序 (8 KB，CSIH1 Mode 0，P10.11 CS#)…",
         )
     )
     link.send_loader_payload(EEPROM_M95640_READER_STUB, reporter=reporter)
@@ -1470,6 +1480,7 @@ def read_eeprom_in_loader(
             tr(
                 f"Апплет чтения M95640 по шине CSIH1 завершился с ошибкой (status={status}, прочитано={bytes_read} Б)",
                 f"CSIH1 M95640 reader applet failed (status={status}, bytes_read={bytes_read} B)",
+                f"CSIH1 M95640 读取小程序失败 (status={status}，已读取={bytes_read} B)",
             )
         )
 
@@ -1488,6 +1499,7 @@ def read_eeprom_in_loader(
             tr(
                 "Линия MISO внешней EEPROM M95640 вернула только 0x00 (микросхема не отвечает по SPI)",
                 "M95640 external EEPROM MISO line returned all 0x00 bytes (SPI device did not respond)",
+                "外部 EEPROM M95640 的 MISO 线返回全 0x00 字节（SPI 设备无响应）",
             )
         )
 
@@ -1591,9 +1603,9 @@ def can_backup(
                 fname = extra_names[area_key]
                 file_path = out_dir / fname
                 step_title = (
-                    tr("Чтение Opbt.bin (36 Б: OPBT0..OPBT8 @ 0xFF300070)", "Reading Opbt.bin (36 B: OPBT0..OPBT8 @ 0xFF300070)")
+                    tr("Чтение Opbt.bin (36 Б: OPBT0..OPBT8 @ 0xFF300070)", "Reading Opbt.bin (36 B: OPBT0..OPBT8 @ 0xFF300070)", "正在读取 Opbt.bin（36 B：OPBT0..OPBT8 @ 0xFF300070）")
                     if area_key == "opbt"
-                    else tr("Чтение внешней EEPROM M95640 (8 КБ по SPI CSIH1)", "Reading external M95640 EEPROM (8 KB via SPI CSIH1)")
+                    else tr("Чтение внешней EEPROM M95640 (8 КБ по SPI CSIH1)", "Reading external M95640 EEPROM (8 KB via SPI CSIH1)", "正在读取外部 M95640 EEPROM（8 KB，通过 SPI CSIH1）")
                 )
                 reporter.step(idx, total_steps, step_title)
                 try:
@@ -1615,11 +1627,13 @@ def can_backup(
                         tr(
                             f"ContiTool не смог прочитать OPBT (опционные байты RH850): {exc}. Основной бэкап продолжен.",
                             f"ContiTool could not read OPBT (RH850 Option Bytes): {exc}. Main backup continues.",
+                            f"ContiTool 无法读取 OPBT（RH850 选项字节）：{exc}。主备份继续。",
                         )
                         if area_key == "opbt"
                         else tr(
                             f"ContiTool не смог прочитать внешнюю EEPROM M95640: {exc}. Основной бэкап продолжен.",
                             f"ContiTool could not read external M95640 EEPROM: {exc}. Main backup continues.",
+                            f"ContiTool 无法读取外部 M95640 EEPROM：{exc}。主备份继续。",
                         )
                     )
                     reporter.warning(warn_msg)
@@ -1701,17 +1715,17 @@ def can_read_opbt(
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
             if not no_enter:
-                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение OPBT)", "Entering factory RAM-Loader over CAN (OPBT read)"))
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение OPBT)", "Entering factory RAM-Loader over CAN (OPBT read)", "正在通过 CAN 进入工厂 RAM-Loader（读取 OPBT）"))
                 report["loader_session"] = enter_ram_loader(link, reporter=reporter)
             else:
-                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)"))
+                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)", "正在检查活动的 RAM-Loader (0x6F0)"))
                 report["beacon"] = _probe_beacon_in_loader(link, reporter)
 
-            reporter.step(2, total_steps, tr("Чтение опционных байтов OPBT0..OPBT8 (36 Б)", "Reading Option Bytes OPBT0..OPBT8 (36 B)"))
+            reporter.step(2, total_steps, tr("Чтение опционных байтов OPBT0..OPBT8 (36 Б)", "Reading Option Bytes OPBT0..OPBT8 (36 B)", "正在读取选项字节 OPBT0..OPBT8（36 B）"))
             report["opbt"] = read_opbt_in_loader(link, output_file, reporter=reporter)
 
             if return_to_app:
-                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)"))
+                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)", "正在将网关恢复为正常应用程序模式 (10 03)"))
                 report["return_to_app"] = _return_to_application(link, report.get("loader_session"), reporter=reporter)
 
             report["complete"] = True
@@ -1759,13 +1773,13 @@ def can_read_eeprom(
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
             if not no_enter:
-                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение M95640 EEPROM)", "Entering factory RAM-Loader over CAN (M95640 EEPROM read)"))
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение M95640 EEPROM)", "Entering factory RAM-Loader over CAN (M95640 EEPROM read)", "正在通过 CAN 进入工厂 RAM-Loader（读取 M95640 EEPROM）"))
                 report["loader_session"] = enter_ram_loader(link, reporter=reporter)
             else:
-                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)"))
+                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)", "正在检查活动的 RAM-Loader (0x6F0)"))
                 report["beacon"] = _probe_beacon_in_loader(link, reporter)
 
-            reporter.step(2, total_steps, tr("Чтение внешней SPI EEPROM ST M95640 (8 КБ)", "Reading external ST M95640 SPI EEPROM (8 KB)"))
+            reporter.step(2, total_steps, tr("Чтение внешней SPI EEPROM ST M95640 (8 КБ)", "Reading external ST M95640 SPI EEPROM (8 KB)", "正在读取外部 ST M95640 SPI EEPROM（8 KB）"))
             report["eeprom"] = read_eeprom_in_loader(
                 link,
                 output_file,
@@ -1774,7 +1788,7 @@ def can_read_eeprom(
             )
 
             if return_to_app:
-                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)"))
+                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)", "正在将网关恢复为正常应用程序模式 (10 03)"))
                 report["return_to_app"] = _return_to_application(link, report.get("loader_session"), reporter=reporter)
 
             report["complete"] = True
@@ -3809,6 +3823,8 @@ def can_upload_zdc_datasets(
                         "Используйте «Записать DataFlash целиком…».",
                         f"This gateway's firmware disables UDS download for ZDC #{idx} ({code_name}). "
                         "Use “Write the whole DataFlash…” instead.",
+                        f"此网关的固件禁用了 ZDC #{idx} ({code_name}) 的 UDS 下载。"
+                        "请改用“写入整个 DataFlash…”。",
                     )
                 )
         else:
@@ -3827,6 +3843,8 @@ def can_upload_zdc_datasets(
                         f"а блок в DataFlash собран под формат {len(full_pay)} Б. Запишите DataFlash через RAM-Loader.",
                         f"This gateway's firmware expects a {uds_len}-byte UDS image for ZDC #{idx} ({code_name}), "
                         f"whereas DataFlash holds a {len(full_pay)}-byte block. Write DataFlash via RAM-Loader instead.",
+                        f"此网关的固件期望 ZDC #{idx} ({code_name}) 的 UDS 镜像长度为 {uds_len} B，"
+                        f"而 DataFlash 中的块为 {len(full_pay)} B。请改用 RAM-Loader 写入 DataFlash。",
                     )
                 )
             raise ValueError(
@@ -3893,6 +3911,10 @@ def can_upload_zdc_datasets(
                                 f"0x{uds_addr:08X}, {uds_len} B) with 7F 34 {exc.nrc:02X} — its ZDC address/size table "
                                 "differs from standard. Read the full ECU memory first (so ContiTool takes the ZDC map "
                                 "from its Cflash.bin) or write the dataset via “Write the whole DataFlash…”.",
+                                f"此网关的固件拒绝了 ZDC #{idx} ({code}，0x{uds_addr:08X}，"
+                                f"{uds_len} B) 的 UDS 下载 (7F 34 {exc.nrc:02X})——其 ZDC 地址/大小表 "
+                                "与标准不同。请先读取完整的模块内存（以便 ContiTool 从其 Cflash.bin 获取 ZDC "
+                                "表），或通过“写入整个 DataFlash…”写入数据集。",
                             )
                         ) from exc
                     raise

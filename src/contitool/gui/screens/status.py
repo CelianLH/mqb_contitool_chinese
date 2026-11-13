@@ -367,9 +367,9 @@ def passport_rows(ws: Workspace) -> list[tuple[str, str, str]]:
             rows.append(("VIN", e.vin, "muted"))
         if not cf:
             if e.part_number:
-                rows.append((tr("Номер ПО (EEPROM)", "SW part (EEPROM)"), e.part_number, "muted"))
+                rows.append((tr("Номер ПО (EEPROM)", "SW part (EEPROM)", "软件零件号 (EEPROM)"), e.part_number, "muted"))
             if e.sw_version:
-                rows.append((tr("Версия ПО (EEPROM)", "Software (EEPROM)"), e.sw_version, "muted"))
+                rows.append((tr("Версия ПО (EEPROM)", "Software (EEPROM)", "软件 (EEPROM)"), e.sw_version, "muted"))
     return rows
 
 
@@ -380,36 +380,36 @@ def hardware_extras(ws: Workspace) -> State:
     warns = ws.read_warnings
     if warns and not (has_ee and has_op):
         return State(
-            tr("предупреждение", "warning"),
+            tr("предупреждение", "warning", "警告"),
             "warn",
             " ".join(warns.values()),
             key="warn",
         )
     if has_ee and has_op:
         return State(
-            tr("EEPROM + OPBT", "EEPROM + OPBT"),
+            tr("EEPROM + OPBT", "EEPROM + OPBT", "EEPROM + OPBT"),
             "ok",
-            tr("Загружены внешняя EEPROM M95640 (8 КБ) и OPBT0..OPBT8 (36 Б).", "External M95640 EEPROM (8 KB) and OPBT0..OPBT8 (36 B) loaded."),
+            tr("Загружены внешняя EEPROM M95640 (8 КБ) и OPBT0..OPBT8 (36 Б).", "External M95640 EEPROM (8 KB) and OPBT0..OPBT8 (36 B) loaded.", "已加载外部 M95640 EEPROM（8 KB）和 OPBT0..OPBT8（36 B）。"),
             key="on",
         )
     if has_ee:
         return State(
             "EEPROM",
             "ok",
-            tr("Загружена внешняя SPI EEPROM M95640 (8 КБ).", "External M95640 SPI EEPROM (8 KB) loaded."),
+            tr("Загружена внешняя SPI EEPROM M95640 (8 КБ).", "External M95640 SPI EEPROM (8 KB) loaded.", "已加载外部 SPI M95640 EEPROM（8 KB）。"),
             key="partial",
         )
     if has_op:
         return State(
             "OPBT",
             "ok",
-            tr("Загружены опционные байты RH850 OPBT.", "RH850 Option Bytes (OPBT) loaded."),
+            tr("Загружены опционные байты RH850 OPBT.", "RH850 Option Bytes (OPBT) loaded.", "已加载 RH850 OPBT 选项字节。"),
             key="partial",
         )
     return State(
         UNKNOWN,
         "muted",
-        tr("Дампы Eeprom.bin и Opbt.bin ещё не прочитаны (режим только чтение).", "Eeprom.bin and Opbt.bin are not loaded yet (read-only)."),
+        tr("Дампы Eeprom.bin и Opbt.bin ещё не прочитаны (режим только чтение).", "Eeprom.bin and Opbt.bin are not loaded yet (read-only).", "Eeprom.bin 和 Opbt.bin 转储尚未读取（只读模式）。"),
         known=False,
         key="unknown",
     )

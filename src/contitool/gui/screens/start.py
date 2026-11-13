@@ -169,8 +169,8 @@ class StartScreen(QWidget):
                 "VAG MQB J533 网关 — Continental 3Q0 907 530（Renesas RH850/F1L）",
             )
         )
-        self.lbl_can_eyebrow.setText(tr("ПОДКЛЮЧЕНИЕ ПО CAN (500 КБИТ/С)", "CAN CONNECTION (500 KBIT/S)"))
-        self.lbl_files_eyebrow.setText(tr("ЛОКАЛЬНЫЕ ФАЙЛЫ (.BIN / .RAW)", "LOCAL FILES (.BIN / .RAW)"))
+        self.lbl_can_eyebrow.setText(tr("ПОДКЛЮЧЕНИЕ ПО CAN (500 КБИТ/С)", "CAN CONNECTION (500 KBIT/S)", "CAN 连接（500 KBIT/S）"))
+        self.lbl_files_eyebrow.setText(tr("ЛОКАЛЬНЫЕ ФАЙЛЫ (.BIN / .RAW)", "LOCAL FILES (.BIN / .RAW)", "本地文件（.BIN / .RAW）"))
         self.tile_can.set_text(
             tr("Блок на стенде или в авто", "ECU on bench or car", "台架或车上的模块"),
             tr(

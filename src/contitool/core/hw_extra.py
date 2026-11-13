@@ -37,10 +37,11 @@ class OpbtField:
     raw_value: int
     value_ru: str
     value_en: str
+    value_zh: str
 
     @property
     def value_text(self) -> str:
-        return tr(self.value_ru, self.value_en)
+        return tr(self.value_ru, self.value_en, self.value_zh)
 
 
 @dataclasses.dataclass
@@ -98,6 +99,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             tr(
                 f"Ожидался дамп OPBT размером 32, 36 или 256 байт, получено: {len(raw)} Б",
                 f"Expected a 32, 36, or 256-byte OPBT dump, got {len(raw)} B",
+                f"预期 32、36 或 256 字节的 OPBT 转储，实际收到 {len(raw)} B",
             )
         )
 
@@ -113,10 +115,11 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
         0: (
             "Порт общего назначения JP0 (отладочный интерфейс JTAG/LPD отключён)",
             "General-purpose port JP0 (JTAG/LPD debug interface disabled)",
+            "通用端口 JP0（JTAG/LPD 调试接口已禁用）",
         ),
-        1: ("1-проводной интерфейс LPD (1-pin LPD)", "1-pin LPD debug interface"),
-        2: ("4-проводной интерфейс LPD (4-pin LPD)", "4-pin LPD debug interface"),
-        3: ("Интерфейс отладки JTAG / Nexus", "JTAG / Nexus debug interface"),
+        1: ("1-проводной интерфейс LPD (1-pin LPD)", "1-pin LPD debug interface", "单线 LPD 调试接口"),
+        2: ("4-проводной интерфейс LPD (4-pin LPD)", "4-pin LPD debug interface", "四线 LPD 调试接口"),
+        3: ("Интерфейс отладки JTAG / Nexus", "JTAG / Nexus debug interface", "JTAG / Nexus 调试接口"),
     }
 
     wdt1_var = bool((opbt0 >> 26) & 1)
@@ -146,6 +149,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(wdt1_var),
             "Переменный код активации WDTA1" if wdt1_var else "Фиксированный код активации WDTA1 (0xAC)",
             "Variable WDTA1 activation code" if wdt1_var else "Fixed WDTA1 activation code (0xAC)",
+            "WDTA1 可变激活码" if wdt1_var else "WDTA1 固定激活码 (0xAC)",
         ),
         OpbtField(
             "24",
@@ -153,6 +157,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(wdt1_auto),
             "Автозапуск WDTA1 сразу после сброса" if wdt1_auto else "Запуск WDTA1 программным триггером",
             "WDTA1 starts automatically after reset" if wdt1_auto else "WDTA1 starts on software trigger",
+            "复位后 WDTA1 自动启动" if wdt1_auto else "WDTA1 由软件触发启动",
         ),
         OpbtField(
             "23",
@@ -160,6 +165,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(wdt1_en),
             "WDTA1 включён" if wdt1_en else "WDTA1 выключен",
             "WDTA1 enabled" if wdt1_en else "WDTA1 disabled",
+            "WDTA1 已启用" if wdt1_en else "WDTA1 已禁用",
         ),
         OpbtField(
             "22",
@@ -167,6 +173,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(wdt0_var),
             "Переменный код активации WDTA0" if wdt0_var else "Фиксированный код активации WDTA0 (0xAC)",
             "Variable WDTA0 activation code" if wdt0_var else "Fixed WDTA0 activation code (0xAC)",
+            "WDTA0 可变激活码" if wdt0_var else "WDTA0 固定激活码 (0xAC)",
         ),
         OpbtField(
             "20",
@@ -174,6 +181,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(wdt0_auto),
             "Автозапуск WDTA0 сразу после сброса" if wdt0_auto else "Запуск WDTA0 программным триггером",
             "WDTA0 starts automatically after reset" if wdt0_auto else "WDTA0 starts on software trigger",
+            "复位后 WDTA0 自动启动" if wdt0_auto else "WDTA0 由软件触发启动",
         ),
         OpbtField(
             "19",
@@ -181,6 +189,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(wdt0_en),
             "WDTA0 включён" if wdt0_en else "WDTA0 выключен",
             "WDTA0 enabled" if wdt0_en else "WDTA0 disabled",
+            "WDTA0 已启用" if wdt0_en else "WDTA0 已禁用",
         ),
         OpbtField(
             "18..16",
@@ -188,6 +197,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             wdt_sel,
             f"Период переполнения 2^{wdt_exp} / WDTATCKI",
             f"Overflow interval 2^{wdt_exp} / WDTATCKI",
+            f"溢出周期 2^{wdt_exp} / WDTATCKI",
         ),
         OpbtField(
             "8",
@@ -195,6 +205,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(memcdiv_div4),
             "Тактирование контроллера памяти CPUCLK/4 (штатно для 96 МГц)" if memcdiv_div4 else "Тактирование CPUCLK/2",
             "Memory controller clock CPUCLK/4 (standard for 96 MHz)" if memcdiv_div4 else "Memory controller clock CPUCLK/2",
+            "内存控制器时钟 CPUCLK/4（96 MHz 标准值）" if memcdiv_div4 else "内存控制器时钟 CPUCLK/2",
         ),
         OpbtField(
             "5",
@@ -202,6 +213,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(cvm_hd),
             "Монитор повышенного напряжения ядра включён" if cvm_hd else "Монитор повышенного напряжения выключен",
             "High core voltage monitor enabled" if cvm_hd else "High core voltage monitor disabled",
+            "内核高电压监视器已启用" if cvm_hd else "内核高电压监视器已禁用",
         ),
         OpbtField(
             "4",
@@ -209,6 +221,7 @@ def analyze_opbt(raw: bytes) -> OpbtSummary:
             int(cvm_ld),
             "Монитор пониженного напряжения ядра включён" if cvm_ld else "Монитор пониженного напряжения выключен",
             "Low core voltage monitor enabled" if cvm_ld else "Low core voltage monitor disabled",
+            "内核低电压监视器已启用" if cvm_ld else "内核低电压监视器已禁用",
         ),
     ]
 
@@ -259,10 +272,11 @@ class EepromRdsrInfo:
     wip: bool
     protected_range_ru: str
     protected_range_en: str
+    protected_range_zh: str
 
     @property
     def protected_range(self) -> str:
-        return tr(self.protected_range_ru, self.protected_range_en)
+        return tr(self.protected_range_ru, self.protected_range_en, self.protected_range_zh)
 
 
 def decode_m95640_rdsr(rdsr: int) -> EepromRdsrInfo:
@@ -270,10 +284,10 @@ def decode_m95640_rdsr(rdsr: int) -> EepromRdsrInfo:
     v = rdsr & 0xFF
     bp = (v >> 2) & 0x3
     ranges = {
-        0: ("Нет аппаратной защиты секторов (вся память открыта)", "None (entire array unprotected)"),
-        1: ("Верхняя 1/4 памяти (0x1800..0x1FFF)", "Upper quarter (0x1800..0x1FFF)"),
-        2: ("Верхняя 1/2 памяти (0x1000..0x1FFF)", "Upper half (0x1000..0x1FFF)"),
-        3: ("Вся микросхема 8 КБ (0x0000..0x1FFF)", "Whole 8 KB memory (0x0000..0x1FFF)"),
+        0: ("Нет аппаратной защиты секторов (вся память открыта)", "None (entire array unprotected)", "无扇区硬件保护（整个存储阵列未保护）"),
+        1: ("Верхняя 1/4 памяти (0x1800..0x1FFF)", "Upper quarter (0x1800..0x1FFF)", "上部 1/4 存储区 (0x1800..0x1FFF)"),
+        2: ("Верхняя 1/2 памяти (0x1000..0x1FFF)", "Upper half (0x1000..0x1FFF)", "上部 1/2 存储区 (0x1000..0x1FFF)"),
+        3: ("Вся микросхема 8 КБ (0x0000..0x1FFF)", "Whole 8 KB memory (0x0000..0x1FFF)", "整个 8 KB 芯片 (0x0000..0x1FFF)"),
     }
     return EepromRdsrInfo(
         raw=v,
@@ -283,6 +297,7 @@ def decode_m95640_rdsr(rdsr: int) -> EepromRdsrInfo:
         wip=bool(v & 1),
         protected_range_ru=ranges[bp][0],
         protected_range_en=ranges[bp][1],
+        protected_range_zh=ranges[bp][2],
     )
 
 
@@ -445,6 +460,7 @@ def analyze_eeprom(
             tr(
                 f"Ожидался дамп внешней EEPROM M95640 размером 8192 байта (8 КБ), получено: {len(raw)} Б",
                 f"Expected an 8,192-byte (8 KB) M95640 external EEPROM dump, got {len(raw)} B",
+                f"预期 8192 字节（8 KB）的 M95640 外部 EEPROM 转储，实际收到 {len(raw)} B",
             )
         )
 

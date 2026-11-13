@@ -513,14 +513,16 @@ class DPduBus(can.BusABC):
         if self.uds_only:
             if not self._probe_uds_only_fallback(verify=False):
                 raise can.CanOperationError(tr("D-PDU: не удалось переоткрыть канал UDS ISO-TP",
-                                               "D-PDU: could not reopen the UDS ISO-TP link"))
+                                               "D-PDU: could not reopen the UDS ISO-TP link",
+                                               "D-PDU：无法重新打开 UDS ISO-TP 链路"))
             return
         if self._raw_monitor_deaf:
             if not self._open_nonraw(bitrate, verify=verify):
                 self._close_links()
                 if not verify or not self._probe_uds_only_fallback(verify=True):
                     raise can.CanOperationError(tr("D-PDU: не удалось переоткрыть резервный канал",
-                                                   "D-PDU: could not reopen the fallback link"))
+                                                   "D-PDU: could not reopen the fallback link",
+                                                   "D-PDU：无法重新打开备用链路"))
             self.spent = False
             return
         try:
