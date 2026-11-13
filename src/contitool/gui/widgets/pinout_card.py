@@ -10,7 +10,7 @@ from contitool.core import T20_BENCH_PINS
 from contitool.gui import theme
 from contitool.gui.theme import mono_font
 from contitool.gui.widgets.page import Callout, Section
-from contitool.i18n import get_lang, subscribe_lang_change, tr
+from contitool.i18n import subscribe_lang_change, tr
 
 PIN_COLORS = {
     1: theme.ERR,  # KL30 +12V
@@ -98,7 +98,7 @@ class PinoutCard(Section):
         self.grid_pins.setVerticalSpacing(4)
         self.grid_pins.setColumnStretch(2, 1)
         self._pin_labels: list[tuple[QLabel, QLabel, QLabel]] = []
-        for r, (pin, sig, _ru, _en) in enumerate(T20_BENCH_PINS):
+        for r, (pin, sig, _ru, _en, _zh) in enumerate(T20_BENCH_PINS):
             num = QLabel(f"Pin {pin}")
             num.setStyleSheet(f"color: {PIN_COLORS.get(pin, theme.TEXT)}; font-weight: 600;")
             name = QLabel(sig)
@@ -122,14 +122,16 @@ class PinoutCard(Section):
         self.retranslate_ui()
 
     def retranslate_ui(self) -> None:
-        self.set_text(tr("Разъём T20 — подключение на стенде", "T20 connector — bench wiring"))
-        for (_pin, _sig, desc_ru, desc_en), (_num, _name, lbl) in zip(T20_BENCH_PINS, self._pin_labels, strict=True):
-            lbl.setText(desc_ru if get_lang() == "ru" else desc_en)
+        self.set_text(tr("Разъём T20 — подключение на стенде", "T20 connector — bench wiring", "T20 连接器 — 台架接线"))
+        for (_pin, _sig, desc_ru, desc_en, desc_zh), (_num, _name, lbl) in zip(T20_BENCH_PINS, self._pin_labels, strict=True):
+            lbl.setText(tr(desc_ru, desc_en, desc_zh))
         self.lbl_warn.setText(
             tr(
                 "<b>Обязательно:</b> включён терминатор в адаптере или установлен резистор 120 Ом между "
                 "Pin 19 (CAN-H) и Pin 9 (CAN-L). Без терминатора шина CAN уходит в Bus-Off.",
                 "<b>Required:</b> the adapter's terminator is on or a 120 Ω resistor is fitted between "
                 "Pin 19 (CAN-H) and Pin 9 (CAN-L). Without termination the CAN bus goes Bus-Off.",
+                "<b>必需：</b>开启适配器上的终端电阻，或在 Pin 19（CAN-H）与 Pin 9（CAN-L）之间接入 120 Ω 电阻。"
+                "缺少终端电阻时，CAN 总线会进入 Bus-Off 状态。",
             )
         )

@@ -127,6 +127,7 @@ def resolve_device(port: str) -> str:
         tr(
             "J2534-адаптер не найден. Установите драйвер PassThru от производителя адаптера.",
             "No J2534 adapter found. Install the PassThru driver from the adapter vendor.",
+            "未找到 J2534 适配器。请安装适配器厂商提供的 PassThru 驱动程序。",
         )
     )
 
@@ -137,6 +138,8 @@ def _bitness_message(dev: J2534Device) -> str:
         "в программу. Нужен драйвер PassThru той же разрядности от производителя адаптера.",
         f"The “{dev.name}” driver is {dev.bits}-bit and ContiTool is {_PY_BITS}-bit — Windows cannot load it. "
         "Get a PassThru driver of the same bitness from the adapter vendor.",
+        f"“{dev.name}”驱动程序为 {dev.bits} 位，而 ContiTool 为 {_PY_BITS} 位——Windows 无法加载它。"
+        "请从适配器厂商获取相同位数的 PassThru 驱动程序。",
     )
 
 
@@ -227,7 +230,7 @@ class J2534Bus(can.BusABC):
         self._call("PassThruWriteMsgs", self._chan.value, ctypes.byref(out), ctypes.byref(n),
                    100 if timeout is None else int(timeout * 1000))
         if n.value != 1:
-            raise can.CanOperationError(tr("J2534: кадр не отправлен", "J2534: frame not sent"))
+            raise can.CanOperationError(tr("J2534: кадр не отправлен", "J2534: frame not sent", "J2534：帧未发送"))
 
     def send_batch(self, msgs: list[can.Message], timeout: float | None = None) -> None:
         """Write a whole block of ConsecutiveFrames in one PassThruWriteMsgs call instead of one USB/TCP call each."""
@@ -251,7 +254,7 @@ class J2534Bus(can.BusABC):
             n = ctypes.c_uint32(rem)
             self._call("PassThruWriteMsgs", self._chan.value, ctypes.byref(arr), ctypes.byref(n), timeout_ms)
             if n.value == 0:
-                raise can.CanOperationError(tr("J2534: кадр не отправлен", "J2534: frame not sent"))
+                raise can.CanOperationError(tr("J2534: кадр не отправлен", "J2534: frame not sent", "J2534：帧未发送"))
             idx += n.value
 
     @contextlib.contextmanager
@@ -332,7 +335,7 @@ class J2534Bus(can.BusABC):
         self._call("PassThruWriteMsgs", self._uds_chan, ctypes.byref(out), ctypes.byref(n),
                    max(2000, int(timeout * 1000)))
         if n.value != 1:
-            raise can.CanOperationError(tr("J2534: запрос UDS не отправлен", "J2534: UDS request not sent"))
+            raise can.CanOperationError(tr("J2534: запрос UDS не отправлен", "J2534: UDS request not sent", "J2534：UDS 请求未发送"))
 
         # P2 bounds the wait for the first byte; after a `7F xx 78` the ECU gets P2* for the next one. Without
         # this a dead ECU held the caller for the whole operation timeout — 120 s for an erase.

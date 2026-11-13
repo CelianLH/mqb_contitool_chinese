@@ -436,8 +436,11 @@ class J533CanLink:
                         "прошивку заново: на драйверах 30 и новее обрыв повторится.",
                         "then connect through D-PDU driver 27.2 (it comes with ContiTool) and run the same flash "
                         "again: on drivers 30 and newer it breaks off again.",
+                        "然后通过 D-PDU 驱动 27.2（随 ContiTool 一起提供）连接，并重新运行同一刷写：在 30 及更新版本的"
+                        "驱动上仍会中断。",
                     ) if driver_unstable(getattr(self.bus, "driver_version", "")) else tr(
-                        "затем запустите ту же прошивку заново.", "then run the same flash again.")
+                        "затем запустите ту же прошивку заново.", "then run the same flash again.",
+                        "然后重新运行同一刷写。")
                     raise can.CanOperationError(tr(
                         f"Связь с VCI потеряна посреди передачи ({req[:3].hex(' ').upper()}: {exc}): адаптер "
                         "перезагрузился или отключился, продолжить на этом соединении нельзя. Если шла прошивка, блок "
@@ -447,6 +450,9 @@ class J533CanLink:
                         "disconnected, and this connection cannot go on. If a flash was running, the ECU stays in its "
                         "FBL bootloader without an application — which can be fixed: power-cycle the ECU and the VCI, "
                         f"{again}",
+                        f"传输中途与 VCI 失去连接（{req[:3].hex(' ').upper()}：{exc}）：适配器已重启或断开，此连接无法"
+                        "继续。如果当时正在刷写，模块会停留在 FBL 引导加载程序中且没有应用程序——这是可以修复的："
+                        f"给模块和 VCI 重新上电，{again}",
                     )) from exc
                 if self.on_hw_fallback is not None:
                     self.on_hw_fallback(f"{req[:3].hex(' ').upper()}: {exc}")

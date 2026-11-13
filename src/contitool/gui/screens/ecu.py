@@ -73,7 +73,7 @@ from contitool.core import (
     sync_gateway_coding_for_zdc,
 )
 from contitool.core import dtc
-from contitool.core.constants import DFLASH_FSC_BASE_OFF, DFLASH_FSC_STRIDE, DFLASH_SWAP_NVM_OFF, FBL_MOD_OFFSET, ZDC_DATASET_SPECS
+from contitool.core.constants import DFLASH_FSC_BASE_OFF, DFLASH_FSC_STRIDE, DFLASH_SWAP_NVM_OFF, FBL_MOD_OFFSET, UNSUPPORTED_DATASET_ZH, ZDC_DATASET_SPECS
 from contitool.gui.connection import CanConnection, ensure_ready
 from contitool.gui.dialogs.cp import CpBindDialog
 from contitool.gui.dialogs.crypto import FscDialog, OdxSignDialog, RsaKeyDialog, SwapActivateDialog
@@ -118,17 +118,18 @@ def _restart_note() -> str:
         "For the dataset changes to take effect in every module, restart them: in a car switch the ignition off and "
         "on again; on the bench cut the power for a few seconds. If the head unit still shows the old list of driving "
         "modes, restart it by holding its power button for about 10 seconds.",
+        "为使数据集更改在所有模块中生效，请重启这些模块：在车上先关闭点火再重新打开；在台架上断开电源几秒。如果主机仍显示旧的驾驶模式列表，请重启主机：按住电源键约 10 秒。",
     )
 
 
 def _title(key: str) -> str:
     return {
-        "cp": tr("Адаптация IKA/CP", "IKA/CP adaptation"),
-        "eng": tr("Расширенная диагностика", "Extended diagnostics"),
-        "swap": tr("Активация SWaP/FEC", "SWaP/FEC activation"),
-        "zdc": tr("Параметрирование", "Parameterization"),
-        "dtc": tr("Регистратор DTC", "DTC memory"),
-        "boot": tr("Загрузчик и подпись", "Bootloader & signing"),
+        "cp": tr("Адаптация IKA/CP", "IKA/CP adaptation", "IKA/CP 适配"),
+        "eng": tr("Расширенная диагностика", "Extended diagnostics", "扩展诊断"),
+        "swap": tr("Активация SWaP/FEC", "SWaP/FEC activation", "SWaP/FEC 激活"),
+        "zdc": tr("Параметрирование", "Parameterization", "参数化"),
+        "dtc": tr("Регистратор DTC", "DTC memory", "DTC 记录器"),
+        "boot": tr("Загрузчик и подпись", "Bootloader & signing", "引导加载程序与签名"),
     }[key]
 
 
@@ -325,18 +326,18 @@ class EcuScreen(QWidget):
             self._render_page()
 
     def _refresh_identity(self) -> None:
-        self.lbl_pn.setText(self.ws.part_number or tr("Блок не определён", "Unknown ECU"))
+        self.lbl_pn.setText(self.ws.part_number or tr("Блок не определён", "Unknown ECU", "未识别的模块"))
         set_pill(
             self.pill_source,
-            tr("считан по CAN", "read over CAN") if self.ws.source == "can" else tr("из файлов", "from files"),
+            tr("считан по CAN", "read over CAN", "通过 CAN 读取") if self.ws.source == "can" else tr("из файлов", "from files", "来自文件"),
             "info" if self.ws.source == "can" else "muted",
         )
-        self.btn_export.setText(tr("Экспортировать бэкап…", "Export backup…"))
-        self.btn_export.setToolTip(tr("Копирует дампы в том виде, как они считаны, в выбранную папку", "Copies the dumps as read to a folder you pick"))
-        self.btn_restore.setText(tr("Залить бэкап в блок…", "Write backup to ECU…"))
+        self.btn_export.setText(tr("Экспортировать бэкап…", "Export backup…", "导出备份…"))
+        self.btn_export.setToolTip(tr("Копирует дампы в том виде, как они считаны, в выбранную папку", "Copies the dumps as read to a folder you pick", "将转储按读取时的原样复制到所选文件夹"))
+        self.btn_restore.setText(tr("Залить бэкап в блок…", "Write backup to ECU…", "将备份写入模块…"))
         self.btn_restore.setEnabled(not self.runner.is_busy)
-        self.btn_report.setText(tr("Подробный отчёт", "Full report"))
-        self.btn_close.setText(tr("Закрыть блок", "Close ECU"))
+        self.btn_report.setText(tr("Подробный отчёт", "Full report", "详细报告"))
+        self.btn_close.setText(tr("Закрыть блок", "Close ECU", "关闭模块"))
 
         clear_layout(self.grid_id)
         rows = status.passport_rows(self.ws)
@@ -355,12 +356,12 @@ class EcuScreen(QWidget):
         clear_layout(self.files_row)
         for k in KINDS:
             have = self.ws.path(k) is not None
-            chip = pill(NAMES[k] if have else tr(f"{NAMES[k]}: нет", f"{NAMES[k]}: missing"), "ok" if have else "warn")
-            chip.setToolTip(str(self.ws.path(k) or tr("Файла нет в папке", "Not in the folder")))
+            chip = pill(NAMES[k] if have else tr(f"{NAMES[k]}: нет", f"{NAMES[k]}: missing", f"{NAMES[k]}：缺失"), "ok" if have else "warn")
+            chip.setToolTip(str(self.ws.path(k) or tr("Файла нет в папке", "Not in the folder", "不在该文件夹中")))
             self.files_row.addWidget(chip)
         folder = self.ws.folder
         if folder:
-            where = hint(tr(f"Папка: {folder.name}", f"Folder: {folder.name}"))
+            where = hint(tr(f"Папка: {folder.name}", f"Folder: {folder.name}", f"文件夹：{folder.name}"))
             where.setWordWrap(False)
             where.setToolTip(str(folder))
             self.files_row.addSpacing(10)
@@ -379,13 +380,13 @@ class EcuScreen(QWidget):
         if key == "boot":
             return status.bootloader(self.ws)
         if self._dtc is None:
-            return State(tr("по запросу", "on request"), "muted")
+            return State(tr("по запросу", "on request", "按需"), "muted")
         groups = self._dtc_groups()
         if groups["active"]:
-            return State(tr(f"активных: {len(groups['active'])}", f"{len(groups['active'])} active"), "err")
+            return State(tr(f"активных: {len(groups['active'])}", f"{len(groups['active'])} active", f"活跃：{len(groups['active'])}"), "err")
         if groups["stored"]:
-            return State(tr(f"сохранено: {len(groups['stored'])}", f"{len(groups['stored'])} stored"), "warn")
-        return State(tr("нет ошибок", "none"), "ok")
+            return State(tr(f"сохранено: {len(groups['stored'])}", f"{len(groups['stored'])} stored", f"已存储：{len(groups['stored'])}"), "warn")
+        return State(tr("нет ошибок", "none", "无故障"), "ok")
 
     def _dtc_groups(self) -> dict[str, list[tuple[int, int]]]:
         """(code, status) of the last read, split into active / stored / untested."""
@@ -396,8 +397,8 @@ class EcuScreen(QWidget):
         return groups
 
     def _refresh_nav(self) -> None:
-        self._group_labels["main"].setText(tr("ФУНКЦИИ", "FUNCTIONS"))
-        self._group_labels["service"].setText(tr("СЕРВИС", "SERVICE"))
+        self._group_labels["main"].setText(tr("ФУНКЦИИ", "FUNCTIONS", "功能"))
+        self._group_labels["service"].setText(tr("СЕРВИС", "SERVICE", "服务"))
         for key, nav_row in self.nav_rows.items():
             st = self._state(key)
             nav_row.lbl_name.setText(_title(key))
@@ -528,7 +529,7 @@ class EcuScreen(QWidget):
         missing = [NAMES[k] for k in kinds if self.ws.path(k) is None]
         if not missing:
             return True, ""
-        return False, tr(f"Нужен дамп: {', '.join(missing)}", f"Requires the dump: {', '.join(missing)}")
+        return False, tr(f"Нужен дамп: {', '.join(missing)}", f"Requires the dump: {', '.join(missing)}", f"需要转储：{', '.join(missing)}")
 
     # ────────────────────────────── pages ──────────────────────────────
     def _page_cp(self, lay: QVBoxLayout) -> None:
@@ -542,6 +543,7 @@ class EcuScreen(QWidget):
                 "Component Protection: modules (head unit, instrument cluster, amplifier and others) check "
                 "through the gateway that they sit in their own car. Adaptation adds a module from another car to "
                 "the gateway; the factory modules are not affected.",
+                "部件保护：各模块（主机、仪表盘、功放等）通过网关校验自己是否安装在本车上。适配会向网关加入来自其他车辆的模块；原厂模块不受影响。",
             ),
         )
         self._note(
@@ -553,6 +555,7 @@ class EcuScreen(QWidget):
                 "You need the IKA key of the module being adapted (16 bytes), known in advance. It is read from "
                 "a memory dump of the module itself. Without the key the module cannot be adapted. The alternative is to "
                 "generate your own key and write it into both the gateway and the module's IKA slot.",
+                "需要提前知晓被适配模块的 IKA 密钥（16 字节）。该密钥从模块自身的内存转储中读取。没有密钥就无法适配该模块。另一种方式是生成自己的密钥，并将其同时写入网关和模块的 IKA 槽位。",
             ),
             tone="warn",
         )
@@ -560,19 +563,20 @@ class EcuScreen(QWidget):
             self._text(lay, st.detail, primary=True)
         inf = self.ws.info("dflash")
         bound = [
-            (s.spec.ecu_addr, tr(s.spec.short_ru, s.spec.short_en))
+            (s.spec.ecu_addr, tr(s.spec.short_ru, s.spec.short_en, s.spec.short_zh))
             for s in ((inf.dflash_slots or []) if inf else [])
             if s.spec.slot > 0 and not s.empty and s.kind == "PLAIN"
         ]
         if bound:
-            self._table(lay, tr("Привязаны по ключу", "Bound by key"), bound)
+            self._table(lay, tr("Привязаны по ключу", "Bound by key", "按键绑定"), bound)
         ok, tip = self._need("cflash", "dflash")
-        lay.addLayout(row(self._btn("cp", tr("Адаптировать модули…", "Adapt modules…"), self._bind_modules, "PrimaryBtn", ok, tip)))
+        lay.addLayout(row(self._btn("cp", tr("Адаптировать модули…", "Adapt modules…", "适配模块…"), self._bind_modules, "PrimaryBtn", ok, tip)))
         self._note(
             lay,
             tr(
                 "Адаптация меняет CodeFlash и DataFlash; в блок они записываются кнопкой «Записать в блок».",
                 "Adaptation changes CodeFlash and DataFlash; they go into the ECU with “Write to ECU”.",
+                "适配会修改 CodeFlash 和 DataFlash；它们通过「写入模块」按钮写入模块。",
             ),
         )
 
@@ -585,23 +589,25 @@ class EcuScreen(QWidget):
                 "памяти по CAN) и RAM-Loader 0x6F0.",
                 "Enables the gateway's factory engineering services: functions 0x80/0x81/0x83, ASAM CCP (memory "
                 "read and write over CAN) and the 0x6F0 RAM-Loader.",
+                "启用网关的原厂工程服务：0x80/0x81/0x83 功能、ASAM CCP（通过 CAN 读写内存）以及 0x6F0 RAM-Loader。",
             ),
         )
         if st.key == "partial":
             self._text(lay, st.detail, primary=True)
         ok, tip = self._need("cflash")
         if st.key == "on":
-            btns = [self._btn("eng_off", tr("Выключить", "Turn off"), lambda: self._patch_engineering(True), "", ok, tip)]
+            btns = [self._btn("eng_off", tr("Выключить", "Turn off", "关闭"), lambda: self._patch_engineering(True), "", ok, tip)]
         else:
-            btns = [self._btn("eng_on", tr("Включить", "Turn on"), lambda: self._patch_engineering(False), "PrimaryBtn", ok, tip)]
+            btns = [self._btn("eng_on", tr("Включить", "Turn on", "开启"), lambda: self._patch_engineering(False), "PrimaryBtn", ok, tip)]
             if st.key == "partial":
                 btns.append(
-                    self._btn("eng_off", tr("Вернуть заводское", "Restore factory"), lambda: self._patch_engineering(True), "GhostBtn", ok)
+                    self._btn("eng_off", tr("Вернуть заводское", "Restore factory", "恢复原厂"), lambda: self._patch_engineering(True), "GhostBtn", ok)
                 )
         lay.addLayout(row(*btns))
         self._note(lay, tr(
             "Меняется только CodeFlash; в блок он записывается кнопкой «Записать в блок».",
             "Only CodeFlash changes; it goes into the ECU with “Write to ECU”.",
+            "仅 CodeFlash 会修改；它通过「写入模块」按钮写入模块。",
         ))
 
     def _page_swap(self, lay: QVBoxLayout) -> None:
@@ -615,6 +621,7 @@ class EcuScreen(QWidget):
                 "The gateway's SWaP features (GRA cruise control, MKE fatigue detection, FPA driving profiles) "
                 "are switched on by writing FEC codes into the Multi-FSC slots in DataFlash. No RSA key, "
                 "certificate or CodeFlash change is needed.",
+                "网关的 SWaP 功能（GRA 定速巡航、MKE 疲劳监测、FPA 驾驶模式）通过将 FEC 代码写入 DataFlash 的 Multi-FSC 槽位来开启。无需 RSA 密钥、证书或修改 CodeFlash。",
             ),
         )
         self._swap_live_block(lay)
@@ -622,29 +629,30 @@ class EcuScreen(QWidget):
         if features:
             self._table(
                 lay,
-                tr("Включены в DataFlash", "Enabled in DataFlash"),
+                tr("Включены в DataFlash", "Enabled in DataFlash", "已在 DataFlash 中启用"),
                 [
                     (
                         code,
                         name,
                         ("Multi-FSC" if factory else "RSA-FSC")
-                        + (tr(", есть в датасете", ", in the dataset") if ds_ok else tr(", нет в датасете", ", not in the dataset")),
+                        + (tr(", есть в датасете", ", in the dataset", "，数据集中有") if ds_ok else tr(", нет в датасете", ", not in the dataset", "，数据集中没有")),
                     )
                     for _, code, name, factory, ds_ok in features
                 ],
             )
         else:
-            self._text(lay, st.detail or tr("Включённых функций нет.", "No features enabled."), primary=True)
+            self._text(lay, st.detail or tr("Включённых функций нет.", "No features enabled.", "未启用任何功能。"), primary=True)
 
         unsup_active = status.unsupported_active_fecs(self.ws)
         if unsup_active:
             unsup_hex = ", ".join(f"{c:08X}" for c in unsup_active)
             self._note(
                 lay,
-                f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING)}\n"
+                f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING, UNSUPPORTED_DATASET_ZH)}\n"
                 + tr(
                     f"Включённые коды ({unsup_hex}) не поддерживаются текущим датасетом ZDC в DataFlash.",
                     f"Active codes ({unsup_hex}) are not supported by the current ZDC dataset in DataFlash.",
+                    f"已启用的代码 ({unsup_hex}) 不受 DataFlash 中当前 ZDC 数据集的支持。",
                 ),
                 tone="warn",
             )
@@ -652,13 +660,13 @@ class EcuScreen(QWidget):
                 row(
                     self._btn(
                         "swap_autoparam_now",
-                        tr("Параметрировать под активные SWaP", "Parameterize for active SWaP"),
+                        tr("Параметрировать под активные SWaP", "Parameterize for active SWaP", "按已激活的 SWaP 进行参数化"),
                         self._parameterize_for_active_swap,
                         "PrimaryBtn",
                     ),
                     self._btn(
                         "swap_goto_zdc",
-                        tr("Открыть «Параметрирование»", "Open Parameterization"),
+                        tr("Открыть «Параметрирование»", "Open Parameterization", "打开「参数化」"),
                         lambda: self.select("zdc"),
                         "GhostBtn",
                     ),
@@ -673,12 +681,14 @@ class EcuScreen(QWidget):
             tip_df = tr(
                 "Область SWaP NvM 0x7C в DataFlash пуста (сначала запустите шлюз на столе)",
                 "SWaP NvM 0x7C in DataFlash is empty (boot the gateway once on bench first)",
+                "DataFlash 中的 SWaP NvM 0x7C 区域为空（请先在台架上启动一次网关）",
             )
         self._block(
             lay,
             tr(
                 "Активация в DataFlash",
                 "Activation in DataFlash",
+                "在 DataFlash 中激活",
             ),
             status.dataset_state(self.ws),
             tr(
@@ -686,10 +696,11 @@ class EcuScreen(QWidget):
                 "датасете ZDC. CodeFlash и ключ VAG не меняются.",
                 "Writes the selected FECs into the Multi-FSC slots in DataFlash and checks that the ZDC dataset "
                 "has data for them. CodeFlash and the VAG key stay as they are.",
+                "将所选 FEC 写入 DataFlash 的 Multi-FSC 槽位，并检查 ZDC 数据集中是否有对应的数据。CodeFlash 和 VAG 密钥保持不变。",
             ),
             self._btn(
                 "swap_direct",
-                tr("Настроить функции SWaP…", "Configure SWaP features…"),
+                tr("Настроить функции SWaP…", "Configure SWaP features…", "配置 SWaP 功能…"),
                 self._activate_swap_direct,
                 "PrimaryBtn",
                 ok_df,
@@ -703,6 +714,7 @@ class EcuScreen(QWidget):
                 tr(
                     "ДОПОЛНИТЕЛЬНО: СЕРТИФИКАТЫ ПО UDS (СВОЙ КЛЮЧ RSA-1024)",
                     "ADVANCED: UDS CERTIFICATES (CUSTOM RSA-1024 KEY)",
+                    "高级：UDS 证书（自定义 RSA-1024 密钥）",
                 )
             )
         )
@@ -713,7 +725,7 @@ class EcuScreen(QWidget):
         key_btns = [
             self._btn(
                 "swap_key",
-                tr("Заменить ключ…", "Replace key…") if own else tr("Вшить свой ключ…", "Embed your key…"),
+                tr("Заменить ключ…", "Replace key…", "替换密钥…") if own else tr("Вшить свой ключ…", "Embed your key…", "写入自己的密钥…"),
                 lambda: self._replace_key("swap"),
                 "" if own else "",
                 ok,
@@ -721,10 +733,10 @@ class EcuScreen(QWidget):
             )
         ]
         if own:
-            key_btns.append(self._btn("swap_stock", tr("Вернуть ключ VAG", "Restore VAG key"), lambda: self._restore_key("swap"), "GhostBtn", ok))
+            key_btns.append(self._btn("swap_stock", tr("Вернуть ключ VAG", "Restore VAG key", "恢复 VAG 密钥"), lambda: self._restore_key("swap"), "GhostBtn", ok))
         self._block(
             lay,
-            tr("Свой ключ в шлюзе", "Your key in the gateway"),
+            tr("Свой ключ в шлюзе", "Your key in the gateway", "网关中的自有密钥"),
             key,
             tr(
                 "Ключ RSA-1024 записывается в CodeFlash и в кэш SWaP в DataFlash. Новая пара ключей сохраняется в"
@@ -733,37 +745,40 @@ class EcuScreen(QWidget):
                 "The RSA-1024 key is written into CodeFlash and into the SWaP cache in DataFlash. A new key pair "
                 "is saved in the ContiTool_keys folder next to the dumps. Without the private key no certificate "
                 "can be signed — keep it.",
+                "RSA-1024 密钥会写入 CodeFlash 和 DataFlash 的 SWaP 缓存。新的密钥对保存在转储旁的 ContiTool_keys 文件夹中。没有私钥就无法签署证书——请妥善保存。",
             ),
             *key_btns,
             num="1",
         )
         self._block(
             lay,
-            tr("Сертификат функции", "Feature certificate"),
+            tr("Сертификат функции", "Feature certificate", "功能证书"),
             None,
             tr(
                 "Выберите функцию — ContiTool подпишет сертификат вашим ключом для VCRN и VIN этого блока.",
                 "Pick a feature — ContiTool signs a certificate with your key for this ECU's VCRN and VIN.",
+                "选择功能——ContiTool 会用你的密钥为本模块的 VCRN 和 VIN 签署证书。",
             ),
             self._btn(
                 "fsc",
-                tr("Выпустить сертификат…", "Issue certificate…"),
+                tr("Выпустить сертификат…", "Issue certificate…", "签发证书…"),
                 self._issue_certificate,
                 "PrimaryBtn" if own else "",
                 own,
-                "" if own else tr("Сначала вшейте свой ключ (шаг 1)", "Embed your key first (step 1)"),
+                "" if own else tr("Сначала вшейте свой ключ (шаг 1)", "Embed your key first (step 1)", "请先写入自己的密钥（第 1 步）"),
             ),
             num="2",
         )
         self._block(
             lay,
-            tr("Отправка в блок", "Sending to the ECU"),
+            tr("Отправка в блок", "Sending to the ECU", "发送到模块"),
             None,
             tr(
                 "Сертификат отправляется в шлюз (адрес 19) командой UDS 31 01 06 55 из CAN-терминала ContiTool "
                 "или тестером. Готовый сертификат открывается в CAN-терминале.",
                 "The certificate goes to the gateway (address 19) with UDS 31 01 06 55, from ContiTool's CAN "
                 "terminal or a scan tool. A signed certificate opens in the CAN terminal.",
+                "证书通过 UDS 31 01 06 55 命令发送到网关（地址 19），可从 ContiTool 的 CAN 终端或诊断仪发送。签署好的证书会在 CAN 终端中打开。",
             ),
             num="3",
         )
@@ -772,20 +787,21 @@ class EcuScreen(QWidget):
         """What the gateway itself reports for every feature (UDS 22 3C 00): the proof that a patch was accepted."""
         btn = self._btn(
             "swap_check",
-            tr("Проверить в блоке", "Check in the ECU") if self._swap_live is None else tr("Проверить снова", "Check again"),
+            tr("Проверить в блоке", "Check in the ECU", "在模块中检查") if self._swap_live is None else tr("Проверить снова", "Check again", "再次检查"),
             self._swap_check,
             "PrimaryBtn" if self._swap_live is None else "GhostBtn",
         )
         if self._swap_live is None:
             self._block(
                 lay,
-                tr("Состояние в блоке", "State in the ECU"),
+                tr("Состояние в блоке", "State in the ECU", "模块中的状态"),
                 None,
                 tr(
                     "Читает из блока статус всех FEC (UDS 22 3C 00): какие приняты, какие отклонены и почему. После "
                     "записи области SWaP запускается сам.",
                     "Reads the status of every FEC from the ECU (UDS 22 3C 00): which are accepted, which are "
                     "rejected and why. Runs by itself after the SWaP area is written.",
+                    "从模块读取所有 FEC 的状态（UDS 22 3C 00）：哪些被接受、哪些被拒绝以及原因。写入 SWaP 区域后会自动运行。",
                 ),
                 btn,
             )
@@ -798,7 +814,7 @@ class EcuScreen(QWidget):
         g.setHorizontalSpacing(14)
         g.setVerticalSpacing(7)
         g.addLayout(
-            row(group_label(tr("СОСТОЯНИЕ В БЛОКЕ", "STATE IN THE ECU")), 1, hint(tr(f"проверено в {self._swap_at}", f"checked at {self._swap_at}")), btn),
+            row(group_label(tr("СОСТОЯНИЕ В БЛОКЕ", "STATE IN THE ECU", "模块中的状态")), 1, hint(tr(f"проверено в {self._swap_at}", f"checked at {self._swap_at}", f"检查于 {self._swap_at}")), btn),
             0, 0, 1, 3,
         )
         summary = status.swap_live_summary(self._swap_live, self.ws)
@@ -834,6 +850,7 @@ class EcuScreen(QWidget):
                 tr(
                     f"НЕ АКТИВИРОВАНЫ ({len(off)}): ПОДДЕРЖИВАЮТСЯ БЛОКОМ, СЕРТИФИКАТА НЕТ",
                     f"NOT ACTIVATED ({len(off)}): SUPPORTED BY THE ECU, NO CERTIFICATE",
+                    f"未激活 ({len(off)})：模块支持，但没有证书",
                 )
             )
             head.setContentsMargins(0, 8, 0, 0)
@@ -853,6 +870,7 @@ class EcuScreen(QWidget):
                 "Старт-Стоп на экране, генератор (BEM).",
                 "The gateway's ZDC datasets: driving profiles and the MODE and wheel buttons, fatigue detection "
                 "(MKE), Start-Stop messages on screen, alternator (BEM).",
+                "网关的 ZDC 数据集：驾驶模式和 MODE 与方向盘按钮、疲劳监测 (MKE)、屏幕上的起停消息、发电机 (BEM)。",
             ),
         )
         if st.detail:
@@ -871,6 +889,7 @@ class EcuScreen(QWidget):
                     f"Для включённых FEC ({unsup_names}) в параметрии нет данных. Кнопка ниже добавит их в датасет.",
                     f"The parameterization has no data for the enabled FECs ({unsup_names}). The button below adds "
                     "them to the dataset.",
+                    f"参数化中没有已启用 FEC ({unsup_names}) 的数据。下面的按钮会将其加入数据集。",
                 ),
                 tone="warn",
             )
@@ -878,7 +897,7 @@ class EcuScreen(QWidget):
                 row(
                     self._btn(
                         "zdc_fix_swap",
-                        tr("Настроить параметрию под включённые функции", "Auto-configure for enabled features"),
+                        tr("Настроить параметрию под включённые функции", "Auto-configure for enabled features", "按已启用功能自动配置参数化"),
                         self._parameterize_for_active_swap,
                         "PrimaryBtn",
                         ok_df,
@@ -894,19 +913,19 @@ class EcuScreen(QWidget):
                 act_profs = [s.name_en for s in fpa.slots() if s.selectable]  # as the head unit labels them
                 bcfg = fpa.button_config()
                 wheel_short = f"0x{bcfg.mfl_keycode:02X}"
-                for kcode, kru, ken in MFL_KEYCODE_PRESETS:
+                for kcode, kru, ken, kzh in MFL_KEYCODE_PRESETS:
                     if kcode == bcfg.mfl_keycode:
-                        wheel_short = tr(kru.split(" (")[0], ken.split(" (")[0])
+                        wheel_short = tr(kru.split(" (")[0], ken.split(" (")[0], kzh.split(" (")[0])
                         break
                 btn_map = {
-                    "none": tr("только с экрана магнитолы", "head-unit screen only"),
-                    "console": tr("кнопка MODE", "MODE button"),
-                    "mfl": tr(f"кнопка на руле ({wheel_short})", f"wheel button ({wheel_short})"),
-                    "both": tr(f"кнопка MODE + руль ({wheel_short})", f"MODE + wheel ({wheel_short})"),
+                    "none": tr("только с экрана магнитолы", "head-unit screen only", "仅通过主机屏幕"),
+                    "console": tr("кнопка MODE", "MODE button", "MODE 按钮"),
+                    "mfl": tr(f"кнопка на руле ({wheel_short})", f"wheel button ({wheel_short})", f"方向盘按钮 ({wheel_short})"),
+                    "both": tr(f"кнопка MODE + руль ({wheel_short})", f"MODE + wheel ({wheel_short})", f"MODE + 方向盘按钮 ({wheel_short})"),
                 }
                 kl15_ok = fpa.all_active_profiles_persist_kl15
                 fpa_st = State(
-                    tr(f"режимов: {len(act_profs)}", f"{len(act_profs)} modes"),
+                    tr(f"режимов: {len(act_profs)}", f"{len(act_profs)} modes", f"模式：{len(act_profs)}"),
                     "ok",
                     key="on",
                 )
@@ -915,60 +934,65 @@ class EcuScreen(QWidget):
                     f"После выключения зажигания: {'профиль сохраняется' if kl15_ok else 'сброс в Normal'}.",
                     f"In the menu: {', '.join(act_profs)}.\nSwitching: {btn_map.get(bcfg.mode, bcfg.mode)}. "
                     f"After the ignition is off: {'the profile is kept' if kl15_ok else 'back to Normal'}.",
+                    f"菜单中：{', '.join(act_profs)}。\n切换方式：{btn_map.get(bcfg.mode, bcfg.mode)}。"
+                    f"关闭点火后：{'保留当前模式' if kl15_ok else '重置为 Normal'}。",
                 )
             elif fpa.crc_ok:
-                fpa_st = State(tr("отключены", "disabled"), "muted", key="off")
+                fpa_st = State(tr("отключены", "disabled", "已禁用"), "muted", key="off")
                 fpa_desc = tr(
                     "Записан базовый датасет без профилей движения. Включите нужные режимы в настройке.",
                     "A base dataset without driving profiles is written. Enable the modes you need in the settings.",
+                    "已写入不含驾驶模式的基础数据集。请在设置中启用所需模式。",
                 )
             else:
-                fpa_st = State(tr("не настроено", "not set"), "warn", key="off")
+                fpa_st = State(tr("не настроено", "not set", "未设置"), "warn", key="off")
                 fpa_desc = tr(
                     "Профили движения не настроены. Нажмите кнопку ниже и выберите шаблон.",
                     "Driving profiles are not configured. Press the button below and pick a template.",
+                    "尚未配置驾驶模式。请点击下方按钮并选择模板。",
                 )
 
             mke = parse_mke_block(raw_df)
             mke_st = (
-                State(tr(f"от {mke.speed_on_kmh} км/ч", f"from {mke.speed_on_kmh} km/h"), "ok", key="on")
+                State(tr(f"от {mke.speed_on_kmh} км/ч", f"from {mke.speed_on_kmh} km/h", f"自 {mke.speed_on_kmh} 公里/小时起"), "ok", key="on")
                 if (mke.crc_ok and mke.plausible)
-                else State(tr("не настроен", "not set"), "muted", key="off")
+                else State(tr("не настроен", "not set", "未设置"), "muted", key="off")
             )
 
             ssa = parse_ssa_block(raw_df)
             if ssa.crc_ok:
                 ssa_lbl = {
-                    0: tr("скрыты", "hidden"),
-                    1: tr("стандартно", "standard"),
-                    3: tr("подробно", "detailed"),
-                }.get(ssa.bap_output_mode, tr("включены", "enabled"))
+                    0: tr("скрыты", "hidden", "隐藏"),
+                    1: tr("стандартно", "standard", "标准"),
+                    3: tr("подробно", "detailed", "详细"),
+                }.get(ssa.bap_output_mode, tr("включены", "enabled", "已启用"))
                 ssa_st = State(ssa_lbl, "ok", key="on")
             else:
-                ssa_st = State(tr("не настроено", "not set"), "muted", key="off")
+                ssa_st = State(tr("не настроено", "not set", "未设置"), "muted", key="off")
 
             bem = parse_bem_block(raw_df)
             bem_pop = sum(1 for s in bem.slots if not s.empty)
             bem_st = (
-                State(tr(f"моделей: {bem_pop}", f"{bem_pop} models"), "ok", key="on")
+                State(tr(f"моделей: {bem_pop}", f"{bem_pop} models", f"型号：{bem_pop}"), "ok", key="on")
                 if bem.crc_ok
-                else State(tr("не настроен", "not set"), "muted", key="off")
+                else State(tr("не настроен", "not set", "未设置"), "muted", key="off")
             )
             pp_st = (
                 State(f"{pp.dataset_pn} ({pp.dataset_ver})", "ok", key="on")
                 if pp.crc_ok
-                else State(tr("не заполнен", "not set"), "muted", key="off")
+                else State(tr("не заполнен", "not set", "未填写"), "muted", key="off")
             )
         else:
             fpa_st = mke_st = ssa_st = bem_st = pp_st = status.parameterization(self.ws)
             fpa_desc = tr(
                 "Откройте дамп DataFlash, чтобы настроить профили вождения и кнопки.",
                 "Load a DataFlash dump to configure driving profiles and buttons.",
+                "加载 DataFlash 转储以配置驾驶模式和按钮。",
             )
 
         self._block(
             lay,
-            tr("Параметрия блока", "ECU datasets"),
+            tr("Параметрия блока", "ECU datasets", "模块数据集"),
             pp_st,
             tr(
                 "Запись по UDS (сессия 10 40, доступ 20103). Перед записью ContiTool читает из блока статус SWaP "
@@ -978,22 +1002,23 @@ class EcuScreen(QWidget):
                 "status and coding and offers to switch on what is missing. Export saves the datasets as ODIS "
                 "files (.xml) and as they are (.bin); import loads a dataset from an ODIS file with its number "
                 "and version.",
+                "通过 UDS 写入（会话 10 40，访问权限 20103）。写入前，ContiTool 会读取模块的 SWaP 状态和编码，并提示启用缺失部分。导出将数据集保存为 ODIS 文件 (.xml) 和原始格式 (.bin)；导入则从 ODIS 文件加载数据集，并保留其编号和版本。",
             ),
-            self._btn("zdc_can_upload", tr("Записать параметрию по CAN…", "Write datasets over CAN…"),
+            self._btn("zdc_can_upload", tr("Записать параметрию по CAN…", "Write datasets over CAN…", "通过 CAN 写入数据集…"),
                       self._upload_zdc_over_can, "PrimaryBtn", ok_df, tip_df),
-            self._btn("zdc_export", tr("Экспорт…", "Export…"), self._export_zdc, "", ok_df, tip_df),
-            self._btn("zdc_import_odis", tr("Импорт ODIS…", "Import ODIS…"), self._import_odis_zdc, "", ok_df, tip_df),
-            self._btn("zdc_passport", tr("Паспорт и разделы…", "Passport & sections…"), self._open_passport_editor,
+            self._btn("zdc_export", tr("Экспорт…", "Export…", "导出…"), self._export_zdc, "", ok_df, tip_df),
+            self._btn("zdc_import_odis", tr("Импорт ODIS…", "Import ODIS…", "导入 ODIS…"), self._import_odis_zdc, "", ok_df, tip_df),
+            self._btn("zdc_passport", tr("Паспорт и разделы…", "Passport & sections…", "护照与分区…"), self._open_passport_editor,
                       "GhostBtn", ok_df, tip_df),
         )
         self._block(
             lay,
-            tr("Профили вождения и кнопки (MODE и руль)", "Driving Profiles & Buttons (MODE & Wheel)"),
+            tr("Профили вождения и кнопки (MODE и руль)", "Driving Profiles & Buttons (MODE & Wheel)", "驾驶模式与按钮（MODE 与方向盘）"),
             fpa_st,
             fpa_desc,
             self._btn(
                 "zdc_fpa",
-                tr("Настроить профили и кнопки…", "Configure profiles & buttons…"),
+                tr("Настроить профили и кнопки…", "Configure profiles & buttons…", "配置模式与按钮…"),
                 self._open_fpa_editor,
                 "PrimaryBtn",
                 ok_df,
@@ -1001,41 +1026,44 @@ class EcuScreen(QWidget):
             ),
             self._btn(
                 "zdc_learn_mfl",
-                tr("Проверить кнопку руля по CAN…", "Test wheel button over CAN…"),
+                tr("Проверить кнопку руля по CAN…", "Test wheel button over CAN…", "通过 CAN 测试方向盘按钮…"),
                 self._test_mfl_button_live,
                 "GhostBtn",
             ),
         )
         self._block(
             lay,
-            tr("Контроль усталости водителя (MKE)", "Driver Fatigue Detection (MKE)"),
+            tr("Контроль усталости водителя (MKE)", "Driver Fatigue Detection (MKE)", "驾驶员疲劳监测 (MKE)"),
             mke_st,
             tr(
                 "Скорость, с которой включается контроль (обычно 65 км/ч), и длительность остановки, после "
                 "которой сбрасывается предупреждение.",
                 "The speed at which monitoring starts (usually 65 km/h) and how long a stop resets the warning.",
+                "监测开始的速度（通常为 65 公里/小时），以及多久的停车会重置警告。",
             ),
-            self._btn("zdc_mke", tr("Настроить…", "Configure…"), self._open_mke_editor, "", ok_df, tip_df),
+            self._btn("zdc_mke", tr("Настроить…", "Configure…", "配置…"), self._open_mke_editor, "", ok_df, tip_df),
         )
         self._block(
             lay,
-            tr("Уведомления системы Старт-Стоп на экране", "Start-Stop Screen Notifications"),
+            tr("Уведомления системы Старт-Стоп на экране", "Start-Stop Screen Notifications", "起停系统屏幕通知"),
             ssa_st,
             tr(
                 "Причины, по которым Старт-Стоп не глушит или запускает двигатель, на экране магнитолы.",
                 "Why Start-Stop keeps the engine running or restarts it, shown on the head unit.",
+                "起停系统为何不熄火或重新启动发动机的原因，显示在主机屏幕上。",
             ),
-            self._btn("zdc_ssa", tr("Настроить…", "Configure…"), self._open_ssa_editor, "", ok_df, tip_df),
+            self._btn("zdc_ssa", tr("Настроить…", "Configure…", "配置…"), self._open_ssa_editor, "", ok_df, tip_df),
         )
         self._block(
             lay,
-            tr("Генератор 14В и умная зарядка (BEM)", "14V Alternator & Smart Charging (BEM)"),
+            tr("Генератор 14В и умная зарядка (BEM)", "14V Alternator & Smart Charging (BEM)", "14V 发电机与智能充电 (BEM)"),
             bem_st,
             tr(
                 "Модель генератора автомобиля из заводского каталога (Bosch, Valeo, Denso, 110–250 А).",
                 "The car's alternator model from the factory catalogue (Bosch, Valeo, Denso, 110–250 A).",
+                "从原厂目录中选择的车辆发电机型号（Bosch、Valeo、Denso，110–250 A）。",
             ),
-            self._btn("zdc_bem", tr("Выбрать генератор…", "Select alternator…"), self._open_bem_editor, "", ok_df, tip_df),
+            self._btn("zdc_bem", tr("Выбрать генератор…", "Select alternator…", "选择发电机…"), self._open_bem_editor, "", ok_df, tip_df),
         )
 
 
@@ -1046,12 +1074,13 @@ class EcuScreen(QWidget):
             tr(
                 "Коды неисправностей читаются из блока по CAN; в дампах их нет.",
                 "Trouble codes are read from the ECU over CAN; dumps do not contain them.",
+                "故障码通过 CAN 从模块读取；转储中不包含故障码。",
             ),
         )
         lay.addLayout(
             row(
-                self._btn("dtc", tr("Прочитать ошибки", "Read codes"), lambda: self._dtc_run(False), "PrimaryBtn"),
-                self._btn("dtc_clear", tr("Стереть ошибки", "Clear codes"), lambda: self._dtc_run(True), "GhostBtn"),
+                self._btn("dtc", tr("Прочитать ошибки", "Read codes", "读取故障码"), lambda: self._dtc_run(False), "PrimaryBtn"),
+                self._btn("dtc_clear", tr("Стереть ошибки", "Clear codes", "清除故障码"), lambda: self._dtc_run(True), "GhostBtn"),
             )
         )
         if self._dtc is None:
@@ -1065,11 +1094,13 @@ class EcuScreen(QWidget):
                 f"не проверялись {len(groups['untested'])}",
                 f"Read at {self._dtc_at}: {len(groups['active'])} active, {len(groups['stored'])} stored, "
                 f"{len(groups['untested'])} not tested",
+                f"读取于 {self._dtc_at}：活跃 {len(groups['active'])}，已存储 {len(groups['stored'])}，"
+                f"未检测 {len(groups['untested'])}",
             ),
             primary=True,
         )
         if not faults:
-            summary.setText(tr(f"Неисправностей нет, прочитано в {self._dtc_at}", f"No faults, read at {self._dtc_at}"))
+            summary.setText(tr(f"Неисправностей нет, прочитано в {self._dtc_at}", f"No faults, read at {self._dtc_at}", f"无故障，读取于 {self._dtc_at}"))
             set_tone(summary, "ok")
 
         def rows(items: list[tuple[int, int]], status: str = "") -> list[tuple[str, ...]]:
@@ -1080,16 +1111,16 @@ class EcuScreen(QWidget):
             return out
 
         if groups["active"]:
-            self._table(lay, tr("Активные — неисправность есть сейчас", "Active — failing now"), rows(groups["active"]))
+            self._table(lay, tr("Активные — неисправность есть сейчас", "Active — failing now", "活跃——当前存在故障"), rows(groups["active"]))
         if groups["stored"]:
-            self._table(lay, tr("Сохранённые — неисправность была", "Stored — failed earlier"), rows(groups["stored"]))
+            self._table(lay, tr("Сохранённые — неисправность была", "Stored — failed earlier", "已存储——曾经发生故障"), rows(groups["stored"]))
         if groups["untested"]:
             n = len(groups["untested"])
             toggle = self._btn(
                 "dtc_untested",
-                tr(f"Скрыть невыполненные проверки ({n})", f"Hide checks not run yet ({n})")
+                tr(f"Скрыть невыполненные проверки ({n})", f"Hide checks not run yet ({n})", f"隐藏尚未运行的检查 ({n})")
                 if self._show_untested
-                else tr(f"Показать невыполненные проверки ({n})", f"Show checks not run yet ({n})"),
+                else tr(f"Показать невыполненные проверки ({n})", f"Show checks not run yet ({n})", f"显示尚未运行的检查 ({n})"),
                 self._toggle_untested,
                 "GhostBtn",
             )
@@ -1104,12 +1135,13 @@ class EcuScreen(QWidget):
                         "These are not faults: they are checks the ECU has not run since the codes were cleared. Some "
                         "(memory, watchdog) run only on an ignition cycle: switch terminal 15 off, let the ECU sleep and "
                         "switch it on again.",
+                        "这些不是故障：它们是模块在清除故障码后尚未运行的检查。部分检查（内存、看门狗）仅在点火循环时运行：关闭 15 号端子，等待模块休眠后重新开启。",
                     ),
                 )
                 self._table(
                     lay,
-                    tr("Проверки, которые блок ещё не выполнял", "Checks the ECU has not run yet"),
-                    rows(groups["untested"], tr("проверка не выполнялась", "check not run")),
+                    tr("Проверки, которые блок ещё не выполнял", "Checks the ECU has not run yet", "模块尚未运行的检查"),
+                    rows(groups["untested"], tr("проверка не выполнялась", "check not run", "检查未运行")),
                     muted=True,
                 )
 
@@ -1130,20 +1162,21 @@ class EcuScreen(QWidget):
                 "signed by VAG, and any change to CodeFlash breaks that signature. The engineering bootloader does not "
                 "check the signature, so a modified CodeFlash can be written over CAN. It differs from the factory one "
                 "by a single instruction: 4 bytes at 0x0100342A.",
+                "引导加载程序 (Uflash) 将固件写入模块。原厂引导加载程序只接受带 VAG 签名的 CodeFlash，任何对 CodeFlash 的修改都会破坏该签名。工程引导加载程序不校验签名，因此修改后的 CodeFlash 可以通过 CAN 写入。它与原厂版本仅相差一条指令：0x0100342A 处的 4 个字节。",
             ),
         )
         btns = []
         if st.key != "open":
             btns.append(
-                self._btn("boot_on", tr("Активировать инженерный…", "Activate engineering…"), lambda: self._flash_bootloader(True))
+                self._btn("boot_on", tr("Активировать инженерный…", "Activate engineering…", "激活工程引导加载程序…"), lambda: self._flash_bootloader(True))
             )
         if st.key != "stock":
             btns.append(
-                self._btn("boot_off", tr("Вернуть заводской…", "Restore factory…"), lambda: self._flash_bootloader(False), "GhostBtn")
+                self._btn("boot_off", tr("Вернуть заводской…", "Restore factory…", "恢复原厂…"), lambda: self._flash_bootloader(False), "GhostBtn")
             )
         self._block(
             lay,
-            tr("Инженерный загрузчик", "Engineering bootloader"),
+            tr("Инженерный загрузчик", "Engineering bootloader", "工程引导加载程序"),
             st,
             tr(
                 "Uflash меняется только через FACI: в RAM блока загружается программа, которая перезаписывает "
@@ -1152,22 +1185,23 @@ class EcuScreen(QWidget):
                 "Uflash is changed only through FACI: a program loaded into the ECU's RAM rewrites the "
                 "bootloader, which is then read back. Before a CodeFlash write ContiTool installs the engineering"
                 " bootloader itself if it is not there.",
+                "Uflash 只能通过 FACI 修改：加载到模块 RAM 中的程序会重写引导加载程序，随后再读取校验。写入 CodeFlash 前，若没有工程引导加载程序，ContiTool 会自行安装。",
             )
-            + ("" if st.known else "\n" + tr("Состояние видно по дампу Uflash.", "The state comes from the Uflash dump.")),
+            + ("" if st.known else "\n" + tr("Состояние видно по дампу Uflash.", "The state comes from the Uflash dump.", "状态由 Uflash 转储可见。")),
             *btns,
         )
 
         fbl = status.fbl_key(self.ws)
         ok, tip = self._need("cflash")
         btns = [
-            self._btn("fbl_key", tr("Вшить свой ключ…", "Embed your key…"), lambda: self._replace_key("fbl"), "", ok, tip),
-            self._btn("odx", tr("Подписать прошивку для ODX…", "Sign firmware for ODX…"), self._sign_odx, "GhostBtn", ok, tip),
+            self._btn("fbl_key", tr("Вшить свой ключ…", "Embed your key…", "写入自己的密钥…"), lambda: self._replace_key("fbl"), "", ok, tip),
+            self._btn("odx", tr("Подписать прошивку для ODX…", "Sign firmware for ODX…", "为 ODX 签署固件…"), self._sign_odx, "GhostBtn", ok, tip),
         ]
         if fbl.key == "custom":
-            btns.append(self._btn("fbl_stock", tr("Вернуть ключ VAG", "Restore VAG key"), lambda: self._restore_key("fbl"), "GhostBtn", ok))
+            btns.append(self._btn("fbl_stock", tr("Вернуть ключ VAG", "Restore VAG key", "恢复 VAG 密钥"), lambda: self._restore_key("fbl"), "GhostBtn", ok))
         self._block(
             lay,
-            tr("Свой ключ FBL — для ODX и ODIS", "Your FBL key — for ODX and ODIS"),
+            tr("Свой ключ FBL — для ODX и ODIS", "Your FBL key — for ODX and ODIS", "自有 FBL 密钥——用于 ODX 和 ODIS"),
             fbl,
             tr(
                 "Вместо инженерного загрузчика можно записать свой ключ FBL и подписывать им прошивку, например "
@@ -1176,6 +1210,7 @@ class EcuScreen(QWidget):
                 "Instead of the engineering bootloader you can write your own FBL key and sign firmware with it, "
                 "for an .odx container for ODIS, say. The key sits in CodeFlash at 0xA2F7 and goes into the ECU "
                 "through FACI with “Write to ECU”.",
+                "除工程引导加载程序外，你也可以写入自己的 FBL 密钥并用它签署固件，例如为 ODIS 生成 .odx 容器。密钥存放在 CodeFlash 的 0xA2F7 地址，并通过 FACI 用「写入模块」按钮写入模块。",
             ),
             *btns,
         )
@@ -1213,7 +1248,7 @@ class EcuScreen(QWidget):
             a, b = orig.read_bytes(), cur.read_bytes()  # type: ignore[union-attr]
         except OSError:
             return False
-        blocks = [(off, off + size) for idx, _n, off, size, _r, _e in ZDC_DATASET_SPECS
+        blocks = [(off, off + size) for idx, _n, off, size, _r, _e, _zh in ZDC_DATASET_SPECS
                   if idx in ZDC_UDS_UPLOAD_MAP and any(v != 0xFF for v in b[off : off + size])]
         ok = len(a) == len(b) and all(any(lo <= s0 and e0 <= hi for lo, hi in blocks) for s0, e0 in changed_ranges(a, b))
         self._dataset_only_cache = (key, ok)
@@ -1230,33 +1265,35 @@ class EcuScreen(QWidget):
     def change_state(self, kind: str) -> tuple[str, str, str]:
         """(tag, tone, how it gets into the ECU) for one loaded dump."""
         if not self.ws.modified(kind):
-            return tr("без изменений", "unchanged"), "muted", tr("записывать не нужно", "nothing to write")
+            return tr("без изменений", "unchanged", "无更改"), "muted", tr("записывать не нужно", "nothing to write", "无需写入")
         if not self.ws.pending(kind):
-            return tr("записан", "written"), "ok", tr("уже в блоке", "already in the ECU")
+            return tr("записан", "written", "已写入"), "ok", tr("уже в блоке", "already in the ECU", "已在模块中")
         if kind == "cflash" and self._fbl_key_changed():
             return (
-                tr("изменён", "changed"),
+                tr("изменён", "changed", "已修改"),
                 "info",
                 tr(
                     "запишется по CAN кнопкой «Записать в блок» (включая ключ FBL через FACI)",
                     "written over CAN with “Write to ECU” (including the FBL key via FACI)",
+                    "通过 CAN 用「写入模块」按钮写入（包括通过 FACI 写入 FBL 密钥）",
                 ),
             )
         if kind == "dflash" and self._dataset_only_edit():
             return (
-                tr("изменён", "changed"),
+                tr("изменён", "changed", "已修改"),
                 "info",
                 tr("изменена только параметрия — запишется штатно по UDS кнопкой «Записать параметрию по CAN»",
-                   "only the datasets changed — written the standard way over UDS with “Write datasets over CAN”"),
+                   "only the datasets changed — written the standard way over UDS with “Write datasets over CAN”",
+                   "仅数据集已修改——将按标准方式通过 UDS 用「通过 CAN 写入数据集」按钮写入"),
             )
-        return tr("изменён", "changed"), "info", tr("запишется по CAN кнопкой «Записать в блок»", "written over CAN with “Write to ECU”")
+        return tr("изменён", "changed", "已修改"), "info", tr("запишется по CAN кнопкой «Записать в блок»", "written over CAN with “Write to ECU”", "通过 CAN 用「写入模块」按钮写入")
 
     def _refresh_changes(self) -> None:
         changed = [k for k in KINDS if self.ws.modified(k)]
         self.changes.setVisible(bool(changed))
         if not changed:
             return
-        self.lbl_changes.setText(tr("Изменённые дампы", "Changed dumps"))
+        self.lbl_changes.setText(tr("Изменённые дампы", "Changed dumps", "已修改的转储"))
         clear_layout(self.grid_changes)
         for r, kind in enumerate(k for k in KINDS if self.ws.path(k) is not None):
             tag, tone, how = self.change_state(kind)
@@ -1268,14 +1305,14 @@ class EcuScreen(QWidget):
         self.grid_changes.setColumnStretch(2, 1)
 
         busy = self.runner.is_busy
-        self.btn_save.setText(tr("Сохранить дампы…", "Save dumps…"))
-        self.btn_save.setToolTip(tr("Копирует изменённые дампы в выбранную папку", "Copies the changed dumps to a folder you pick"))
-        self.btn_revert.setText(tr("Отменить изменения", "Discard changes"))
+        self.btn_save.setText(tr("Сохранить дампы…", "Save dumps…", "保存转储…"))
+        self.btn_save.setToolTip(tr("Копирует изменённые дампы в выбранную папку", "Copies the changed dumps to a folder you pick", "将已修改的转储复制到所选文件夹"))
+        self.btn_revert.setText(tr("Отменить изменения", "Discard changes", "放弃更改"))
         dataset_only = self._dataset_only_edit()
-        self.btn_write.setText(tr("Записать параметрию по CAN…", "Write datasets over CAN…") if dataset_only
-                               else tr("Записать в блок", "Write to ECU"))
-        self.btn_write_df.setText(tr("Записать DataFlash целиком…", "Write the whole DataFlash…"))
-        self.btn_write_df.setToolTip(tr("Через RAM-Loader, как «Записать в блок»", "Through the RAM-Loader, like “Write to ECU”"))
+        self.btn_write.setText(tr("Записать параметрию по CAN…", "Write datasets over CAN…", "通过 CAN 写入数据集…") if dataset_only
+                               else tr("Записать в блок", "Write to ECU", "写入模块"))
+        self.btn_write_df.setText(tr("Записать DataFlash целиком…", "Write the whole DataFlash…", "整体写入 DataFlash…"))
+        self.btn_write_df.setToolTip(tr("Через RAM-Loader, как «Записать в блок»", "Through the RAM-Loader, like “Write to ECU”", "通过 RAM-Loader，如同「写入模块」"))
         self.btn_write_df.setVisible(dataset_only)
         self.btn_write_df.setEnabled(not busy)
         can_write = any(self.ws.pending(k) for k in KINDS)
@@ -1283,7 +1320,7 @@ class EcuScreen(QWidget):
         self.btn_write.setToolTip(
             ""
             if can_write
-            else tr("Все изменённые дампы уже записаны в блок", "All changed dumps are already in the ECU")
+            else tr("Все изменённые дампы уже записаны в блок", "All changed dumps are already in the ECU", "所有已修改的转储均已写入模块")
         )
         self.btn_save.setEnabled(not busy)
         self.btn_revert.setEnabled(not busy)
@@ -1291,7 +1328,7 @@ class EcuScreen(QWidget):
     def _save_dumps(self) -> None:
         changed = [k for k in KINDS if self.ws.modified(k)]
         chosen = QFileDialog.getExistingDirectory(
-            self, tr("Куда сохранить изменённые дампы", "Where to save the changed dumps"), str(self.ws.folder or Path.cwd())
+            self, tr("Куда сохранить изменённые дампы", "Where to save the changed dumps", "将已修改的转储保存到哪里"), str(self.ws.folder or Path.cwd())
         )
         if not chosen or not changed:
             return
@@ -1300,28 +1337,28 @@ class EcuScreen(QWidget):
         if any(t.resolve() == self.ws.original[k].resolve() for k, t in targets.items()):
             QMessageBox.warning(
                 self,
-                tr("Это папка с исходными дампами", "This is the folder with the original dumps"),
-                tr("Исходные дампы не перезаписываются. Выберите другую папку.", "The original dumps are never overwritten. Pick another folder."),
+                tr("Это папка с исходными дампами", "This is the folder with the original dumps", "这是原始转储所在的文件夹"),
+                tr("Исходные дампы не перезаписываются. Выберите другую папку.", "The original dumps are never overwritten. Pick another folder.", "原始转储永远不会被覆盖。请选择其他文件夹。"),
             )
             return
         copies = {k: t for k, t in targets.items() if t.resolve() != self.ws.path(k).resolve()}
         existing = [t.name for t in copies.values() if t.exists()]
         if existing and QMessageBox.question(
             self,
-            tr("Файлы уже есть", "Files already exist"),
-            tr(f"В папке уже есть: {', '.join(existing)}. Заменить?", f"The folder already has: {', '.join(existing)}. Replace?"),
+            tr("Файлы уже есть", "Files already exist", "文件已存在"),
+            tr(f"В папке уже есть: {', '.join(existing)}. Заменить?", f"The folder already has: {', '.join(existing)}. Replace?", f"文件夹中已有：{', '.join(existing)}。是否替换？"),
         ) != QMessageBox.StandardButton.Yes:
             return
         for k, t in copies.items():
             shutil.copy2(self.ws.path(k), t)
         names = ", ".join(t.name for t in targets.values())
-        self.note.emit(tr(f"Изменённые дампы сохранены в {dest}: {names}", f"Changed dumps saved to {dest}: {names}"))
+        self.note.emit(tr(f"Изменённые дампы сохранены в {dest}: {names}", f"Changed dumps saved to {dest}: {names}", f"已修改的转储已保存到 {dest}：{names}"))
 
     def export_backup(self) -> None:
         """Copy the dumps as they were read (not the edited copies) into a new folder where the user wants them."""
         if not self.ws.original:
             return
-        chosen = QFileDialog.getExistingDirectory(self, tr("Куда экспортировать бэкап", "Where to export the backup"), str(Path.home()))
+        chosen = QFileDialog.getExistingDirectory(self, tr("Куда экспортировать бэкап", "Where to export the backup", "将备份导出到哪里"), str(Path.home()))
         if not chosen:
             return
         name = f"{self.ws.part_number or 'J533'}_{time.strftime('%Y-%m-%d_%H-%M')}"
@@ -1333,7 +1370,7 @@ class EcuScreen(QWidget):
             shutil.copy2(src, dest / CANDIDATES[kind][0])  # standard names, so "Open dump folder" finds them
         if self.ws.folder is not None and (self.ws.folder / "manifest.json").is_file():
             shutil.copy2(self.ws.folder / "manifest.json", dest / "manifest.json")  # read session: SHA-256 of every area
-        self.note.emit(tr(f"Бэкап экспортирован в {dest}", f"Backup exported to {dest}"))
+        self.note.emit(tr(f"Бэкап экспортирован в {dest}", f"Backup exported to {dest}", f"备份已导出到 {dest}"))
 
     # ────────────────────────────── edits ──────────────────────────────
     def _edit(self, title: str, kind: str, fn: Any) -> None:
@@ -1346,7 +1383,7 @@ class EcuScreen(QWidget):
         def task(rep: Any) -> Path:
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_bytes(fn(src.read_bytes(), rep))
-            rep.success(tr(f"Сохранено: {out}", f"Saved: {out}"))
+            rep.success(tr(f"Сохранено: {out}", f"Saved: {out}", f"已保存：{out}"))
             return out
 
         self.runner.run_task(title, task, on_success=self._here(lambda p: self.ws.commit(kind, p)))
@@ -1360,7 +1397,7 @@ class EcuScreen(QWidget):
 
         if dlg.action == "clear":
             self._edit(
-                tr("Очистка банков", "Erasing banks"),
+                tr("Очистка банков", "Erasing banks", "擦除存储区"),
                 "dflash",
                 lambda raw, rep: clear_dflash_slots(raw, banks, reporter=rep),
             )
@@ -1390,13 +1427,13 @@ class EcuScreen(QWidget):
             self.ws.commit("dflash", df_out)
 
         addrs = ", ".join(s.ecu_addr for s in banks)
-        self.runner.run_task(tr(f"Адаптация IKA/CP: {addrs}", f"IKA/CP adaptation: {addrs}"), task, on_success=self._here(done))
+        self.runner.run_task(tr(f"Адаптация IKA/CP: {addrs}", f"IKA/CP adaptation: {addrs}", f"IKA/CP 适配：{addrs}"), task, on_success=self._here(done))
 
     def _patch_engineering(self, restore: bool) -> None:
         self._edit(
-            tr("Возврат заводской диагностики", "Restoring factory diagnostics")
+            tr("Возврат заводской диагностики", "Restoring factory diagnostics", "恢复原厂诊断")
             if restore
-            else tr("Включение расширенной диагностики", "Enabling extended diagnostics"),
+            else tr("Включение расширенной диагностики", "Enabling extended diagnostics", "启用扩展诊断"),
             "cflash",
             lambda raw, rep: apply_engineering_patch(raw, restore_stock=restore, reporter=rep)[0],
         )
@@ -1434,6 +1471,7 @@ class EcuScreen(QWidget):
             tr(
                 "Активация FEC в DataFlash",
                 "FEC activation in DataFlash",
+                "在 DataFlash 中激活 FEC",
             ),
             "dflash",
             _patch_fn,
@@ -1449,6 +1487,7 @@ class EcuScreen(QWidget):
             tr(
                 "Параметрия ZDC под включённые FEC",
                 "ZDC parameterization for the enabled FECs",
+                "按已启用的 FEC 进行 ZDC 参数化",
             ),
             "dflash",
             lambda raw, rep: parameterize_dflash_for_fecs(raw, fecs, ZdcAutoParamConfig(enabled=True), reporter=rep)[0],
@@ -1461,7 +1500,7 @@ class EcuScreen(QWidget):
         dlg = FpaEditorDialog(src.read_bytes(), self.conn, self.runner, self)
         if run_dialog(dlg):
             new_df = dlg.result_dflash()
-            self._edit(tr("Сохранение параметрии FPA (ZDC #4)", "Saving FPA parameterization (ZDC #4)"), "dflash", lambda _r, _rep: new_df)
+            self._edit(tr("Сохранение параметрии FPA (ZDC #4)", "Saving FPA parameterization (ZDC #4)", "保存 FPA 参数化 (ZDC #4)"), "dflash", lambda _r, _rep: new_df)
 
     def _open_mke_editor(self) -> None:
         src = self.ws.path("dflash")
@@ -1470,7 +1509,7 @@ class EcuScreen(QWidget):
         dlg = MkeEditorDialog(src.read_bytes(), self)
         if run_dialog(dlg):
             new_df = dlg.result_dflash()
-            self._edit(tr("Сохранение параметров MKE (ZDC #1)", "Saving MKE parameters (ZDC #1)"), "dflash", lambda _r, _rep: new_df)
+            self._edit(tr("Сохранение параметров MKE (ZDC #1)", "Saving MKE parameters (ZDC #1)", "保存 MKE 参数 (ZDC #1)"), "dflash", lambda _r, _rep: new_df)
 
     def _open_ssa_editor(self) -> None:
         src = self.ws.path("dflash")
@@ -1480,7 +1519,7 @@ class EcuScreen(QWidget):
         if run_dialog(dlg):
             new_df = dlg.result_dflash()
             self._edit(
-                tr("Сохранение параметров индикации Старт-Стоп (ZDC #2)", "Saving Start-Stop HMI parameters (ZDC #2)"),
+                tr("Сохранение параметров индикации Старт-Стоп (ZDC #2)", "Saving Start-Stop HMI parameters (ZDC #2)", "保存起停 HMI 参数 (ZDC #2)"),
                 "dflash",
                 lambda _r, _rep: new_df,
             )
@@ -1492,7 +1531,7 @@ class EcuScreen(QWidget):
         dlg = BemEditorDialog(src.read_bytes(), self)
         if run_dialog(dlg):
             new_df = dlg.result_dflash()
-            self._edit(tr("Сохранение моделей генераторов BEM (ZDC #6)", "Saving BEM alternator models (ZDC #6)"), "dflash", lambda _r, _rep: new_df)
+            self._edit(tr("Сохранение моделей генераторов BEM (ZDC #6)", "Saving BEM alternator models (ZDC #6)", "保存 BEM 发电机型号 (ZDC #6)"), "dflash", lambda _r, _rep: new_df)
 
     def _open_passport_editor(self) -> None:
         src = self.ws.path("dflash")
@@ -1501,7 +1540,7 @@ class EcuScreen(QWidget):
         dlg = ZdcPassportBlocksDialog(src.read_bytes(), self)
         if run_dialog(dlg):
             new_df = dlg.result_dflash()
-            self._edit(tr("Обновление паспорта и блоков ZDC", "Updating ZDC passport & blocks"), "dflash", lambda _r, _rep: new_df)
+            self._edit(tr("Обновление паспорта и блоков ZDC", "Updating ZDC passport & blocks", "更新 ZDC 护照与区块"), "dflash", lambda _r, _rep: new_df)
 
     def _export_zdc(self) -> None:
         src = self.ws.path("dflash")
@@ -1510,11 +1549,11 @@ class EcuScreen(QWidget):
         df = src.read_bytes()
         blocks = populated_zdc_blocks(df)
         if not blocks:
-            QMessageBox.information(self, tr("Экспорт параметрии", "Dataset export"),
-                                    tr("В DataFlash нет заполненных блоков ZDC.", "DataFlash holds no populated ZDC blocks."))
+            QMessageBox.information(self, tr("Экспорт параметрии", "Dataset export", "数据集导出"),
+                                    tr("В DataFlash нет заполненных блоков ZDC.", "DataFlash holds no populated ZDC blocks.", "DataFlash 中没有已填充的 ZDC 区块。"))
             return
         chosen = QFileDialog.getExistingDirectory(
-            self, tr("Куда сохранить параметрию", "Where to save the datasets"), str(self.ws.folder or Path.home()))
+            self, tr("Куда сохранить параметрию", "Where to save the datasets", "将数据集保存到哪里"), str(self.ws.folder or Path.home()))
         if not chosen:
             return
         dest, n = Path(chosen) / f"ZDC_{self.ws.part_number or 'J533'}_{time.strftime('%Y-%m-%d_%H-%M')}", 2
@@ -1527,23 +1566,24 @@ class EcuScreen(QWidget):
             (dest / f"{name}.xml").write_bytes(build_odis_zdc_file(df, idx))
             (dest / f"{name}.bin").write_bytes(export_zdc_block(df, idx))
         (dest / "ZDC_area_0000-303F.bin").write_bytes(df[:0x3040])  # passport and all blocks, as DataFlash holds them
-        self.note.emit(tr(f"Параметрия сохранена ({len(blocks)} бл.): {dest}", f"Datasets saved ({len(blocks)} blocks): {dest}"))
+        self.note.emit(tr(f"Параметрия сохранена ({len(blocks)} бл.): {dest}", f"Datasets saved ({len(blocks)} blocks): {dest}", f"数据集已保存（{len(blocks)} 个区块）：{dest}"))
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(dest)))
 
     def _import_odis_zdc(self) -> None:
         src, _ = QFileDialog.getOpenFileName(
-            self, tr("Файл параметрии ODIS", "ODIS parameterization file"), str(self.ws.folder or Path.home()),
+            self, tr("Файл параметрии ODIS", "ODIS parameterization file", "ODIS 参数化文件"), str(self.ws.folder or Path.home()),
             "ODIS XML (*.xml);;All files (*)")
         if not src:
             return
         try:
             parsed = parse_odis_zdc_file(Path(src).read_bytes())
         except (OSError, ValueError) as exc:
-            QMessageBox.critical(self, tr("Импорт файла ODIS", "ODIS file import"), str(exc))
+            QMessageBox.critical(self, tr("Импорт файла ODIS", "ODIS file import", "导入 ODIS 文件"), str(exc))
             return
         self._edit(
             tr(f"Импорт параметрии ODIS в ZDC #{parsed.zdc_idx} ({parsed.dataset_pn})",
-               f"Importing the ODIS dataset into ZDC #{parsed.zdc_idx} ({parsed.dataset_pn})"),
+               f"Importing the ODIS dataset into ZDC #{parsed.zdc_idx} ({parsed.dataset_pn})",
+               f"正在将 ODIS 数据集导入 ZDC #{parsed.zdc_idx}（{parsed.dataset_pn}）"),
             "dflash",
             lambda raw, rep: apply_odis_zdc_file(raw, parsed, reporter=rep),
         )
@@ -1563,7 +1603,7 @@ class EcuScreen(QWidget):
             return {"features": features, **can_read_gateway_coding(port, interface=iface, reporter=rep)}
 
         self.runner.run_task(
-            tr("Проверка блока перед загрузкой параметрии", "Checking the ECU before the dataset upload"),
+            tr("Проверка блока перед загрузкой параметрии", "Checking the ECU before the dataset upload", "上传数据集前检查模块"),
             precheck,
             # the runner is still busy inside on_success: plan once it has finished
             on_success=self._here(lambda pre: QTimer.singleShot(0, lambda: self._zdc_upload_plan(df_bytes, pre))),
@@ -1589,26 +1629,29 @@ class EcuScreen(QWidget):
                 "not offer a profile to the head unit, and MKE does not work. The gateway has no command to switch "
                 "FECs on: ContiTool writes them into the SWaP area of DataFlash through the RAM-Loader; the rest of "
                 "DataFlash stays as it is.",
+                f"数据集的一部分在模块中没有已激活的 FEC：\n{names}\n\n没有对应 FEC 时，网关不会向主机提供该模式，MKE 也无法工作。网关没有开启 FEC 的命令：ContiTool 会通过 RAM-Loader 将其写入 DataFlash 的 SWaP 区域，其余 DataFlash 保持不变。",
             ))
         elif required:
             lines.append(tr("Все функции SWaP, которых требует датасет, в блоке активны.",
-                            "Every SWaP feature the dataset needs is active in the ECU."))
+                            "Every SWaP feature the dataset needs is active in the ECU.",
+                            "数据集所需的全部 SWaP 功能均已在模块中激活。"))
         blk = ", ".join(f"ZDC #{i}" for i in blocks)
         lines.append(tr(f"Параметрия ({blk}) — штатно по UDS (10 40, код 20103).",
-                        f"Datasets ({blk}) — the standard way, over UDS (10 40, code 20103)."))
+                        f"Datasets ({blk}) — the standard way, over UDS (10 40, code 20103).",
+                        f"数据集 ({blk})——按标准方式通过 UDS（10 40，代码 20103）写入。"))
         if diff:
             ch = ", ".join(f"{i}: {coding[i]:02X} → {want[i]:02X}" for i in diff)
-            lines.append(tr(f"Кодировка 0x0600 после загрузки, байт {ch}.", f"Coding 0x0600 after the upload, byte {ch}."))
+            lines.append(tr(f"Кодировка 0x0600 после загрузки, байт {ch}.", f"Coding 0x0600 after the upload, byte {ch}.", f"上传后编码 0x0600，字节 {ch}。"))
         else:
-            lines.append(tr("Кодировка 0x0600 уже подходит.", "Coding 0x0600 already fits."))
+            lines.append(tr("Кодировка 0x0600 уже подходит.", "Coding 0x0600 already fits.", "编码 0x0600 已经匹配。"))
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle(tr("Загрузка параметрии по CAN", "Dataset upload over CAN"))
+        box.setWindowTitle(tr("Загрузка параметрии по CAN", "Dataset upload over CAN", "通过 CAN 上传数据集"))
         box.setText("\n\n".join(lines))
-        act = box.addButton(tr("Активировать SWaP и загрузить", "Activate SWaP and upload"), QMessageBox.ButtonRole.AcceptRole) if missing else None
-        only = box.addButton(tr("Только загрузить", "Upload only") if missing else tr("Загрузить", "Upload"),
+        act = box.addButton(tr("Активировать SWaP и загрузить", "Activate SWaP and upload", "激活 SWaP 并上传"), QMessageBox.ButtonRole.AcceptRole) if missing else None
+        only = box.addButton(tr("Только загрузить", "Upload only", "仅上传") if missing else tr("Загрузить", "Upload", "上传"),
                              QMessageBox.ButtonRole.ActionRole if missing else QMessageBox.ButtonRole.AcceptRole)
-        box.addButton(tr("Отмена", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.addButton(tr("Отмена", "Cancel", "取消"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         if clicked is not None and clicked in (act, only):
@@ -1635,22 +1678,24 @@ class EcuScreen(QWidget):
                 self.ws.mark_written(["dflash"])  # the ECU holds this file's datasets, and nothing else was edited
             QTimer.singleShot(0, lambda: self._offer_dtc_clear(res, activate))
 
-        self.runner.run_task(tr("Загрузка параметрии по CAN", "Dataset upload over CAN"), task, on_success=self._here(done))
+        self.runner.run_task(tr("Загрузка параметрии по CAN", "Dataset upload over CAN", "通过 CAN 上传数据集"), task, on_success=self._here(done))
 
     def _offer_dtc_clear(self, res: dict[str, Any], activated: list[int]) -> None:
         active = {f["fsid"] for f in res["features"] if status.swap_live_state(f["status"]).key == "on"}
         refused = [c for c in activated if c not in active]
-        text = tr("Параметрия загружена.", "The datasets are uploaded.")
+        text = tr("Параметрия загружена.", "The datasets are uploaded.", "数据集已上传。")
         if refused:
             names = ", ".join(status.fec_name(c) for c in refused)
             text += tr(f"\n\nБлок не принял FEC: {names}. Подробности — на странице «Активация SWaP/FEC».",
-                       f"\n\nThe ECU did not accept FEC: {names}. Details are on the SWaP/FEC activation page.")
+                       f"\n\nThe ECU did not accept FEC: {names}. Details are on the SWaP/FEC activation page.",
+                       f"\n\n模块未接受 FEC：{names}。详情请见「SWaP/FEC 激活」页面。")
         elif activated:
-            text += tr(" Нужные FEC в блоке активны.", " The FECs it needs are active in the ECU.")
+            text += tr(" Нужные FEC в блоке активны.", " The FECs it needs are active in the ECU.", " 所需 FEC 已在模块中激活。")
         text += "\n\n" + _restart_note()
         text += tr("\n\nСтереть ошибки в блоке? После смены параметрии старые записи обычно уже неактуальны.",
-                   "\n\nClear the trouble codes in the ECU? After a dataset change the old entries are usually stale.")
-        if QMessageBox.question(self, tr("Загрузка параметрии по CAN", "Dataset upload over CAN"), text) == QMessageBox.StandardButton.Yes:
+                   "\n\nClear the trouble codes in the ECU? After a dataset change the old entries are usually stale.",
+                   "\n\n是否清除模块中的故障码？更换数据集后，旧记录通常已不再有效。")
+        if QMessageBox.question(self, tr("Загрузка параметрии по CAN", "Dataset upload over CAN", "通过 CAN 上传数据集"), text) == QMessageBox.StandardButton.Yes:
             self._dtc_run(clear=True)
         else:
             self.refresh()
@@ -1665,30 +1710,32 @@ class EcuScreen(QWidget):
                 kc = int(res["keycode"])
                 QMessageBox.information(
                     self,
-                    tr("Кнопка руля распознана", "Steering-wheel button captured"),
+                    tr("Кнопка руля распознана", "Steering-wheel button captured", "已识别方向盘按钮"),
                     tr(
                         f"Код MFL_Tastencode: 0x{kc:02X} ({res.get('label_ru', '')})\nКадр 0x1F07: {res.get('raw_1f07', '')}",
                         f"MFL_Tastencode: 0x{kc:02X} ({res.get('label_en', '')})\n0x1F07 frame: {res.get('raw_1f07', '')}",
+                        f"MFL_Tastencode 代码：0x{kc:02X} ({res.get('label_zh', '')})\n0x1F07 帧：{res.get('raw_1f07', '')}",
                     ),
                 )
             elif res.get("gra_button_detected"):
                 QMessageBox.warning(
                     self,
-                    tr("Линия круиз-контроля (GRA_Neu)", "Cruise-control line (GRA_Neu)"),
+                    tr("Линия круиз-контроля (GRA_Neu)", "Cruise-control line (GRA_Neu)", "定速巡航线路 (GRA_Neu)"),
                     tr(
                         "Нажатая кнопка относится к круиз-контролю / Travel Assist (кадр GRA_Neu LIN 0x0F) и не отправляет MFL_Tastencode.",
                         "The pressed button belongs to cruise control / Travel Assist (GRA_Neu LIN 0x0F) and does not emit an MFL_Tastencode.",
+                        "所按按钮属于定速巡航 / Travel Assist（GRA_Neu LIN 0x0F 帧），不会发送 MFL_Tastencode。",
                     ),
                 )
             else:
                 QMessageBox.information(
                     self,
-                    tr("Нажатие не обнаружено", "No button press detected"),
-                    tr("В течение 12 секунд нажатие кнопки руля не зафиксировано.", "No steering-wheel button press was detected within 12 seconds."),
+                    tr("Нажатие не обнаружено", "No button press detected", "未检测到按键"),
+                    tr("В течение 12 секунд нажатие кнопки руля не зафиксировано.", "No steering-wheel button press was detected within 12 seconds.", "12 秒内未检测到方向盘按钮按下。"),
                 )
 
         self.runner.run_task(
-            tr("Ожидание нажатия кнопки на руле (12 с)", "Waiting for steering-wheel button press (12 s)"),
+            tr("Ожидание нажатия кнопки на руле (12 с)", "Waiting for steering-wheel button press (12 s)", "等待方向盘按键 (12 秒)"),
             lambda rep: can_learn_mfl_button(port, interface=iface, reporter=rep),
             on_success=show_res,
         )
@@ -1716,7 +1763,7 @@ class EcuScreen(QWidget):
             if source is None:
                 kp = generate_rsa1024_e3_keypair(reporter=rep)
                 for p in save_rsa1024_keypair_bundle(bundle, kp):
-                    rep.success(tr(f"Ключ сохранён: {p}", f"Key saved: {p}"))
+                    rep.success(tr(f"Ключ сохранён: {p}", f"Key saved: {p}", f"密钥已保存：{p}"))
                 modulus, _ = load_rsa1024_key_material(bundle)
             elif isinstance(source, Path):
                 modulus, _ = load_rsa1024_key_material(source)
@@ -1740,9 +1787,9 @@ class EcuScreen(QWidget):
                 self.ws.commit("dflash", df_out)
 
         if isinstance(source, bytes):
-            title = tr("Возврат ключа VAG", "Restoring the VAG key")
+            title = tr("Возврат ключа VAG", "Restoring the VAG key", "恢复 VAG 密钥")
         else:
-            title = tr("Свой ключ SWaP", "Your SWaP key") if swap else tr("Свой ключ FBL", "Your FBL key")
+            title = tr("Свой ключ SWaP", "Your SWaP key", "自有 SWaP 密钥") if swap else tr("Свой ключ FBL", "Your FBL key", "自有 FBL 密钥")
         self.runner.run_task(title, task, on_success=self._here(done))
 
     # ────────────────────────────── certificates ──────────────────────────────
@@ -1764,11 +1811,12 @@ class EcuScreen(QWidget):
                     tr(
                         "В файле нет приватной части ключа — сертификат подписать нечем.",
                         "The file has no private key part — nothing to sign the certificate with.",
+                        "文件中没有私钥部分——没有可用于签署证书的内容。",
                     )
                 )
             fsc = build_signed_fsc(fec, vcrn, vin, modulus, d_int, reporter=rep)
             out_file.write_bytes(fsc)
-            rep.success(tr(f"Сохранено: {out_file}", f"Saved: {out_file}"))
+            rep.success(tr(f"Сохранено: {out_file}", f"Saved: {out_file}", f"已保存：{out_file}"))
             return fsc
 
         def done(fsc: bytes) -> None:
@@ -1782,19 +1830,20 @@ class EcuScreen(QWidget):
 
             dlg_res = TextResultDialog(
                 self,
-                tr("Сертификат готов", "Certificate ready"),
+                tr("Сертификат готов", "Certificate ready", "证书已就绪"),
                 f"# {out_file}\n{fsc.hex().upper()}\n\n# UDS RoutineControl 0x0655\n{command}",
                 tr(
                     "Отправьте вторую строку в блок 19 — из CAN-терминала или диагностическим тестером.",
                     "Send the second line to module 19 — from the CAN terminal or a diagnostic tester.",
+                    "将第二行发送到 19 号模块——可从 CAN 终端或诊断仪发送。",
                 ),
-                actions=(button(tr("Открыть в CAN-терминале", "Open in CAN terminal"), slot=to_terminal),),
+                actions=(button(tr("Открыть в CAN-терминале", "Open in CAN terminal", "在 CAN 终端中打开"), slot=to_terminal),),
             )
             holder.append(dlg_res)
             run_dialog(dlg_res)
 
         # the runner is still busy inside on_success: show the result (it can open the terminal) once it has finished
-        self.runner.run_task(tr(f"Подпись сертификата {fec:08X}", f"Signing certificate {fec:08X}"), task,
+        self.runner.run_task(tr(f"Подпись сертификата {fec:08X}", f"Signing certificate {fec:08X}", f"正在签署证书 {fec:08X}"), task,
                              on_success=lambda fsc: QTimer.singleShot(0, lambda: done(fsc)))
 
     def _sign_odx(self) -> None:
@@ -1812,6 +1861,7 @@ class EcuScreen(QWidget):
                     tr(
                         "В файле нет приватной части ключа — подписать прошивку нечем.",
                         "The file has no private key part — nothing to sign the firmware with.",
+                        "文件中没有私钥部分——没有可用于签署固件的内容。",
                     )
                 )
             return sign_fbl_odx_application(cf_src.read_bytes(), modulus, d_int, reporter=rep)
@@ -1821,13 +1871,13 @@ class EcuScreen(QWidget):
             run_dialog(
                 TextResultDialog(
                     self,
-                    tr("Подпись прошивки", "Firmware signature"),
+                    tr("Подпись прошивки", "Firmware signature", "固件签名"),
                     f'<FW-SIGNATURE TYPE="A_BYTEFIELD">{sig.hex().upper()}</FW-SIGNATURE>',
-                    tr("Вставьте строку в контейнер .odx.", "Paste this line into the .odx container."),
+                    tr("Вставьте строку в контейнер .odx.", "Paste this line into the .odx container.", "请将该行粘贴到 .odx 容器中。"),
                 )
             )
 
-        self.runner.run_task(tr("Подпись прошивки для ODX", "Signing firmware for ODX"), task, on_success=done)
+        self.runner.run_task(tr("Подпись прошивки для ODX", "Signing firmware for ODX", "为 ODX 签署固件"), task, on_success=done)
 
     # ────────────────────────────── bench ──────────────────────────────
     def _dtc_run(self, clear: bool) -> None:
@@ -1843,7 +1893,7 @@ class EcuScreen(QWidget):
             self.refresh()
 
         self.runner.run_task(
-            tr("Сброс ошибок блока", "Clearing trouble codes") if clear else tr("Чтение ошибок блока", "Reading trouble codes"),
+            tr("Сброс ошибок блока", "Clearing trouble codes", "清除模块故障码") if clear else tr("Чтение ошибок блока", "Reading trouble codes", "读取模块故障码"),
             lambda rep: can_health_check(port, interface=iface, session_dir=sdir, clear_dtc=clear, reporter=rep),
             on_success=self._here(done),
         )
@@ -1853,7 +1903,7 @@ class EcuScreen(QWidget):
             return
         port, iface = self.conn.port, self.conn.interface
         self.runner.run_task(
-            tr("Проверка функций SWaP в блоке", "Checking SWaP features in the ECU"),
+            tr("Проверка функций SWaP в блоке", "Checking SWaP features in the ECU", "检查模块中的 SWaP 功能"),
             lambda rep: can_swap_status(port, interface=iface, reporter=rep),
             on_success=self._here(self._swap_done),
         )
@@ -1904,13 +1954,13 @@ class EcuScreen(QWidget):
         if not ensure_ready(self.conn, self):
             return
         question = (
-            tr("Активировать в блоке инженерный загрузчик?", "Activate the engineering bootloader on the ECU?")
+            tr("Активировать в блоке инженерный загрузчик?", "Activate the engineering bootloader on the ECU?", "在模块中激活工程引导加载程序？")
             if engineering
-            else tr("Вернуть в блок заводской загрузчик?", "Restore the factory bootloader on the ECU?")
+            else tr("Вернуть в блок заводской загрузчик?", "Restore the factory bootloader on the ECU?", "在模块中恢复原厂引导加载程序？")
         )
         if QMessageBox.question(
             self,
-            tr("Загрузчик", "Bootloader"),
+            tr("Загрузчик", "Bootloader", "引导加载程序"),
             question
             + tr(
                 "\n\nUflash перезаписывается через FACI. Перед записью он читается (если этот блок ещё ни разу не "
@@ -1919,6 +1969,7 @@ class EcuScreen(QWidget):
                 "\n\nUflash is rewritten through FACI. It is read first (the whole memory if this ECU was never read "
                 "completely) and the result is read back. The +12 V supply must stay stable until the operation "
                 "finishes.",
+                "\n\nUflash 通过 FACI 重写。写入前会先读取（若该模块从未完整读取过，则读取全部内存），写入后再读取校验。+12 V 电源必须保持稳定直到操作完成。",
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -1928,9 +1979,9 @@ class EcuScreen(QWidget):
         sdir = self._session("bootloader")
         have_read = has_full_read(sdir.parent.parent)  # a full copy only for a gateway never read completely
         self.runner.run_task(
-            tr("Активация инженерного загрузчика", "Activating the engineering bootloader")
+            tr("Активация инженерного загрузчика", "Activating the engineering bootloader", "激活工程引导加载程序")
             if engineering
-            else tr("Возврат заводского загрузчика", "Restoring the factory bootloader"),
+            else tr("Возврат заводского загрузчика", "Restoring the factory bootloader", "恢复原厂引导加载程序"),
             lambda rep: can_write_uflash(port, restore_stock=not engineering, interface=iface, session_dir=sdir,
                                          skip_full_backup=have_read, reporter=rep),
             on_success=self._here(lambda _r: self._adopt_uflash(sdir)),
@@ -1939,10 +1990,11 @@ class EcuScreen(QWidget):
     def _revert(self) -> None:
         ans = QMessageBox.question(
             self,
-            tr("Отменить изменения", "Discard changes"),
+            tr("Отменить изменения", "Discard changes", "放弃更改"),
             tr(
                 "Вернуться к исходным дампам? Изменённые копии останутся на диске.",
                 "Go back to the original dumps? The edited copies stay on disk.",
+                "是否恢复原始转储？已修改的副本会保留在磁盘上。",
             ),
         )
         if ans == QMessageBox.StandardButton.Yes:
@@ -1962,10 +2014,11 @@ class EcuScreen(QWidget):
             "reading it back after. A full memory copy is taken only if this ECU was never read completely. "
             "For the CodeFlash application ContiTool first installs the engineering bootloader if it is not "
             "there.\n\nKeep the +12 V supply (Pin 1 and 14) on until the write finishes.",
+            f"将写入：{target_names}。\n\n每个区域在写入前都会从模块读取，写入后再读取校验。仅当该模块从未完整读取过时，才会获取完整的内存副本。对于 CodeFlash 应用区域，若没有工程引导加载程序，ContiTool 会先安装。\n\n在写入完成前，请保持 +12 V 电源（Pin 1 和 14）供电。",
         )
         if QMessageBox.question(
             self,
-            tr("Запись в блок", "Write to ECU"),
+            tr("Запись в блок", "Write to ECU", "写入模块"),
             text,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -2038,6 +2091,7 @@ class EcuScreen(QWidget):
                             f"The write succeeded, but coding 0x0600 for ZDC datasets {zdc_blocks} could not be aligned "
                             f"({exc}). Without it the datasets are not used: repeat the DataFlash write or enable them in the "
                             "coding.",
+                            f"写入成功，但无法为 ZDC 数据集 {zdc_blocks} 对齐 0x0600 编码 ({exc})。没有它数据集无法生效：请重新写入 DataFlash，或在编码中启用它们。",
                         ))
             out["flashed"] = str(self._record_flashed(unit_dir, sdir, now_files, base_files))
             if check_swap:
@@ -2048,6 +2102,7 @@ class EcuScreen(QWidget):
                         tr(
                             f"Запись прошла, но прочитать состояние SWaP не удалось ({exc}). Нажмите «Проверить в блоке».",
                             f"The write succeeded but the SWaP state could not be read ({exc}). Press “Check in the ECU”.",
+                            f"写入成功，但无法读取 SWaP 状态 ({exc})。请点击「在模块中检查」。",
                         )
                     )
             return out
@@ -2056,14 +2111,14 @@ class EcuScreen(QWidget):
             flashed = Path(r["flashed"])
             self._folder = flashed  # the same ECU as it now is: what belongs to it stays
             self.ws.open_folder(flashed, source="can")  # what the ECU now holds; nothing left pending
-            self.note.emit(tr(f"Открыты дампы, как они теперь в блоке: {flashed}", f"Opened the dumps as the ECU now holds them: {flashed}"))
+            self.note.emit(tr(f"Открыты дампы, как они теперь в блоке: {flashed}", f"Opened the dumps as the ECU now holds them: {flashed}", f"已打开转储，即模块当前状态：{flashed}"))
             if "swap" in r:
                 self._swap_done(r["swap"])
             if r.get("dflash", {}).get("zdc_blocks_written"):  # the runner is still busy here: tell once it is done
-                QTimer.singleShot(0, lambda: QMessageBox.information(self, tr("Запись в блок", "Write to ECU"), _restart_note()))
+                QTimer.singleShot(0, lambda: QMessageBox.information(self, tr("Запись в блок", "Write to ECU", "写入模块"), _restart_note()))
 
         self.runner.run_task(
-            tr(f"Запись в блок: {target_names}", f"Writing to ECU: {target_names}"),
+            tr(f"Запись в блок: {target_names}", f"Writing to ECU: {target_names}", f"正在写入模块：{target_names}"),
             task,
             on_success=self._here(done),
         )

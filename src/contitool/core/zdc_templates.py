@@ -221,129 +221,129 @@ def get_rom_bem_records() -> tuple[bytes, ...]:
 
 
 # 21 factory LIN 14V alternator models indexed by ROM_REC[0..20]
-# Tuple: (rom_idx, default_supplier_id, default_class_id, nominal_amps, rectifier, poles, phases, ru, en)
-ROM_BEM_CATALOG: tuple[tuple[int, int, int, int, str, int, int, str, str], ...] = (
-    (0, 0x07, 0x12, 110, "PN", 12, 3, "Denso / SEG — 110 А (стандартный)", "Denso / SEG — 110 A (standard)"),
-    (1, 0x07, 0x02, 110, "PN", 12, 6, "Denso / SEG — 110 А (6-фазный)", "Denso / SEG — 110 A (6-phase)"),
-    (2, 0x00, 0x12, 110, "PN", 12, 3, "Valeo — 110 А (исполнение B)", "Valeo — 110 A (variant B)"),
-    (3, 0x00, 0x01, 90, "PN", 12, 3, "Valeo — 90 А", "Valeo — 90 A"),
-    (4, 0x01, 0x0D, 150, "MOSFET", 12, 3, "Bosch — 150 А (активный выпрямитель MOSFET)", "Bosch — 150 A (MOSFET)"),
-    (5, 0x01, 0x0E, 180, "MOSFET", 12, 6, "Bosch — 180 А (6-фазный MOSFET)", "Bosch — 180 A (6-phase MOSFET)"),
-    (6, 0x00, 0x02, 110, "PN", 12, 3, "Valeo — 110 А (базовый)", "Valeo — 110 A (standard)"),
-    (7, 0x00, 0x03, 140, "PN", 12, 3, "Valeo — 140 А (базовый)", "Valeo — 140 A (standard)"),
-    (8, 0x00, 0x14, 140, "HED", 12, 3, "Valeo — 140 А (высокоэффективный HED)", "Valeo — 140 A (high-efficiency HED)"),
-    (9, 0x00, 0x0D, 150, "MOSFET", 16, 3, "Valeo — 150 А (MOSFET)", "Valeo — 150 A (MOSFET)"),
-    (10, 0x00, 0x05, 180, "PN", 16, 3, "Valeo — 180 А (стандартный)", "Valeo — 180 A (standard)"),
-    (11, 0x00, 0x15, 180, "HED", 16, 3, "Valeo — 180 А (высокоэффективный HED)", "Valeo — 180 A (high-efficiency HED)"),
-    (12, 0x00, 0x11, 250, "MOSFET", 16, 3, "Valeo — 250 А (усиленный MOSFET)", "Valeo — 250 A (heavy-duty MOSFET)"),
-    (13, 0x01, 0x15, 180, "HED", 12, 3, "Bosch — 180 А (высокоэффективный HED)", "Bosch — 180 A (high-efficiency HED)"),
-    (14, 0x01, 0x09, 180, "PN", 12, 3, "Bosch — 180 А (стандартный)", "Bosch — 180 A (standard)"),
-    (15, 0x01, 0x12, 110, "PN", 12, 3, "Bosch — 110 А (исполнение B)", "Bosch — 110 A (variant B)"),
-    (16, 0x01, 0x02, 110, "PN", 12, 3, "Bosch — 110 А (базовый)", "Bosch — 110 A (standard)"),
-    (17, 0x01, 0x14, 140, "HED", 12, 3, "Bosch — 140 А (высокоэффективный HED)", "Bosch — 140 A (high-efficiency HED)"),
-    (18, 0x01, 0x13, 140, "PN", 12, 3, "Bosch — 140 А (модернизированный)", "Bosch — 140 A (revised)"),
-    (19, 0x01, 0x03, 140, "PN", 12, 3, "Bosch — 140 А (базовый)", "Bosch — 140 A (standard)"),
-    (20, 0x01, 0x01, 90, "PN", 12, 3, "Bosch — 90 А", "Bosch — 90 A"),
+# Tuple: (rom_idx, default_supplier_id, default_class_id, nominal_amps, rectifier, poles, phases, ru, en, zh)
+ROM_BEM_CATALOG: tuple[tuple[int, int, int, int, str, int, int, str, str, str], ...] = (
+    (0, 0x07, 0x12, 110, "PN", 12, 3, "Denso / SEG — 110 А (стандартный)", "Denso / SEG — 110 A (standard)", "Denso / SEG — 110 A（标准）"),
+    (1, 0x07, 0x02, 110, "PN", 12, 6, "Denso / SEG — 110 А (6-фазный)", "Denso / SEG — 110 A (6-phase)", "Denso / SEG — 110 A（6 相）"),
+    (2, 0x00, 0x12, 110, "PN", 12, 3, "Valeo — 110 А (исполнение B)", "Valeo — 110 A (variant B)", "Valeo — 110 A（变体 B）"),
+    (3, 0x00, 0x01, 90, "PN", 12, 3, "Valeo — 90 А", "Valeo — 90 A", "Valeo — 90 A"),
+    (4, 0x01, 0x0D, 150, "MOSFET", 12, 3, "Bosch — 150 А (активный выпрямитель MOSFET)", "Bosch — 150 A (MOSFET)", "Bosch — 150 A（MOSFET）"),
+    (5, 0x01, 0x0E, 180, "MOSFET", 12, 6, "Bosch — 180 А (6-фазный MOSFET)", "Bosch — 180 A (6-phase MOSFET)", "Bosch — 180 A（6 相 MOSFET）"),
+    (6, 0x00, 0x02, 110, "PN", 12, 3, "Valeo — 110 А (базовый)", "Valeo — 110 A (standard)", "Valeo — 110 A（标准）"),
+    (7, 0x00, 0x03, 140, "PN", 12, 3, "Valeo — 140 А (базовый)", "Valeo — 140 A (standard)", "Valeo — 140 A（标准）"),
+    (8, 0x00, 0x14, 140, "HED", 12, 3, "Valeo — 140 А (высокоэффективный HED)", "Valeo — 140 A (high-efficiency HED)", "Valeo — 140 A（高效 HED）"),
+    (9, 0x00, 0x0D, 150, "MOSFET", 16, 3, "Valeo — 150 А (MOSFET)", "Valeo — 150 A (MOSFET)", "Valeo — 150 A（MOSFET）"),
+    (10, 0x00, 0x05, 180, "PN", 16, 3, "Valeo — 180 А (стандартный)", "Valeo — 180 A (standard)", "Valeo — 180 A（标准）"),
+    (11, 0x00, 0x15, 180, "HED", 16, 3, "Valeo — 180 А (высокоэффективный HED)", "Valeo — 180 A (high-efficiency HED)", "Valeo — 180 A（高效 HED）"),
+    (12, 0x00, 0x11, 250, "MOSFET", 16, 3, "Valeo — 250 А (усиленный MOSFET)", "Valeo — 250 A (heavy-duty MOSFET)", "Valeo — 250 A（重载 MOSFET）"),
+    (13, 0x01, 0x15, 180, "HED", 12, 3, "Bosch — 180 А (высокоэффективный HED)", "Bosch — 180 A (high-efficiency HED)", "Bosch — 180 A（高效 HED）"),
+    (14, 0x01, 0x09, 180, "PN", 12, 3, "Bosch — 180 А (стандартный)", "Bosch — 180 A (standard)", "Bosch — 180 A（标准）"),
+    (15, 0x01, 0x12, 110, "PN", 12, 3, "Bosch — 110 А (исполнение B)", "Bosch — 110 A (variant B)", "Bosch — 110 A（变体 B）"),
+    (16, 0x01, 0x02, 110, "PN", 12, 3, "Bosch — 110 А (базовый)", "Bosch — 110 A (standard)", "Bosch — 110 A（标准）"),
+    (17, 0x01, 0x14, 140, "HED", 12, 3, "Bosch — 140 А (высокоэффективный HED)", "Bosch — 140 A (high-efficiency HED)", "Bosch — 140 A（高效 HED）"),
+    (18, 0x01, 0x13, 140, "PN", 12, 3, "Bosch — 140 А (модернизированный)", "Bosch — 140 A (revised)", "Bosch — 140 A（改进型）"),
+    (19, 0x01, 0x03, 140, "PN", 12, 3, "Bosch — 140 А (базовый)", "Bosch — 140 A (standard)", "Bosch — 140 A（标准）"),
+    (20, 0x01, 0x01, 90, "PN", 12, 3, "Bosch — 90 А", "Bosch — 90 A", "Bosch — 90 A"),
 )
 
-BEM_SUPPLIER_NAMES: dict[int, tuple[str, str]] = {
-    0x00: ("Valeo", "Valeo"),
-    0x01: ("Bosch", "Bosch"),
-    0x02: ("Hitachi / Mitsubishi", "Hitachi / Mitsubishi"),
-    0x03: ("Denso / SEG", "Denso / SEG"),
-    0x07: ("Не задан", "Unassigned"),
+BEM_SUPPLIER_NAMES: dict[int, tuple[str, str, str]] = {
+    0x00: ("Valeo", "Valeo", "Valeo"),
+    0x01: ("Bosch", "Bosch", "Bosch"),
+    0x02: ("Hitachi / Mitsubishi", "Hitachi / Mitsubishi", "Hitachi / Mitsubishi"),
+    0x03: ("Denso / SEG", "Denso / SEG", "Denso / SEG"),
+    0x07: ("Не задан", "Unassigned", "未指定"),
 }
 
-FPA_PROFILE_NAMES: dict[int, tuple[str, str]] = {
-    0x00: ("Отключён", "Disabled"),
-    0x01: ("Comfort (Комфорт)", "Comfort"),
-    0x02: ("Normal (Обычный)", "Normal"),
-    0x03: ("Sport (Спорт)", "Sport"),
-    0x04: ("Offroad (Бездорожье)", "Offroad"),
-    0x05: ("Eco (Эко)", "Eco"),
-    0x06: ("Race / Cupra (Гонка)", "Race / Cupra"),
-    0x07: ("Individual (Индивидуальный)", "Individual"),
-    0x08: ("Offroad Individual", "Offroad Individual"),
-    0x09: ("Snow / Allroad (Снег)", "Snow / Allroad"),
-    0x0A: ("Snow (Снег)", "Snow"),
-    0x0B: ("Offroad Individual", "Offroad Individual"),  # Tiguan OZ00: knob position 4, cluster code 0x12
-    0x0C: ("GTE / Hybrid (Гибрид)", "GTE / Hybrid"),
-    0x14: ("Базовый Normal (без выбора профилей)", "Passive Normal (no FPA)"),
-    0x36: ("Шайба 4Motion: Дорога / Снег", "4Motion Rotary: Snow / Onroad"),
-    0x3A: ("Шайба 4Motion: Offroad Individual", "4Motion Rotary: Offroad Individual"),
-    0x3B: ("Шайба 4Motion: Бездорожье", "4Motion Rotary: Offroad"),
+FPA_PROFILE_NAMES: dict[int, tuple[str, str, str]] = {
+    0x00: ("Отключён", "Disabled", "已禁用"),
+    0x01: ("Comfort (Комфорт)", "Comfort", "舒适"),
+    0x02: ("Normal (Обычный)", "Normal", "标准"),
+    0x03: ("Sport (Спорт)", "Sport", "运动"),
+    0x04: ("Offroad (Бездорожье)", "Offroad", "越野"),
+    0x05: ("Eco (Эко)", "Eco", "经济"),
+    0x06: ("Race / Cupra (Гонка)", "Race / Cupra", "赛道 / Cupra"),
+    0x07: ("Individual (Индивидуальный)", "Individual", "自定义"),
+    0x08: ("Offroad Individual", "Offroad Individual", "越野自定义"),
+    0x09: ("Snow / Allroad (Снег)", "Snow / Allroad", "雪地 / 全路况"),
+    0x0A: ("Snow (Снег)", "Snow", "雪地"),
+    0x0B: ("Offroad Individual", "Offroad Individual", "越野自定义"),  # Tiguan OZ00: knob position 4, cluster code 0x12
+    0x0C: ("GTE / Hybrid (Гибрид)", "GTE / Hybrid", "GTE / 混动"),
+    0x14: ("Базовый Normal (без выбора профилей)", "Passive Normal (no FPA)", "被动标准（无 FPA）"),
+    0x36: ("Шайба 4Motion: Дорога / Снег", "4Motion Rotary: Snow / Onroad", "4Motion 旋钮：雪地 / 公路"),
+    0x3A: ("Шайба 4Motion: Offroad Individual", "4Motion Rotary: Offroad Individual", "4Motion 旋钮：越野自定义"),
+    0x3B: ("Шайба 4Motion: Бездорожье", "4Motion Rotary: Offroad", "4Motion 旋钮：越野"),
 }
 
-# Canonical defaults per Inst0 FPA slot 1..12: (bap_profile_id, fec_code, kombi_icon, s074_flags, name_ru, name_en)
+# Canonical defaults per Inst0 FPA slot 1..12: (bap_profile_id, fec_code, kombi_icon, s074_flags, name_ru, name_en, name_zh)
 # Note: FeC 0x10001900 unlocks Inst0 slots 9..12; FeC 0x10001A00/1B00 map to Inst1 S153[1..2] below.
-FPA_SLOT_DEFAULTS: dict[int, tuple[int, int, int, int, str, str]] = {
-    1: (0x01, 0x10001100, 0x01, 0x0001, "Comfort (Комфорт)", "Comfort"),
-    2: (0x02, 0x10001200, 0x02, 0x0000, "Normal (Обычный)", "Normal"),
-    3: (0x03, 0x10001300, 0x03, 0x0001, "Sport (Спорт)", "Sport"),
-    4: (0x04, 0x10001400, 0x04, 0x0005, "Offroad (Бездорожье)", "Offroad"),
-    5: (0x05, 0x10001500, 0x05, 0x0001, "Eco (Эко)", "Eco"),
-    6: (0x06, 0x10001600, 0x07, 0x0001, "Race / Cupra (Гонка)", "Race / Cupra"),
-    7: (0x07, 0x10001700, 0x06, 0x0000, "Individual (Индивидуальный)", "Individual"),
-    8: (0x0A, 0x10001800, 0x10, 0x0001, "Snow (Снег)", "Snow"),
-    9: (0x0B, 0x10001900, 0x12, 0x0005, "Offroad Individual", "Offroad Individual"),  # as in the Tiguan OZ00
-    10: (0x36, 0x00000000, 0x00, 0x0000, "Шайба 4Motion (Снег / Трасса)", "4Motion Rotary (Snow / Onroad)"),
-    11: (0x3B, 0x00000000, 0x00, 0x0000, "Шайба 4Motion (Бездорожье)", "4Motion Rotary (Offroad)"),
-    12: (0x3A, 0x00000000, 0x06, 0x0005, "Шайба 4Motion (Offroad Индив.)", "4Motion Rotary (Offroad Indiv.)"),
+FPA_SLOT_DEFAULTS: dict[int, tuple[int, int, int, int, str, str, str]] = {
+    1: (0x01, 0x10001100, 0x01, 0x0001, "Comfort (Комфорт)", "Comfort", "舒适"),
+    2: (0x02, 0x10001200, 0x02, 0x0000, "Normal (Обычный)", "Normal", "标准"),
+    3: (0x03, 0x10001300, 0x03, 0x0001, "Sport (Спорт)", "Sport", "运动"),
+    4: (0x04, 0x10001400, 0x04, 0x0005, "Offroad (Бездорожье)", "Offroad", "越野"),
+    5: (0x05, 0x10001500, 0x05, 0x0001, "Eco (Эко)", "Eco", "经济"),
+    6: (0x06, 0x10001600, 0x07, 0x0001, "Race / Cupra (Гонка)", "Race / Cupra", "赛道 / Cupra"),
+    7: (0x07, 0x10001700, 0x06, 0x0000, "Individual (Индивидуальный)", "Individual", "自定义"),
+    8: (0x0A, 0x10001800, 0x10, 0x0001, "Snow (Снег)", "Snow", "雪地"),
+    9: (0x0B, 0x10001900, 0x12, 0x0005, "Offroad Individual", "Offroad Individual", "越野自定义"),  # as in the Tiguan OZ00
+    10: (0x36, 0x00000000, 0x00, 0x0000, "Шайба 4Motion (Снег / Трасса)", "4Motion Rotary (Snow / Onroad)", "4Motion 旋钮（雪地 / 公路）"),
+    11: (0x3B, 0x00000000, 0x00, 0x0000, "Шайба 4Motion (Бездорожье)", "4Motion Rotary (Offroad)", "4Motion 旋钮（越野）"),
+    12: (0x3A, 0x00000000, 0x06, 0x0005, "Шайба 4Motion (Offroad Индив.)", "4Motion Rotary (Offroad Indiv.)", "4Motion 旋钮（越野自定义）"),
 }
 
-# Canonical defaults per Inst1 secondary EV/Hybrid slot 1..2 (S153[1..2]): (bap_profile_id, fec_code, name_ru, name_en)
-FPA_INST1_SLOT_DEFAULTS: dict[int, tuple[int, int, str, str]] = {
-    1: (0x0B, 0x10001A00, "EV / E-Mode (Электро)", "EV / E-Mode"),
-    2: (0x0C, 0x10001B00, "GTE / Hybrid (Гибрид)", "GTE / Hybrid"),
+# Canonical defaults per Inst1 secondary EV/Hybrid slot 1..2 (S153[1..2]): (bap_profile_id, fec_code, name_ru, name_en, name_zh)
+FPA_INST1_SLOT_DEFAULTS: dict[int, tuple[int, int, str, str, str]] = {
+    1: (0x0B, 0x10001A00, "EV / E-Mode (Электро)", "EV / E-Mode", "纯电 / 电动模式"),
+    2: (0x0C, 0x10001B00, "GTE / Hybrid (Гибрид)", "GTE / Hybrid", "GTE / 混动"),
 }
 
-FPA_SG_CATALOG: dict[int, tuple[str, str]] = {
-    0x01: ("Коробка передач DSG / АКПП", "Gearbox DSG / AT"),
-    0x02: ("Движение накатом (Freilauf)", "Freewheeling / Coasting"),
-    0x03: ("Двигатель (отклик педали газа)", "Engine / Throttle Response"),
-    0x04: ("Рекуперация и тяговый привод", "Recuperation / Powertrain"),
-    0x05: ("Рулевое управление (усилие на руле)", "Power Steering"),
-    0x07: ("Фоновая подсветка салона (Ambiente)", "Ambient Lighting"),
-    0x08: ("Адаптивное освещение и поворотный свет", "Adaptive Front Lighting"),
-    0x09: ("Адаптивный круиз-контроль (ACC)", "Adaptive Cruise Control (ACC)"),
-    0x0A: ("Климат-контроль (Climatronic)", "Air Conditioning (Climatronic)"),
-    0x0B: ("Адаптивная подвеска (DCC)", "Adaptive Chassis (DCC)"),
-    0x0C: ("Блокировка переднего дифференциала (VAQ)", "Front Differential Lock (VAQ)"),
-    0x0E: ("Имитатор звука двигателя (Soundaktor)", "Interior Engine Sound (Soundaktor)"),
-    0x12: ("Система Старт-Стоп", "Start-Stop System"),
-    0x14: ("Задний климат-контроль", "Rear Climate Control"),
-    0x17: ("Пневмоподвеска", "Air Suspension"),
-    0x1C: ("Полный привод 4Motion (муфта Haldex)", "4Motion AWD (Haldex)"),
-    0x21: ("Силовой агрегат (ДВС + КПП)", "Powertrain (Engine + Gearbox)"),
-    0x23: ("Дополнительный электроотопитель салона", "Auxiliary Cabin Heater"),
-    0x24: ("Климатическая установка", "Climate System"),
-    0x2C: ("Курсовая устойчивость и спуск с горы (ESC)", "Stability & Hill Descent (ESC)"),
-    0x2D: ("Динамическое рулевое управление", "Dynamic Steering"),
-    0x2E: ("Заслонка выхлопа и звук двигателя", "Exhaust Flap & Engine Sound"),
-    0x36: ("Приборная панель и проекция", "Instrument Cluster & HUD"),
-    0x4C: ("Система Старт-Стоп (базовая)", "Start-Stop (Base)"),
+FPA_SG_CATALOG: dict[int, tuple[str, str, str]] = {
+    0x01: ("Коробка передач DSG / АКПП", "Gearbox DSG / AT", "变速箱 DSG / AT"),
+    0x02: ("Движение накатом (Freilauf)", "Freewheeling / Coasting", "滑行 / 惯性行驶"),
+    0x03: ("Двигатель (отклик педали газа)", "Engine / Throttle Response", "发动机 / 油门响应"),
+    0x04: ("Рекуперация и тяговый привод", "Recuperation / Powertrain", "能量回收 / 动力总成"),
+    0x05: ("Рулевое управление (усилие на руле)", "Power Steering", "助力转向"),
+    0x07: ("Фоновая подсветка салона (Ambiente)", "Ambient Lighting", "氛围灯"),
+    0x08: ("Адаптивное освещение и поворотный свет", "Adaptive Front Lighting", "自适应前照明"),
+    0x09: ("Адаптивный круиз-контроль (ACC)", "Adaptive Cruise Control (ACC)", "自适应巡航 (ACC)"),
+    0x0A: ("Климат-контроль (Climatronic)", "Air Conditioning (Climatronic)", "空调 (Climatronic)"),
+    0x0B: ("Адаптивная подвеска (DCC)", "Adaptive Chassis (DCC)", "自适应底盘 (DCC)"),
+    0x0C: ("Блокировка переднего дифференциала (VAQ)", "Front Differential Lock (VAQ)", "前差速锁 (VAQ)"),
+    0x0E: ("Имитатор звука двигателя (Soundaktor)", "Interior Engine Sound (Soundaktor)", "车内发动机声浪模拟 (Soundaktor)"),
+    0x12: ("Система Старт-Стоп", "Start-Stop System", "起停系统"),
+    0x14: ("Задний климат-контроль", "Rear Climate Control", "后排空调"),
+    0x17: ("Пневмоподвеска", "Air Suspension", "空气悬挂"),
+    0x1C: ("Полный привод 4Motion (муфта Haldex)", "4Motion AWD (Haldex)", "四驱 4Motion (Haldex)"),
+    0x21: ("Силовой агрегат (ДВС + КПП)", "Powertrain (Engine + Gearbox)", "动力总成（发动机 + 变速箱）"),
+    0x23: ("Дополнительный электроотопитель салона", "Auxiliary Cabin Heater", "辅助座舱加热器"),
+    0x24: ("Климатическая установка", "Climate System", "空调系统"),
+    0x2C: ("Курсовая устойчивость и спуск с горы (ESC)", "Stability & Hill Descent (ESC)", "车身稳定与陡坡缓降 (ESC)"),
+    0x2D: ("Динамическое рулевое управление", "Dynamic Steering", "动态转向"),
+    0x2E: ("Заслонка выхлопа и звук двигателя", "Exhaust Flap & Engine Sound", "排气阀与发动机声浪"),
+    0x36: ("Приборная панель и проекция", "Instrument Cluster & HUD", "仪表盘与抬头显示"),
+    0x4C: ("Система Старт-Стоп (базовая)", "Start-Stop (Base)", "起停系统（基础）"),
 }
 
-FPA_TARGET_MODE_NAMES: dict[int, tuple[str, str]] = {
-    0: ("Не задействован", "Off / Unused"),
-    1: ("Comfort (Комфорт)", "Comfort"),
-    2: ("Normal (Стандарт)", "Normal"),
-    3: ("Sport (Спорт)", "Sport"),
-    4: ("Offroad (Бездорожье)", "Offroad"),
-    5: ("Eco (Эко)", "Eco"),
-    6: ("Race / Cupra (Гонка)", "Race / Cupra"),
-    7: ("Individual", "Individual"),
-    8: ("Авто / Базовый режим", "Auto / Base mode"),
-    9: ("Мягкий / Eco-климат", "Eco / Mild climate"),
-    10: ("Snow (Снег)", "Snow"),
-    13: ("Спортивная подсветка", "Sport lighting"),
+FPA_TARGET_MODE_NAMES: dict[int, tuple[str, str, str]] = {
+    0: ("Не задействован", "Off / Unused", "关闭 / 未使用"),
+    1: ("Comfort (Комфорт)", "Comfort", "舒适"),
+    2: ("Normal (Стандарт)", "Normal", "标准"),
+    3: ("Sport (Спорт)", "Sport", "运动"),
+    4: ("Offroad (Бездорожье)", "Offroad", "越野"),
+    5: ("Eco (Эко)", "Eco", "经济"),
+    6: ("Race / Cupra (Гонка)", "Race / Cupra", "赛道 / Cupra"),
+    7: ("Individual", "Individual", "自定义"),
+    8: ("Авто / Базовый режим", "Auto / Base mode", "自动 / 基础模式"),
+    9: ("Мягкий / Eco-климат", "Eco / Mild climate", "经济 / 温和空调"),
+    10: ("Snow (Снег)", "Snow", "雪地"),
+    13: ("Спортивная подсветка", "Sport lighting", "运动氛围灯"),
 }
 
 # Steering-wheel LIN MFL_Tastencode presets (DID 0x1F07 byte 1)
-MFL_KEYCODE_PRESETS: tuple[tuple[int, str, str], ...] = (
-    (0x19, "Голосовое управление / Микрофон (рекомендуется)", "Voice Control / Mic (recommended)"),
-    (0x23, "Кнопка VIEW (смена вида приборки)", "VIEW button (cluster view)"),
-    (0x74, "Кнопка меню ассистентов на руле", "Assistants menu button on wheel"),
-    (0x2B, "Кнопка обогрева руля", "Steering-wheel heating button"),
-    (0x2A, "Кнопка R / Звёздочка (Joker)", "R / Star / Joker button"),
+MFL_KEYCODE_PRESETS: tuple[tuple[int, str, str, str], ...] = (
+    (0x19, "Голосовое управление / Микрофон (рекомендуется)", "Voice Control / Mic (recommended)", "语音控制 / 麦克风（推荐）"),
+    (0x23, "Кнопка VIEW (смена вида приборки)", "VIEW button (cluster view)", "VIEW 按钮（切换仪表视图）"),
+    (0x74, "Кнопка меню ассистентов на руле", "Assistants menu button on wheel", "方向盘辅助菜单按钮"),
+    (0x2B, "Кнопка обогрева руля", "Steering-wheel heating button", "方向盘加热按钮"),
+    (0x2A, "Кнопка R / Звёздочка (Joker)", "R / Star / Joker button", "R / 星号 (Joker) 按钮"),
 )

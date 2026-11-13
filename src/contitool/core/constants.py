@@ -8,7 +8,7 @@ import re
 import os
 import sys
 
-from contitool.i18n import get_lang
+from contitool.i18n import tr
 
 AUTHOR_CREDIT = "Made by PerkTheFox"
 AUTHOR_SITE_URL = "https://vwhacking.antonperk.com"
@@ -77,21 +77,21 @@ STOCK_FBL_MODULUS = bytes.fromhex(
 PKCS1_DIGESTINFO_RIPEMD160 = bytes.fromhex("3021300906052b2403020105000414")
 PKCS1_DIGESTINFO_SHA1 = bytes.fromhex("3021300906052b0e03021a05000414")
 
-KNOWN_GATEWAY_FECS: dict[int, tuple[str, str]] = {
-    0x10000100: ("Круиз-контроль GRA (0x10000100)", "Cruise Control / Speed Regulation GRA (0x10000100)"),
-    0x10000200: ("Адаптивный круиз-контроль ACC — резерв VAG (0x10000200)", "Adaptive Cruise Control ACC — VAG reserved (0x10000200)"),
-    0x10000300: ("Ассистент распознавания усталости MKE (0x10000300)", "Driver Alert / Fatigue Detection MKE (0x10000300)"),
-    0x10001100: ("Профиль движения FPA 1 — Comfort (0x10001100)", "Driving Profile FPA 1 — Comfort (0x10001100)"),
-    0x10001200: ("Профиль движения FPA 2 — Normal (0x10001200)", "Driving Profile FPA 2 — Normal (0x10001200)"),
-    0x10001300: ("Профиль движения FPA 3 — Sport (0x10001300)", "Driving Profile FPA 3 — Sport (0x10001300)"),
-    0x10001400: ("Профиль движения FPA 4 — Offroad (0x10001400)", "Driving Profile FPA 4 — Offroad (0x10001400)"),
-    0x10001500: ("Профиль движения FPA 5 — Eco (0x10001500)", "Driving Profile FPA 5 — Eco (0x10001500)"),
-    0x10001600: ("Профиль движения FPA 6 — Race / Cupra (0x10001600)", "Driving Profile FPA 6 — Race / Cupra (0x10001600)"),
-    0x10001700: ("Профиль движения FPA 7 — Individual (0x10001700)", "Driving Profile FPA 7 — Individual (0x10001700)"),
-    0x10001800: ("Профиль движения FPA 8 — Offroad Individual / Snow (0x10001800)", "Driving Profile FPA 8 — Offroad Individual / Snow (0x10001800)"),
-    0x10001900: ("Профиль движения FPA 9 — Allroad / Доп. профиль (0x10001900)", "Driving Profile FPA 9 — Allroad / Extra Profile (0x10001900)"),
-    0x10001A00: ("Профиль движения FPA 10 — EV / E-Mode (0x10001A00)", "Driving Profile FPA 10 — EV / E-Mode (0x10001A00)"),
-    0x10001B00: ("Профиль движения FPA 11 — GTE / Hybrid (0x10001B00)", "Driving Profile FPA 11 — GTE / Hybrid (0x10001B00)"),
+KNOWN_GATEWAY_FECS: dict[int, tuple[str, str, str]] = {
+    0x10000100: ("Круиз-контроль GRA (0x10000100)", "Cruise Control / Speed Regulation GRA (0x10000100)", "定速巡航 / 车速调节 GRA (0x10000100)"),
+    0x10000200: ("Адаптивный круиз-контроль ACC — резерв VAG (0x10000200)", "Adaptive Cruise Control ACC — VAG reserved (0x10000200)", "自适应巡航 ACC — VAG 预留 (0x10000200)"),
+    0x10000300: ("Ассистент распознавания усталости MKE (0x10000300)", "Driver Alert / Fatigue Detection MKE (0x10000300)", "驾驶员注意力 / 疲劳监测 MKE (0x10000300)"),
+    0x10001100: ("Профиль движения FPA 1 — Comfort (0x10001100)", "Driving Profile FPA 1 — Comfort (0x10001100)", "驾驶模式 FPA 1 — 舒适 (0x10001100)"),
+    0x10001200: ("Профиль движения FPA 2 — Normal (0x10001200)", "Driving Profile FPA 2 — Normal (0x10001200)", "驾驶模式 FPA 2 — 标准 (0x10001200)"),
+    0x10001300: ("Профиль движения FPA 3 — Sport (0x10001300)", "Driving Profile FPA 3 — Sport (0x10001300)", "驾驶模式 FPA 3 — 运动 (0x10001300)"),
+    0x10001400: ("Профиль движения FPA 4 — Offroad (0x10001400)", "Driving Profile FPA 4 — Offroad (0x10001400)", "驾驶模式 FPA 4 — 越野 (0x10001400)"),
+    0x10001500: ("Профиль движения FPA 5 — Eco (0x10001500)", "Driving Profile FPA 5 — Eco (0x10001500)", "驾驶模式 FPA 5 — 经济 (0x10001500)"),
+    0x10001600: ("Профиль движения FPA 6 — Race / Cupra (0x10001600)", "Driving Profile FPA 6 — Race / Cupra (0x10001600)", "驾驶模式 FPA 6 — 赛道 / Cupra (0x10001600)"),
+    0x10001700: ("Профиль движения FPA 7 — Individual (0x10001700)", "Driving Profile FPA 7 — Individual (0x10001700)", "驾驶模式 FPA 7 — 自定义 (0x10001700)"),
+    0x10001800: ("Профиль движения FPA 8 — Offroad Individual / Snow (0x10001800)", "Driving Profile FPA 8 — Offroad Individual / Snow (0x10001800)", "驾驶模式 FPA 8 — 越野自定义 / 雪地 (0x10001800)"),
+    0x10001900: ("Профиль движения FPA 9 — Allroad / Доп. профиль (0x10001900)", "Driving Profile FPA 9 — Allroad / Extra Profile (0x10001900)", "驾驶模式 FPA 9 — 全路况 / 附加模式 (0x10001900)"),
+    0x10001A00: ("Профиль движения FPA 10 — EV / E-Mode (0x10001A00)", "Driving Profile FPA 10 — EV / E-Mode (0x10001A00)", "驾驶模式 FPA 10 — 纯电 / 电动模式 (0x10001A00)"),
+    0x10001B00: ("Профиль движения FPA 11 — GTE / Hybrid (0x10001B00)", "Driving Profile FPA 11 — GTE / Hybrid (0x10001B00)", "驾驶模式 FPA 11 — GTE / 混动 (0x10001B00)"),
 }
 
 # Canonical 13-slot SWaP registration order in Continental J533 firmware (slots 0..12 in NvM 0x7C & 0x7D..0x89)
@@ -119,14 +119,14 @@ ZDC_MAINGW_FPA_MAP_OFF = 0x032C        # 13-byte Inst0 FPA profile map (S028: 1.
 ZDC_MAINGW_FPA_MASK_OFF = 0x0345       # 2-byte BE S030 in ZDC #4: slots kept as the user's last profile (not the menu)
 ZDC_MAINGW_FPA_INST1_MAP_OFF = 0x0D0B  # 7-byte Inst1 EV/Hybrid FPA profile map (S153: 1 -> FeC 0x10001A00, 2 -> FeC 0x10001B00)
 
-ZDC_DATASET_SPECS: tuple[tuple[int, str, int, int, str, str], ...] = (
-    (0, "RESERVE_0", 0x0080, 0x0080, "Резервный слот датасета #0 (не используется)", "Reserved Dataset Slot #0 (unused)"),
-    (1, "MKE", 0x0100, 0x0100, "Распознавание усталости водителя (MKE)", "Driver Alert / Fatigue Detection (MKE)"),
-    (2, "SSA_REASONS", 0x0200, 0x0800, "Индикация причин Старт-Стоп на ГУ (BAP 0x27)", "Start-Stop Inhibition Reasons HMI (BAP 0x27)"),
-    (3, "RESERVE_3", 0x0A00, 0x0400, "Резервный блок параметрии #3 (Byte 19 Bit 0)", "Reserved Parameter Block #3 (Byte 19 Bit 0)"),
-    (4, "MAIN_GW", 0x1340, 0x1100, "Профили вождения FPA и координатор MultiKo", "Driving Profile Selection (FPA / MultiKo)"),
-    (5, "RESERVE_5", 0x1200, 0x012E, "Резервный блок параметрии #5 (Byte 29 Bit 0)", "Reserved Parameter Block #5 (Byte 29 Bit 0)"),
-    (6, "BEM", 0x2440, 0x0C00, "Модели 14В LIN-генераторов (BEM)", "14V LIN Alternator Models (BEM)"),
+ZDC_DATASET_SPECS: tuple[tuple[int, str, int, int, str, str, str], ...] = (
+    (0, "RESERVE_0", 0x0080, 0x0080, "Резервный слот датасета #0 (не используется)", "Reserved Dataset Slot #0 (unused)", "保留数据集槽位 #0（未使用）"),
+    (1, "MKE", 0x0100, 0x0100, "Распознавание усталости водителя (MKE)", "Driver Alert / Fatigue Detection (MKE)", "驾驶员疲劳监测 (MKE)"),
+    (2, "SSA_REASONS", 0x0200, 0x0800, "Индикация причин Старт-Стоп на ГУ (BAP 0x27)", "Start-Stop Inhibition Reasons HMI (BAP 0x27)", "起停限制原因显示（主机 BAP 0x27）"),
+    (3, "RESERVE_3", 0x0A00, 0x0400, "Резервный блок параметрии #3 (Byte 19 Bit 0)", "Reserved Parameter Block #3 (Byte 19 Bit 0)", "保留参数区块 #3（字节 19 位 0）"),
+    (4, "MAIN_GW", 0x1340, 0x1100, "Профили вождения FPA и координатор MultiKo", "Driving Profile Selection (FPA / MultiKo)", "驾驶模式选择（FPA / MultiKo）"),
+    (5, "RESERVE_5", 0x1200, 0x012E, "Резервный блок параметрии #5 (Byte 29 Bit 0)", "Reserved Parameter Block #5 (Byte 29 Bit 0)", "保留参数区块 #5（字节 29 位 0）"),
+    (6, "BEM", 0x2440, 0x0C00, "Модели 14В LIN-генераторов (BEM)", "14V LIN Alternator Models (BEM)", "14V LIN 发电机模型 (BEM)"),
 )
 
 # UDS 0x34 RequestDownload virtual addresses & payload lengths for ZDC blocks 0..6
@@ -143,14 +143,15 @@ ZDC_UDS_UPLOAD_MAP: dict[int, tuple[int, int]] = {
 # Fixed English marker (tests and logs search for it); every user-facing place adds the localized text next to it
 UNSUPPORTED_DATASET_WARNING = "Unsupported Dataset: Selected FEC not supported by current dataset"
 UNSUPPORTED_DATASET_RU = "Датасет не поддерживает выбранную функцию"
+UNSUPPORTED_DATASET_ZH = "当前数据集不支持所选功能"
 
 # T20 20-pin J533 bench connector wiring reference
-T20_BENCH_PINS: tuple[tuple[int, str, str, str], ...] = (
-    (1, "KL30 (+12V)", "Постоянное питание +12 В (аккумулятор / ЛБП)", "Permanent +12V battery / bench PSU"),
-    (14, "KL15 (+12V)", "Зажигание +12 В (соединить вместе с Pin 1)", "Ignition +12V (bridge with Pin 1 on bench)"),
-    (11, "KL31 (GND)", "Масса (минус блока питания и GND CAN-адаптера)", "Ground (PSU minus & CAN adapter GND)"),
-    (19, "Diag CAN-H", "Диагностическая шина CAN High (500 кбит/с)", "Diagnosis CAN High (500 kbit/s)"),
-    (9, "Diag CAN-L", "Диагностическая шина CAN Low (500 кбит/с): включён терминатор или резистор 120 Ом к Pin 19!", "Diagnosis CAN Low (500 kbit/s): terminator on or a 120 Ω resistor to Pin 19!"),
+T20_BENCH_PINS: tuple[tuple[int, str, str, str, str], ...] = (
+    (1, "KL30 (+12V)", "Постоянное питание +12 В (аккумулятор / ЛБП)", "Permanent +12V battery / bench PSU", "常电 +12 V（蓄电池 / 台架电源）"),
+    (14, "KL15 (+12V)", "Зажигание +12 В (соединить вместе с Pin 1)", "Ignition +12V (bridge with Pin 1 on bench)", "点火 +12 V（台架上与 Pin 1 短接）"),
+    (11, "KL31 (GND)", "Масса (минус блока питания и GND CAN-адаптера)", "Ground (PSU minus & CAN adapter GND)", "接地（电源负极与 CAN 适配器 GND）"),
+    (19, "Diag CAN-H", "Диагностическая шина CAN High (500 кбит/с)", "Diagnosis CAN High (500 kbit/s)", "诊断 CAN 高电平（500 kbit/s）"),
+    (9, "Diag CAN-L", "Диагностическая шина CAN Low (500 кбит/с): включён терминатор или резистор 120 Ом к Pin 19!", "Diagnosis CAN Low (500 kbit/s): terminator on or a 120 Ω resistor to Pin 19!", "诊断 CAN 低电平（500 kbit/s）：需开启终端电阻，或在 Pin 19 之间接 120 Ω 电阻！"),
 )
 
 
@@ -168,23 +169,26 @@ class SlotSpec:
     rec_size: int
     short_ru: str
     short_en: str
+    short_zh: str
     details_ru: str
     details_en: str
+    details_zh: str
     notes_ru: str
     notes_en: str
+    notes_zh: str
     aliases: tuple[str, ...] = ()
 
     @property
     def short(self) -> str:
-        return self.short_en if get_lang() == "en" else self.short_ru
+        return tr(self.short_ru, self.short_en, self.short_zh)
 
     @property
     def details(self) -> str:
-        return self.details_en if get_lang() == "en" else self.details_ru
+        return tr(self.details_ru, self.details_en, self.details_zh)
 
     @property
     def notes(self) -> str:
-        return self.notes_en if get_lang() == "en" else self.notes_ru
+        return tr(self.notes_ru, self.notes_en, self.notes_zh)
 
     @property
     def cp_tx(self) -> int:
@@ -217,8 +221,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Приборная панель / Иммо (J285)",
         short_en="Instrument Cluster / Immo (J285)",
+        short_zh="仪表盘 / 防盗 (J285)",
         details_ru="Kombiinstrument / Virtual Cockpit (IKA_WFS, LL_DashBoardUDS)",
         details_en="Instrument Cluster / Virtual Cockpit (IKA_WFS, LL_DashBoardUDS)",
+        details_zh="仪表盘 / 虚拟座舱 (IKA_WFS, LL_DashBoardUDS)",
         notes_ru=(
             "Помимо защиты компонентов (CP), приборка 17 на MQB хранит данные "
             "иммобилайзера WFS5 (ключи/CS/MAC). Одной привязки CP для запуска двигателя недостаточно."
@@ -226,6 +232,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "Besides Component Protection (CP), MQB cluster 17 also stores WFS5 immobilizer data "
             "(keys/CS/MAC). CP binding alone will not authorize engine start."
+        ),
+        notes_zh=(
+            "除部件保护 (CP) 外，MQB 仪表 17 还存储 WFS5 防盗数据 "
+            "（钥匙 / CS / MAC）。仅完成 CP 绑定并不足以授权发动机启动。"
         ),
         aliases=("kombi", "cluster", "dash", "ipc"),
     ),
@@ -242,8 +252,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Блок бортовой сети BCM (J519)",
         short_en="Central Electrics / BCM (J519)",
+        short_zh="中央电气 / BCM (J519)",
         details_ru="Central Electrics / Body Control Module (LL_CentrElectUDS, 5Q0/3Q0 937 08x)",
         details_en="Central Electrics / Body Control Module (LL_CentrElectUDS, 5Q0/3Q0 937 08x)",
+        details_zh="中央电气 / 车身控制模块 (LL_CentrElectUDS, 5Q0/3Q0 937 08x)",
         notes_ru=(
             "На платформе MQB блок 09 (BCM) штатно участвует в защите компонентов CP. "
             "Не забудьте также перенести кодировку и адаптации каналов освещения со старого BCM."
@@ -251,6 +263,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "On MQB vehicles, module 09 (BCM) participates in Component Protection. "
             "Remember to also transfer long coding and lighting adaptation channels from the old BCM."
+        ),
+        notes_zh=(
+            "在 MQB 车辆上，模块 09 (BCM) 参与部件保护。"
+            "请记得同时从旧 BCM 迁移长编码和灯光适配通道。"
         ),
         aliases=("bcm", "centr", "0x09"),
     ),
@@ -267,8 +283,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Адаптивный круиз / радар ACC (J428)",
         short_en="Adaptive Cruise / ACC Radar (J428)",
+        short_zh="自适应巡航 / ACC 雷达 (J428)",
         details_ru="Adaptive Cruise Control / Front Assist (LL_AdaptCruisContrUDS, 5Q0/3Q0/2Q0 907 572)",
         details_en="Adaptive Cruise Control / Front Assist (LL_AdaptCruisContrUDS, 5Q0/3Q0/2Q0 907 572)",
+        details_zh="自适应巡航控制 / 前部辅助 (LL_AdaptCruisContrUDS, 5Q0/3Q0/2Q0 907 572)",
         notes_ru=(
             "Для работы дистанции/ACC в радаре 13 также должны быть активированы "
             "соответствующие коды SWaP/FeC (в самом радаре) и залита параметрия под кузов."
@@ -276,6 +294,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "For full ACC/Front Assist operation, radar 13 must also have matching SWaP/FeC codes "
             "enabled inside the radar unit and a valid vehicle dataset loaded."
+        ),
+        notes_zh=(
+            "为使跟车 / ACC 完整工作，雷达 13 内部还须启用对应的 SWaP/FeC 代码，"
+            "并写入针对该车型的参数数据。"
         ),
         aliases=("acc", "radar"),
     ),
@@ -292,8 +314,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Подушки безопасности Airbag (J234)",
         short_en="Airbag Control Unit (J234)",
+        short_zh="安全气囊控制单元 (J234)",
         details_ru="Airbag Control Unit (LL_AirbaUDS, 5Q0/3Q0 959 655)",
         details_en="Airbag Control Unit (LL_AirbaUDS, 5Q0/3Q0 959 655)",
+        details_zh="安全气囊控制单元 (LL_AirbaUDS, 5Q0/3Q0 959 655)",
         notes_ru=(
             "Внимание: блок 15 Airbag на MQB жёстко связан с конфигурацией безопасности и WFS/VIN. "
             "Замена б/у блока 15 с другой комплектацией пиропатронов требует точной параметрии."
@@ -301,6 +325,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "Note: MQB Airbag module 15 is tightly tied to vehicle safety configuration and WFS/VIN. "
             "Installing a used module 15 with different squib/crash config requires exact dataset matching."
+        ),
+        notes_zh=(
+            "注意：MQB 气囊模块 15 与车辆安全配置以及 WFS/VIN 紧密关联。"
+            "安装带有不同爆燃管 / 碰撞配置的二手模块 15 需要精确匹配参数数据。"
         ),
         aliases=("airbag", "srs"),
     ),
@@ -317,8 +345,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Акустическая система / усилитель (J525)",
         short_en="Sound System / DSP Amplifier (J525)",
+        short_zh="音响系统 / DSP 功放 (J525)",
         details_ru="Sound System / DSP Amplifier — Canton / Dynaudio / Fender / B&O (LL_SoundSysteUDS)",
         details_en="Sound System / DSP Amplifier — Canton / Dynaudio / Fender / B&O (LL_SoundSysteUDS)",
+        details_zh="音响系统 / DSP 功放 — Canton / Dynaudio / Fender / B&O (LL_SoundSysteUDS)",
         notes_ru=(
             "При дооснащении усилителем 47 (если с завода его не было, банк 5 пуст) "
             "обязательно включайте обход маски 95640 (--bypass-eeprom-mask)."
@@ -326,6 +356,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "When retrofitting amplifier 47 into a car that had no factory amp (Bank 5 empty), "
             "be sure to enable the 95640 EEPROM mask bypass (--bypass-eeprom-mask)."
+        ),
+        notes_zh=(
+            "在向出厂无功放（存储区 5 为空）的车辆加装功放 47 时，"
+            "务必启用 95640 EEPROM 掩码绕过（--bypass-eeprom-mask）。"
         ),
         aliases=("sound", "dsp", "amp", "canton", "dynaudio"),
     ),
@@ -342,10 +376,13 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="ТВ-тюнер (R78)",
         short_en="TV Tuner (R78)",
+        short_zh="电视调谐器 (R78)",
         details_ru="TV Tuner Digital Multimedia (LL_TVTunerUDS)",
         details_en="TV Tuner Digital Multimedia (LL_TVTunerUDS)",
+        details_zh="数字多媒体电视调谐器 (LL_TVTunerUDS)",
         notes_ru="При дооснащении в ранее пустой банк 6 включайте обход маски 95640.",
         notes_en="When retrofitting into previously empty Bank 6, enable the 95640 EEPROM mask bypass.",
+        notes_zh="向先前为空的存储区 6 加装时，请启用 95640 EEPROM 掩码绕过。",
         aliases=("tv", "tvtuner"),
     ),
     SlotSpec(
@@ -361,8 +398,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Мультимедиа / ГУ MIB1/MIB2/MIB3 (J794)",
         short_en="Infotainment MIB1/MIB2/MIB3 (J794)",
+        short_zh="信息娱乐主机 MIB1/MIB2/MIB3 (J794)",
         details_ru="Information Electronics 1 — MIB STD / High (LL_InforElectUDS)",
         details_en="Information Electronics 1 — MIB STD / High (LL_InforElectUDS)",
+        details_zh="信息电子系统 1 — MIB STD / High (LL_InforElectUDS)",
         notes_ru=(
             "На MIB2 STD TechniSat/Preh рабочий ключ IKA лежит в зашифрованной I2C EEPROM M30 "
             "(запись 0x80000002/3); на Harman/Delphi читается программатором или из IFS/EEPROM."
@@ -370,6 +409,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "On TechniSat/Preh MIB2 STD, the active IKA key is stored in encrypted M30 I2C EEPROM "
             "(record 0x80000002/3); on Harman/Delphi it can be read via programmer or IFS/EEPROM."
+        ),
+        notes_zh=(
+            "在 TechniSat/Preh MIB2 STD 上，当前 IKA 密钥存储在加密的 M30 I2C EEPROM 中 "
+            "（记录 0x80000002/3）；在 Harman/Delphi 上可通过编程器或 IFS/EEPROM 读取。"
         ),
         aliases=("mib", "mib2", "mib3", "infotainment", "mmi"),
     ),
@@ -386,8 +429,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Ассистент смены полосы 1 Master (J769/J1086)",
         short_en="Lane Change / Side Assist 1 Master (J769)",
+        short_zh="车道变换 / 盲区监测 1 主 (J769)",
         details_ru="Lane Change Assist / Side Assist Master Radar (LL_LaneChangAssisUDS, напр. 2Q0 907 686)",
         details_en="Lane Change Assist / Side Assist Master Radar (LL_LaneChangAssisUDS, e.g. 2Q0 907 686)",
+        details_zh="车道变换辅助 / 盲区监测主雷达 (LL_LaneChangAssisUDS, 如 2Q0 907 686)",
         notes_ru=(
             "Радары слепых зон поколения 2Q0 907 686 имеют защиту компонентов CP. "
             "Второй (ведомый) радар CF при необходимости использует соседний Банк 9."
@@ -395,6 +440,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "2Q0 907 686 generation Side Assist radars use Component Protection. "
             "If the slave radar CF also participates in CP, it uses adjacent Bank 9."
+        ),
+        notes_zh=(
+            "2Q0 907 686 一代盲区监测雷达具备部件保护。"
+            "若从属雷达 CF 也参与 CP，则使用相邻的存储区 9。"
         ),
         aliases=("swa", "swa1", "sideassist", "bsd"),
     ),
@@ -411,10 +460,13 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Ассистент смены полосы 2 Slave (J770/J1087)",
         short_en="Lane Change / Side Assist 2 Slave (J770)",
+        short_zh="车道变换 / 盲区监测 2 从 (J770)",
         details_ru="Lane Change Assist 2 Slave Radar (29-bit UDS 0x17FC008A / 0x17FE008A)",
         details_en="Lane Change Assist 2 Slave Radar (29-bit UDS 0x17FC008A / 0x17FE008A)",
+        details_zh="车道变换辅助 2 从雷达（29 位 UDS 0x17FC008A / 0x17FE008A）",
         notes_ru="Ведомый радар Side Assist 2 (диагностика только по 29-bit Extended CAN).",
         notes_en="Slave Side Assist 2 radar (diagnosed exclusively over 29-bit Extended CAN).",
+        notes_zh="从属盲区监测 2 雷达（仅通过 29 位扩展 CAN 进行诊断）。",
         aliases=("swa2", "bsd2"),
     ),
     SlotSpec(
@@ -430,10 +482,13 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Спецфункции / спецтранспорт (J608)",
         short_en="Special Function Module (J608)",
+        short_zh="特殊功能模块 (J608)",
         details_ru="Special Function Module — Taxi / Police / Driving School (LL_SpeciFunctUDS, 5Q0 907 410)",
         details_en="Special Function Module — Taxi / Police / Driving School (LL_SpeciFunctUDS, 5Q0 907 410)",
+        details_zh="特殊功能模块 — 出租车 / 警车 / 驾校车 (LL_SpeciFunctUDS, 5Q0 907 410)",
         notes_ru="Модуль специальных автомобилей J608 (редкая комплектация).",
         notes_en="Special-purpose vehicle module J608 (rare fleet option).",
+        notes_zh="特种车辆模块 J608（少见选装）。",
         aliases=("specfunc", "j608", "taxi"),
     ),
     SlotSpec(
@@ -449,8 +504,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x42,
         short_ru="Передняя камера ассистентов MFK3 (R242)",
         short_en="Front Assist Camera MFK3 (R242)",
+        short_zh="前部驾驶辅助摄像头 MFK3 (R242)",
         details_ru="Front Sensors Driver Assistance Camera (LL_FrontSensoDriveAssisSysteUDS, напр. 2Q0 980 653)",
         details_en="Front Sensors Driver Assistance Camera (LL_FrontSensoDriveAssisSysteUDS, e.g. 2Q0 980 653)",
+        details_zh="前部传感器驾驶辅助摄像头 (LL_FrontSensoDriveAssisSysteUDS, 如 2Q0 980 653)",
         notes_ru=(
             "Камеры 3Q0 980 654 (MFK2) не имели CP, а новые камеры 2Q0 980 653 (Valeo MFK3, ~2020+) "
             "используют Банк 11 (активен с завода на свежих Kodiaq/Octavia/Tiguan)."
@@ -458,6 +515,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "Older 3Q0 980 654 (MFK2) cameras had no CP, whereas newer 2Q0 980 653 (Valeo MFK3, ~2020+) "
             "cameras use Bank 11 (factory active on late MQB Kodiaq/Octavia/Tiguan)."
+        ),
+        notes_zh=(
+            "较旧的 3Q0 980 654 (MFK2) 摄像头无 CP，而较新的 2Q0 980 653（Valeo MFK3，约 2020+）"
+            "摄像头使用存储区 11（在后期 MQB Kodiaq/Octavia/Tiguan 上出厂即激活）。"
         ),
         aliases=("camera", "mfk3", "frontcam", "adas"),
     ),
@@ -474,8 +535,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         rec_size=0x40,
         short_ru="Управление ВВ-батареей гибрида/EV (J840)",
         short_en="Hybrid / EV HV Battery Mgmt BMS (J840)",
+        short_zh="混动 / 纯电高压电池管理 BMS (J840)",
         details_ru="HV Battery Management BMS_MQB (KN_Hybrid_01 Hybrid_KompSchutz, 29-bit UDS, sz=0x40)",
         details_en="HV Battery Management BMS_MQB (KN_Hybrid_01 Hybrid_KompSchutz, 29-bit UDS, sz=0x40)",
+        details_zh="高压电池管理 BMS_MQB (KN_Hybrid_01 Hybrid_KompSchutz, 29 位 UDS, 大小=0x40)",
         notes_ru=(
             "Банк гибридных версий GTE / e-Golf / PHEV (размер записи NvM = 0x40 байт, CRC-32 на +0x44). "
             "Утилита автоматически форматирует 0x40-байтную структуру для этого банка."
@@ -483,6 +546,10 @@ SLAVE_SLOTS: tuple[SlotSpec, ...] = (
         notes_en=(
             "Used on GTE / e-Golf / PHEV vehicles (NvM record size = 0x40 bytes, CRC-32 at +0x44). "
             "This tool automatically formats the 0x40-byte layout for Bank 12."
+        ),
+        notes_zh=(
+            "用于 GTE / e-Golf / PHEV 车辆（NvM 记录大小 = 0x40 字节，CRC-32 位于 +0x44）。"
+            "本工具会自动为存储区 12 格式化 0x40 字节布局。"
         ),
         aliases=("bms", "hybrid", "gte", "hvbattery"),
     ),
@@ -501,8 +568,10 @@ MASTER_SLOT = SlotSpec(
     rec_size=0x42,
     short_ru="Прикладной мастер-ключ шлюза 19 (Master/GFA)",
     short_en="Gateway 19 App Master Key (Master / GFA)",
+    short_zh="网关 19 应用主密钥 (Master / GFA)",
     details_ru="Gateway Application Master Key GFA (NvM 0x7B, key_type=3 — НЕ ТРОГАТЬ на рабочей машине!)",
     details_en="Gateway Application Master Key GFA (NvM 0x7B, key_type=3 — DO NOT TOUCH on a live car!)",
+    details_zh="网关应用主密钥 GFA（NvM 0x7B，key_type=3 — 车辆工作时切勿改动！）",
     notes_ru=(
         "1) Это прикладной мастер-ключ самого шлюза 19 (GFA, NvM 0x7B, key_type=3): в CAN-обмене CP с\n"
         "ведомыми блоками 1..12 он НИКОГДА не участвует (0x0008C94E грузит только IKA key_type=6),\n"
@@ -523,6 +592,15 @@ MASTER_SLOT = SlotSpec(
         "forces key_type=8 (random dummy keys @ 0x0008C968) onto ALL 12 slave banks — putting every ECU\n"
         "in the car into Component Protection Active! Leave 0xDA00 untouched (--force-master is ONLY\n"
         "for offline bench/swap initialization of a brand-new Virgin FF..FF gateway)."
+    ),
+    notes_zh=(
+        "1) 网关 19 自身的应用主密钥（GFA，NvM 0x7B，key_type=3）：绝不参与与从属模块 1..12 的 CAN CP\n"
+        "握手（0x0008C94E 仅加载 IKA key_type=6），且无法据此推导出 IKA 密钥。\n"
+        "2) 实际作用：校验在线 FAZIT/ODIS 容器的 AES-CMAC（UDS 0x2E 02C5，auth_mode=3 @ 0x0008AE44），\n"
+        "并置位网关 Master CP 状态标志（0xFEDFC988 位 0 @ 0x0008E184）。\n"
+        "3) 危险：在车辆工作时擦除或损坏 0xDA00，会使网关 19 失去 Master 状态，并向全部 12 个从属存储区\n"
+        "强制写入 key_type=8（0x0008C968 处的随机假密钥）——导致车上所有模块进入部件保护激活状态！\n"
+        "请保持 0xDA00 不被改动（--force-master 仅用于全新空白的 Virgin FF..FF 网关的离线台架 / 移植初始化）。"
     ),
     aliases=("master", "gw"),
 )

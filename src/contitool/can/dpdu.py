@@ -270,6 +270,8 @@ def check_driver(version: str) -> None:
             f"Work on D-PDU drivers 30 and newer (yours is {shown}) is unstable at the moment: the adapter hangs partway "
             "through a UDS flash. Pick driver 27.2 in the Connection dialog — it comes with ContiTool — or confirm this "
             "driver there.",
+            f"D-PDU 30 及更新版本的驱动（您的是 {shown}）目前工作不稳定：适配器会在 UDS 刷写中途挂起。"
+            "请在“连接”窗口中选择随 ContiTool 一起提供的驱动 27.2，或在该窗口确认此驱动。",
         ))
     raise can.CanInitializationError(tr(
         f"Драйвер D-PDU {shown} не проверен с ContiTool (проверены {', '.join(SUPPORTED_DRIVERS)}). При подключении он "
@@ -278,6 +280,8 @@ def check_driver(version: str) -> None:
         f"D-PDU driver {shown} is not verified with ContiTool (verified: {', '.join(SUPPORTED_DRIVERS)}). On connect it "
         "reflashes the VCI to its own version. Pick the driver 27.2 that comes with ContiTool in the Connection dialog, "
         "or confirm this driver there.",
+        f"D-PDU 驱动 {shown} 未经 ContiTool 验证（已验证：{', '.join(SUPPORTED_DRIVERS)}）。连接时它会将 VCI 重新刷写"
+        "为其自身的版本。请在“连接”窗口中选择 ContiTool 附带的驱动 27.2，或在该窗口确认此驱动。",
     ))
 
 
@@ -303,6 +307,8 @@ def check_vci_free() -> None:
             "перепрошивает его под свою версию.",
             f"Close ODIS and VCTool (running: {', '.join(busy)}). While they run they hold the adapter, and their "
             "driver reflashes it to its own version.",
+            f"请关闭 ODIS 和 VCTool（正在运行：{', '.join(busy)}）。它们运行时占用适配器，并且其驱动程序会将其重新刷写"
+            "为自身版本。",
         ))
 
 
@@ -371,6 +377,8 @@ class DPduBus(can.BusABC):
                     "ODIS для него не нужен) или положите свою копию его папки в dpdu/ рядом с ContiTool.",
                     "No D-PDU API (VAS 6154 / VNCI) found. Install the \"VW D-PDU API\" driver (a standalone package, "
                     "it does not need ODIS) or copy your own copy of its folder into dpdu/ next to ContiTool.",
+                    "未找到 D-PDU API（VAS 6154 / VNCI）。请安装“VW D-PDU API”驱动程序（独立安装包，无需 ODIS），"
+                    "或将其文件夹的副本放到 ContiTool 旁边的 dpdu/ 目录中。",
                 ))
             channel = apis[0]["name"]
             check_driver(apis[0]["version"])
@@ -384,6 +392,8 @@ class DPduBus(can.BusABC):
                     "(VW_D-PDU_API_Win_x64), 32-разрядная не подходит.",
                     f"The D-PDU driver did not load: {apis[0]['dll']} ({exc}). It must be the 64-bit build "
                     "(VW_D-PDU_API_Win_x64); a 32-bit one cannot be used.",
+                    f"D-PDU 驱动未能加载：{apis[0]['dll']}（{exc}）。必须使用 64 位版本（VW_D-PDU_API_Win_x64），"
+                    "32 位版本不可用。",
                 )) from exc
         self._dll = dll
         self._pending: collections.deque[can.Message] = collections.deque(maxlen=RX_QUEUE_MAX)
@@ -461,6 +471,8 @@ class DPduBus(can.BusABC):
                 f"ошибка: {last}",
                 f"No D-PDU module provided a link to the ECU (tried: {', '.join(tried)}). Switch the VCI on and "
                 f"close ODIS; if the adapter list offers another D-PDU driver, pick that one. Last error: {last}",
+                f"没有任何 D-PDU 模块提供到模块的链路（已尝试：{', '.join(tried)}）。请开启 VCI 并关闭 ODIS；"
+                f"如果适配器列表中还有其他 D-PDU 驱动，请选择它。最后的错误：{last}",
             ),
             error_code=failure,  # a VCI that dropped the link (0x11) still gets the one retry __init__ does
         )
@@ -843,7 +855,7 @@ class DPduBus(can.BusABC):
                 ev = item.contents
                 if ev.ItemType == IT_STATUS and ev.pData and C.cast(ev.pData, C.POINTER(U32)).contents.value == CLLST_OFFLINE:
                     self.spent = True
-                    raise can.CanOperationError(tr("VCI закрыл канал D-PDU", "The VCI closed the D-PDU link"))
+                    raise can.CanOperationError(tr("VCI закрыл канал D-PDU", "The VCI closed the D-PDU link", "VCI 关闭了 D-PDU 链路"))
             finally:
                 self._try("PDUDestroyItem", item)
 
@@ -898,7 +910,7 @@ class DPduBus(can.BusABC):
                         st = C.cast(ev.pData, C.POINTER(U32)).contents.value
                         if st == CLLST_OFFLINE:
                             self.spent = True
-                            raise can.CanOperationError(tr("VCI закрыл канал D-PDU", "The VCI closed the D-PDU link"))
+                            raise can.CanOperationError(tr("VCI закрыл канал D-PDU", "The VCI closed the D-PDU link", "VCI 关闭了 D-PDU 链路"))
                         if ev.hCop == hcop and st in COPST_DONE:
                             cop_done = True
                     elif ev.ItemType == IT_RESULT and ev.pData and (ev.hCop == hcop or hcop == 0):
@@ -921,10 +933,12 @@ class DPduBus(can.BusABC):
                             raise can.CanOperationError(tr(
                                 "Потеряна связь с VCI по каналу D-PDU",
                                 "Lost communication with VCI on D-PDU link",
+                                "通过 D-PDU 链路与 VCI 的通信中断",
                             ))
                         raise can.CanOperationError(tr(
                             f"Ошибка протокола UDS D-PDU (0x{err_code:X})",
                             f"D-PDU UDS protocol error (0x{err_code:X})",
+                            f"D-PDU UDS 协议错误（0x{err_code:X}）",
                         ))
                 finally:
                     self._dll.PDUDestroyItem(item)
@@ -1015,8 +1029,8 @@ class DPduBus(can.BusABC):
 
     def describe(self) -> str:
         """The module actually connected, for the log and the problem report."""
-        kind = tr("VCI VW", "VW VCI") if self.module_is_vci else tr("J2534 через драйвер VW", "J2534 through the VW driver")
-        raw = tr("без raw CAN", "no raw CAN") if self.nonraw else "raw CAN"
+        kind = tr("VCI VW", "VW VCI", "VW VCI") if self.module_is_vci else tr("J2534 через драйвер VW", "J2534 through the VW driver", "通过 VW 驱动的 J2534")
+        raw = tr("без raw CAN", "no raw CAN", "无 raw CAN") if self.nonraw else "raw CAN"
         return f"{self.module_label} ({self.module_vendor or '?'}), {kind}, {raw}"
 
     def _modules(self, wait: float) -> list[tuple[int, str, str, bool]]:
@@ -1047,7 +1061,8 @@ class DPduBus(can.BusABC):
                 return vw or other
             if time.monotonic() > end:
                 raise can.CanInitializationError(tr("VAS 6154 / VNCI не найден: подключён ли он и закрыт ли ODIS?",
-                                                    "VAS 6154 / VNCI not found: is it plugged in and ODIS closed?"))
+                                                    "VAS 6154 / VNCI not found: is it plugged in and ODIS closed?",
+                                                    "未找到 VAS 6154 / VNCI：是否已连接且已关闭 ODIS？"))
             time.sleep(0.5)
 
     def _create(self, flags: tuple[int, int, int, int]) -> int:
@@ -1067,6 +1082,9 @@ class DPduBus(can.BusABC):
                     "works only through RawMode on pins 6/14, which neither other vendors' J2534 drivers nor some "
                     "VNCI clones provide — the refusal comes from the adapter itself. Try another D-PDU driver in "
                     "the Connection window; if that is refused too, this adapter cannot be used.",
+                    f"适配器“{self.module_label}”不提供原始 CAN 通道（错误 0x{rc:02X}）。ContiTool 只能通过 6/14 引脚"
+                    "的 RawMode 工作，其他厂商的 J2534 驱动和部分 VNCI 仿制品均不提供该模式——此拒绝来自适配器本身。"
+                    "请在“连接”窗口中尝试其他 D-PDU 驱动；如果仍被拒绝，则此适配器无法使用。",
                 ),
                 error_code=rc,
             )
@@ -1178,7 +1196,7 @@ class DPduBus(can.BusABC):
                 ev = item.contents
                 if ev.ItemType == IT_STATUS and ev.pData and C.cast(ev.pData, C.POINTER(U32)).contents.value == CLLST_OFFLINE:
                     self.spent = True
-                    raise can.CanOperationError(tr("VCI закрыл канал D-PDU", "The VCI closed the D-PDU link"))
+                    raise can.CanOperationError(tr("VCI закрыл канал D-PDU", "The VCI closed the D-PDU link", "VCI 关闭了 D-PDU 链路"))
                 if ev.ItemType == IT_RESULT and ev.pData and (hcll == self.h_rx or hcll in self._rx_id):
                     self._take_result(C.cast(ev.pData, C.POINTER(ResultData)).contents, self._rx_id.get(hcll))
                 elif ev.ItemType == IT_STATUS and ev.pData and hcll != self.h_rx:
@@ -1190,7 +1208,7 @@ class DPduBus(can.BusABC):
                     self._tx_in_flight.pop(ev.hCop, None)
                     self._cop_keep.pop(ev.hCop, None)
                     self.spent = True
-                    raise can.CanOperationError(tr("VCI не смог отправить кадр", "The VCI could not send a frame"))
+                    raise can.CanOperationError(tr("VCI не смог отправить кадр", "The VCI could not send a frame", "VCI 无法发送帧"))
             finally:
                 self._dll.PDUDestroyItem(item)
 
@@ -1213,7 +1231,8 @@ class DPduBus(can.BusABC):
         if len(raw) > 12:
             raise FrameError(
                 tr(f"D-PDU: неожиданный результат {len(raw)} Б (больше одного кадра CAN)",
-                   f"D-PDU: unexpected {len(raw)}-byte result (more than one CAN frame)")
+                   f"D-PDU: unexpected {len(raw)}-byte result (more than one CAN frame)",
+                   f"D-PDU：意外的 {len(raw)} 字节结果（多于一个 CAN 帧）")
             )
         self._pending.append(can.Message(
             timestamp=time.time(),
@@ -1274,7 +1293,8 @@ class DPduBus(can.BusABC):
             # turns that into minutes of waiting for an answer that can no longer come.
             self._check_rx()
             raise can.CanOperationError(tr("D-PDU: канал больше не работает",
-                                           "D-PDU: this link no longer works"))
+                                           "D-PDU: this link no longer works",
+                                           "D-PDU：此链路不再工作"))
         if self.nonraw:  # fixed-id links: the id is the link's, the payload goes on its own
             link = self.nonraw.get(msg.arbitration_id)
             if link is None:
@@ -1284,6 +1304,8 @@ class DPduBus(can.BusABC):
                     f"отправить кадр 0x{msg.arbitration_id:03X} через него нельзя.",
                     f"This adapter has no raw CAN and works only on identifiers {ids}; "
                     f"a frame to 0x{msg.arbitration_id:03X} cannot be sent through it.",
+                    f"此适配器没有原始 CAN，只能工作在标识符 {ids} 上；"
+                    f"无法通过它向 0x{msg.arbitration_id:03X} 发送帧。",
                 ))
             payload, tx_link, flag = bytes(msg.data), link, (0, 0, 0, 0)
         else:
@@ -1318,6 +1340,7 @@ class DPduBus(can.BusABC):
                     raise can.CanOperationError(tr(
                         "D-PDU: очередь отправки VCI переполнена",
                         "D-PDU: the VCI send queue is full",
+                        "D-PDU：VCI 发送队列已满",
                     ))
                 # The previous frame never finished. From the PC side two causes look the same: nothing on the bus
                 # acknowledges it (no ECU power, wiring, termination), or the VCI's own service hung (#113.log). The
@@ -1327,6 +1350,8 @@ class DPduBus(can.BusABC):
                     "провода CAN-H/CAN-L, терминатор 120 Ом), либо завис сам VCI (переподключите адаптер).",
                     "D-PDU: the frame never went out. Either nothing on the bus acknowledges it (ECU power, "
                     "CAN-H/CAN-L wiring, 120 Ohm terminator) or the VCI itself hung (reconnect the adapter).",
+                    "D-PDU：该帧始终未能发出。可能是总线上没有设备确认它（模块供电、CAN-H/CAN-L 线束、120 Ω 终端"
+                    "电阻），也可能是 VCI 本身挂起（请重新连接适配器）。",
                 ))
             time.sleep(0.0005)
 
@@ -1396,7 +1421,8 @@ class DPduBus(can.BusABC):
         """Take the kept-open link for one operation: two at once would interleave their frames."""
         if self.claimed:
             raise can.CanOperationError(tr("Адаптер D-PDU занят другой операцией",
-                                           "The D-PDU adapter is busy with another operation"))
+                                           "The D-PDU adapter is busy with another operation",
+                                           "D-PDU 适配器正忙于其他操作"))
         self.claimed = True
         try:
             self._check_rx()  # the link may have died while no operation was using it

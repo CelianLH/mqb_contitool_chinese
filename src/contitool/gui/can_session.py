@@ -45,10 +45,10 @@ def parse_hex(text: str, max_len: int) -> bytes:
     """`02 10 03`, `021003`, `0x02,0x10` → bytes. Anything after `#` is a comment."""
     s = re.sub(r"(?i)0x|[\s,;:_\-]", "", text.split("#", 1)[0])
     if len(s) % 2 or not re.fullmatch(r"[0-9A-Fa-f]*", s):
-        raise ValueError(tr("Данные — байты в hex, например: 22 F1 90", "Data must be hex bytes, e.g. 22 F1 90"))
+        raise ValueError(tr("Данные — байты в hex, например: 22 F1 90", "Data must be hex bytes, e.g. 22 F1 90", "数据必须为十六进制字节，例如：22 F1 90"))
     data = bytes.fromhex(s)
     if len(data) > max_len:
-        raise ValueError(tr(f"Не больше {max_len} байт", f"At most {max_len} bytes"))
+        raise ValueError(tr(f"Не больше {max_len} байт", f"At most {max_len} bytes", f"最多 {max_len} 字节"))
     return data
 
 
@@ -58,9 +58,9 @@ def parse_id(text: str) -> tuple[int, bool]:
     try:
         value = int(s, 16)
     except ValueError:
-        raise ValueError(tr("ID — число в hex, например 710", "The ID must be hex, e.g. 710")) from None
+        raise ValueError(tr("ID — число в hex, например 710", "The ID must be hex, e.g. 710", "ID 必须为十六进制数，例如 710")) from None
     if value > 0x1FFFFFFF:
-        raise ValueError(tr("ID больше 0x1FFFFFFF", "The ID is above 0x1FFFFFFF"))
+        raise ValueError(tr("ID больше 0x1FFFFFFF", "The ID is above 0x1FFFFFFF", "ID 超过 0x1FFFFFFF"))
     return value, value > 0x7FF or len(s) > 3
 
 
@@ -75,8 +75,9 @@ def describe_uds(resp: bytes) -> str:
         return tr(
             f"Отказ: сервис 0x{resp[1]:02X}, NRC 0x{resp[2]:02X} {name}",
             f"Negative: service 0x{resp[1]:02X}, NRC 0x{resp[2]:02X} {name}",
+            f"否定响应：服务 0x{resp[1]:02X}，NRC 0x{resp[2]:02X} {name}",
         ).rstrip()
-    text = tr(f"Положительный ответ 0x{resp[0]:02X}", f"Positive response 0x{resp[0]:02X}") if resp else ""
+    text = tr(f"Положительный ответ 0x{resp[0]:02X}", f"Positive response 0x{resp[0]:02X}", f"肯定响应 0x{resp[0]:02X}") if resp else ""
     tail = resp[3:] if resp[:1] == b"\x62" else resp[1:]  # 62 = ReadDataByIdentifier: skip the DID
     if len(tail) >= 4 and sum(0x20 <= b < 0x7F for b in tail) >= 0.8 * len(tail):
         text += f'  "{ascii_preview(tail).strip(".")}"'
@@ -146,7 +147,7 @@ class CanSession(QThread):
 
     def _record(self, kind: str, msg: Any) -> None:
         if getattr(msg, "is_error_frame", False):
-            self._push("error", None, note=tr("Кадр ошибки на шине", "Error frame on the bus"))
+            self._push("error", None, note=tr("Кадр ошибки на шине", "Error frame on the bus", "总线上的错误帧"))
             return
         self._push(kind, msg.arbitration_id, bytes(msg.data), ascii_preview(bytes(msg.data)), msg.is_extended_id)
 
@@ -194,7 +195,7 @@ class CanSession(QThread):
         while not self._stop.is_set():  # a 7F xx 78 chain must not keep a disconnect waiting
             left = deadline - time.monotonic()
             if left <= 0:
-                raise TimeoutError(tr(f"Нет ответа от 0x{rx_id:X} за {timeout:g} с", f"No reply from 0x{rx_id:X} within {timeout:g} s"))
+                raise TimeoutError(tr(f"Нет ответа от 0x{rx_id:X} за {timeout:g} с", f"No reply from 0x{rx_id:X} within {timeout:g} s", f"{timeout:g} 秒内未收到 0x{rx_id:X} 的响应"))
             try:
                 resp = link.receive_uds(timeout=left)
             except TimeoutError:

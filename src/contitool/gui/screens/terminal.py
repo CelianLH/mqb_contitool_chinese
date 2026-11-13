@@ -41,13 +41,13 @@ _HISTORY_MAX = 20
 
 def _uds_presets() -> list[str]:
     return [
-        "10 03  # " + tr("расширенная сессия", "extended session"),
+        "10 03  # " + tr("расширенная сессия", "extended session", "扩展会话"),
         "3E 00  # TesterPresent",
-        "22 F1 87  # " + tr("номер детали", "part number"),
-        "22 F1 89  # " + tr("версия ПО", "software version"),
-        "22 F1 8C  # " + tr("серийный номер", "serial number"),
+        "22 F1 87  # " + tr("номер детали", "part number", "零件号"),
+        "22 F1 89  # " + tr("версия ПО", "software version", "软件版本"),
+        "22 F1 8C  # " + tr("серийный номер", "serial number", "序列号"),
         "22 F1 90  # VIN",
-        "19 02 FF  # " + tr("ошибки (DTC)", "trouble codes (DTC)"),
+        "19 02 FF  # " + tr("ошибки (DTC)", "trouble codes (DTC)", "故障码 (DTC)"),
     ]
 
 
@@ -62,7 +62,7 @@ class TraceModel(QAbstractTableModel):
 
     @staticmethod
     def headers() -> list[str]:
-        return [tr("Время, с", "Time, s"), tr("Тип", "Type"), "ID", "DLC", tr("Данные", "Data"), tr("Примечание", "Note")]
+        return [tr("Время, с", "Time, s", "时间，秒"), tr("Тип", "Type", "类型"), "ID", "DLC", tr("Данные", "Data", "数据"), tr("Примечание", "Note", "备注")]
 
     @staticmethod
     def cells(r: TraceRow) -> list[str]:
@@ -71,7 +71,7 @@ class TraceModel(QAbstractTableModel):
             "tx": "Tx",
             "uds-req": "UDS →",
             "uds-resp": "UDS ←",
-            "error": tr("Ошибка", "Error"),
+            "error": tr("Ошибка", "Error", "错误"),
         }[r.kind]
         ident = "" if r.arb_id is None else (f"{r.arb_id:08X}" if r.extended else f"{r.arb_id:03X}")
         dlc = "" if r.kind == "error" else str(len(r.data))
@@ -351,35 +351,36 @@ class TerminalScreen(QWidget):
 
     # ────────────────────────────── text & state ──────────────────────────────
     def retranslate_ui(self) -> None:
-        self.btn_settings.setText(tr("Адаптер…", "Adapter…"))
+        self.btn_settings.setText(tr("Адаптер…", "Adapter…", "适配器…"))
         for i, br in enumerate(BITRATES):
-            self.cmb_bitrate.setItemText(i, tr(f"{br // 1000} кбит/с", f"{br // 1000} kbit/s"))
-        self.sec_trace.set_text(tr("Трафик", "Traffic"))
-        self.ed_filter.setPlaceholderText(tr("Фильтр ID: 710, 77A или -17F00010", "Filter IDs: 710, 77A or -17F00010"))
+            self.cmb_bitrate.setItemText(i, tr(f"{br // 1000} кбит/с", f"{br // 1000} kbit/s", f"{br // 1000} kbit/s"))
+        self.sec_trace.set_text(tr("Трафик", "Traffic", "流量"))
+        self.ed_filter.setPlaceholderText(tr("Фильтр ID: 710, 77A или -17F00010", "Filter IDs: 710, 77A or -17F00010", "过滤 ID：710、77A 或 -17F00010"))
         self.ed_filter.setToolTip(
             tr(
                 "Через запятую: ID — показывать только их, -ID — скрыть. По умолчанию скрыт 17F00010: "
                 "блок шлёт его каждые 0,5 с.",
                 "Comma-separated: ID shows only those, -ID hides one. 17F00010 is hidden by default: "
                 "the ECU sends it every 0.5 s.",
+                "以逗号分隔：ID 表示仅显示这些，-ID 表示隐藏。默认隐藏 17F00010：模块每 0.5 秒发送一次。",
             )
         )
-        self.act_hide_id.setText(tr("Скрыть этот ID", "Hide this ID"))
-        self.btn_pause.setText(tr("Пауза", "Pause"))
-        self.btn_pause.setToolTip(tr("Не показывать новые кадры; ответы UDS по-прежнему видны", "Stop showing new frames; UDS replies still appear"))
-        self.btn_clear.setText(tr("Очистить", "Clear"))
-        self.btn_save.setText(tr("Сохранить…", "Save…"))
-        self.sec_send.set_text(tr("Отправка", "Send"))
-        self.btn_mode_frame.setText(tr("CAN-кадр", "CAN frame"))
-        self.btn_mode_uds.setText(tr("UDS-запрос", "UDS request"))
+        self.act_hide_id.setText(tr("Скрыть этот ID", "Hide this ID", "隐藏此 ID"))
+        self.btn_pause.setText(tr("Пауза", "Pause", "暂停"))
+        self.btn_pause.setToolTip(tr("Не показывать новые кадры; ответы UDS по-прежнему видны", "Stop showing new frames; UDS replies still appear", "停止显示新帧；UDS 应答仍然可见"))
+        self.btn_clear.setText(tr("Очистить", "Clear", "清空"))
+        self.btn_save.setText(tr("Сохранить…", "Save…", "保存…"))
+        self.sec_send.set_text(tr("Отправка", "Send", "发送"))
+        self.btn_mode_frame.setText(tr("CAN-кадр", "CAN frame", "CAN 帧"))
+        self.btn_mode_uds.setText(tr("UDS-запрос", "UDS request", "UDS 请求"))
         self.lbl_id.setText("ID")
-        self.lbl_data_frame.setText(tr("Данные", "Data"))
-        self.lbl_tx.setText(tr("Запрос", "Request"))
-        self.lbl_rx.setText(tr("Ответ", "Reply"))
-        self.lbl_data_uds.setText(tr("Сервис", "Service"))
+        self.lbl_data_frame.setText(tr("Данные", "Data", "数据"))
+        self.lbl_tx.setText(tr("Запрос", "Request", "请求"))
+        self.lbl_rx.setText(tr("Ответ", "Reply", "应答"))
+        self.lbl_data_uds.setText(tr("Сервис", "Service", "服务"))
         self.cmb_frame.lineEdit().setPlaceholderText("02 10 03")
         self.cmb_uds.lineEdit().setPlaceholderText("22 F1 90")
-        self.btn_send.setText(tr("Отправить", "Send"))
+        self.btn_send.setText(tr("Отправить", "Send", "发送"))
         self.model.retranslate()
         self._load_history(self.cmb_frame, "frame")
         self._load_history(self.cmb_uds, "uds")
@@ -392,27 +393,27 @@ class TerminalScreen(QWidget):
         if self.conn.port or self.conn.title:
             self.lbl_link.setText(self.conn.display())
         else:
-            self.lbl_link.setText(tr("Адаптер не настроен", "Adapter not set up"))
+            self.lbl_link.setText(tr("Адаптер не настроен", "Adapter not set up", "适配器未设置"))
 
     def _apply_state(self) -> None:
         col, text = {
-            "off": (theme.TEXT_MUTED, tr("Отключено", "Disconnected")),
-            "connecting": (theme.INFO, tr("Подключение…", "Connecting…")),
-            "on": (theme.OK, tr("Подключено", "Connected")),
-            "err": (theme.ERR, tr("Ошибка подключения", "Connection failed")),
+            "off": (theme.TEXT_MUTED, tr("Отключено", "Disconnected", "已断开")),
+            "connecting": (theme.INFO, tr("Подключение…", "Connecting…", "连接中…")),
+            "on": (theme.OK, tr("Подключено", "Connected", "已连接")),
+            "err": (theme.ERR, tr("Ошибка подключения", "Connection failed", "连接失败")),
         }[self._state]
         self.lbl_dot.setPixmap(dot_icon(col).pixmap(16, 16))
         self.lbl_state.setText(text)
         self.lbl_state.setToolTip(self._error)
         live = self.session is not None
-        self.btn_connect.setText(tr("Отключиться", "Disconnect") if live else tr("Подключиться", "Connect"))
+        self.btn_connect.setText(tr("Отключиться", "Disconnect", "断开") if live else tr("Подключиться", "Connect", "连接"))
         self.btn_connect.setObjectName("" if live else "PrimaryBtn")
         self.btn_connect.style().unpolish(self.btn_connect)
         self.btn_connect.style().polish(self.btn_connect)
         self.cmb_bitrate.setEnabled(not live)
         self.btn_settings.setEnabled(not live)
         self.btn_send.setEnabled(self._state == "on")
-        self.btn_send.setToolTip("" if self._state == "on" else tr("Сначала подключитесь к адаптеру", "Connect to the adapter first"))
+        self.btn_send.setToolTip("" if self._state == "on" else tr("Сначала подключитесь к адаптеру", "Connect to the adapter first", "请先连接适配器"))
         self._refresh_counts()
 
     def _refresh_counts(self) -> None:
@@ -430,6 +431,7 @@ class TerminalScreen(QWidget):
                     "После # можно писать комментарий.",
                     "The request goes over ISO-TP and the reply is reassembled; “pending” (7F xx 78) is handled for you. "
                     "Text after # is a comment.",
+                    "请求通过 ISO-TP 发送，应答会完整重组；“等待中”(7F xx 78) 会自动处理。# 之后的内容为注释。",
                 )
             )
         else:
@@ -437,6 +439,7 @@ class TerminalScreen(QWidget):
                 tr(
                     "До 8 байт данных. ID длиннее трёх знаков или больше 7FF отправляется как 29-битный.",
                     "Up to 8 data bytes. An ID longer than three digits or above 7FF is sent as 29-bit.",
+                    "最多 8 字节数据。ID 超过三位数或大于 7FF 时按 29 位发送。",
                 )
             )
 
@@ -458,6 +461,7 @@ class TerminalScreen(QWidget):
                 "serviceNotSupportedInActiveSession, сначала отправьте 10 03.",
                 "The request is filled in — connect and press Send. If the ECU replies "
                 "serviceNotSupportedInActiveSession, send 10 03 first.",
+                "请求已填入 — 连接后点击「发送」。如果模块回复 serviceNotSupportedInActiveSession，请先发送 10 03。",
             ),
             "info",
         )
@@ -539,7 +543,7 @@ class TerminalScreen(QWidget):
         self._apply_state()
         if error:
             self._say(error, "err")
-            self.problem.emit(Failure(tr("CAN-терминал", "CAN terminal"), error, started=self._opened_at))
+            self.problem.emit(Failure(tr("CAN-терминал", "CAN terminal", "CAN 终端"), error, started=self._opened_at))
 
     def _drain(self, session: CanSession | None = None) -> None:
         s = session or self.session
@@ -570,24 +574,25 @@ class TerminalScreen(QWidget):
     # ────────────────────────────── actions ──────────────────────────────
     def _send(self) -> None:
         if self.session is None or self._state != "on":
-            self._say(tr("Сначала подключитесь к адаптеру.", "Connect to the adapter first."), "err")
+            self._say(tr("Сначала подключитесь к адаптеру.", "Connect to the adapter first.", "请先连接适配器。"), "err")
             return
         try:
             if self.btn_mode_uds.isChecked():
                 text = self.cmb_uds.currentText().strip()
                 payload = parse_hex(text, 4095)
                 if not payload:
-                    raise ValueError(tr("Введите байты запроса, например 22 F1 90", "Enter the request bytes, e.g. 22 F1 90"))
+                    raise ValueError(tr("Введите байты запроса, например 22 F1 90", "Enter the request bytes, e.g. 22 F1 90", "请输入请求字节，例如 22 F1 90"))
                 tx, _ = parse_id(self.ed_tx.text())
                 rx, _ = parse_id(self.ed_rx.text())
                 if tx > 0x7FF or rx > 0x7FF:  # 0710 stays what it always was here: 11-bit 0x710
                     raise ValueError(tr("UDS-запрос идёт только с 11-битными ID (не больше 7FF); "
                                         "29-битный ID отправьте кадром",
                                         "UDS requests use 11-bit IDs only (at most 7FF); "
-                                        "send a 29-bit ID as a raw frame"))
+                                        "send a 29-bit ID as a raw frame",
+                                        "UDS 请求仅支持 11 位 ID（不超过 7FF）；29 位 ID 请以原始帧发送"))
                 self.session.send_uds(tx, rx, payload)
                 self._remember(self.cmb_uds, "uds", text)
-                self._say(tr("Ждём ответ…", "Waiting for the reply…"), "info")
+                self._say(tr("Ждём ответ…", "Waiting for the reply…", "等待应答…"), "info")
             else:
                 text = self.cmb_frame.currentText().strip()
                 data = parse_hex(text, 8)
@@ -629,7 +634,7 @@ class TerminalScreen(QWidget):
     def _save(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            tr("Сохранить трафик", "Save traffic"),
+            tr("Сохранить трафик", "Save traffic", "保存流量"),
             str(self.conn.out_dir / "can_trace.txt"),
             "Text (*.txt *.log);;All Files (*)",
         )

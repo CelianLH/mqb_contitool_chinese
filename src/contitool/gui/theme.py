@@ -334,6 +334,7 @@ def build_stylesheet() -> str:
     QPushButton#SegBtn:hover {{ color: {TEXT}; }}
     QPushButton#SegBtn:checked {{ background-color: {BG_HOVER}; border-color: {BORDER_STRONG}; color: {TEXT}; }}
     QPushButton#SegBtn[pos="left"] {{ border-top-left-radius: 4px; border-bottom-left-radius: 4px; border-right: none; }}
+    QPushButton#SegBtn[pos="middle"] {{ border-right: none; }}
     QPushButton#SegBtn[pos="right"] {{ border-top-right-radius: 4px; border-bottom-right-radius: 4px; }}
 
     /* ── Inputs ── */

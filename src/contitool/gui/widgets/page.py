@@ -186,7 +186,7 @@ class Dialog(QDialog):
         for w in left:
             self.buttons.addWidget(w)
         self.buttons.addStretch(1)
-        self.buttons.addWidget(button(cancel_text or tr("Отмена", "Cancel"), slot=self.reject))
+        self.buttons.addWidget(button(cancel_text or tr("Отмена", "Cancel", "取消"), slot=self.reject))
         if ok is not None:
             ok.setDefault(True)
             self.buttons.addWidget(ok)
@@ -258,6 +258,6 @@ class TextResultDialog(Dialog):
         self.txt.setFont(mono_font(12))
         self.txt.setMinimumHeight(320)
         self.body.addWidget(self.txt, 1)
-        copy = button(tr("Копировать", "Copy"), slot=lambda: QGuiApplication.clipboard().setText(text))
-        self.finish(copy, *actions, cancel_text=tr("Закрыть", "Close"))
+        copy = button(tr("Копировать", "Copy", "复制"), slot=lambda: QGuiApplication.clipboard().setText(text))
+        self.finish(copy, *actions, cancel_text=tr("Закрыть", "Close", "关闭"))
         self.resize(width, 560)

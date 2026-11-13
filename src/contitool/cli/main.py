@@ -94,7 +94,7 @@ from contitool.i18n import detect_early_cli_lang, normalize_lang_code, set_lang,
 def _cli_lang_type(val: str) -> str:
     norm = normalize_lang_code(val)
     if not norm:
-        raise argparse.ArgumentTypeError("Use 'ru' or 'en'")
+        raise argparse.ArgumentTypeError("Use 'ru', 'en' or 'zh'")
     return norm
 
 
@@ -111,7 +111,7 @@ def _make_cli_display(args: argparse.Namespace) -> CliProgressDisplay:
 def _u32_timestamp(ts: int | None) -> int | None:
     """An FSC holds the time in 32 bits: refuse what would be cut to fit."""
     if ts is not None and not 0 <= ts <= 0xFFFFFFFF:
-        raise ValueError(tr(f"--timestamp вне диапазона 0..0xFFFFFFFF: {ts}", f"--timestamp out of range 0..0xFFFFFFFF: {ts}"))
+        raise ValueError(tr(f"--timestamp вне диапазона 0..0xFFFFFFFF: {ts}", f"--timestamp out of range 0..0xFFFFFFFF: {ts}", f"--timestamp 超出范围 0..0xFFFFFFFF：{ts}"))
     return ts
 
 
@@ -137,6 +137,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
             tr(
                 "Укажите хотя бы один дамп: --cflash, --dflash или --uflash",
                 "Provide at least one dump path: --cflash, --dflash, or --uflash",
+                "至少提供一个转储文件：--cflash、--dflash 或 --uflash",
             )
         )
     st = _out_style(args)
@@ -178,16 +179,17 @@ def _collect_bank_key_updates(
                 tr(
                     "Укажите одновременно --bank и --key (либо используйте --set БАНК=КЛЮЧ)",
                     "Provide both --bank and --key (or use --set BANK=KEY)",
+                    "请同时提供 --bank 和 --key（或使用 --set BANK=KEY）",
                 )
             )
         pairs.append((bank, key))
     for item in set_pairs or []:
         if "=" not in item:
-            raise ValueError(tr(f"Неверный формат --set '{item}', ожидается БАНК=КЛЮЧ", f"Invalid --set '{item}', expected BANK=KEY"))
+            raise ValueError(tr(f"Неверный формат --set '{item}', ожидается БАНК=КЛЮЧ", f"Invalid --set '{item}', expected BANK=KEY", f"--set '{item}' 格式错误，应为 BANK=KEY"))
         b_tok, k_tok = item.split("=", 1)
         pairs.append((b_tok, k_tok))
     if not pairs:
-        raise ValueError(tr("Не указан ни один банк и ключ для записи", "No target bank & key provided"))
+        raise ValueError(tr("Не указан ни один банк и ключ для записи", "No target bank & key provided", "未指定要写入的存储区和密钥"))
 
     updates: list[tuple[SlotSpec, bytes]] = []
     for b_tok, k_tok in pairs:
@@ -200,6 +202,7 @@ def _collect_bank_key_updates(
                     + tr(
                         "(Для принудительной записи добавьте --allow-suspicious-key)",
                         "(Pass --allow-suspicious-key to override)",
+                        "（如需强制写入，请添加 --allow-suspicious-key）",
                     )
                 )
             print(f"⚠ {msg}", file=sys.stderr)
@@ -292,11 +295,11 @@ def cmd_clear_cp_key(args: argparse.Namespace) -> int:
 
 def cmd_patch_engineering(args: argparse.Namespace) -> int:
     if not args.cflash_in and not args.uflash_in:
-        raise ValueError(tr("Укажите --cflash-in и/или --uflash-in", "Specify --cflash-in and/or --uflash-in"))
+        raise ValueError(tr("Укажите --cflash-in и/или --uflash-in", "Specify --cflash-in and/or --uflash-in", "请指定 --cflash-in 和/或 --uflash-in"))
     if args.cflash_in and not args.cflash_out:
-        raise ValueError(tr("Для --cflash-in обязательно укажите --cflash-out", "--cflash-out is required with --cflash-in"))
+        raise ValueError(tr("Для --cflash-in обязательно укажите --cflash-out", "--cflash-out is required with --cflash-in", "--cflash-in 必须同时指定 --cflash-out"))
     if args.uflash_in and not args.uflash_out:
-        raise ValueError(tr("Для --uflash-in обязательно укажите --uflash-out", "--uflash-out is required with --uflash-in"))
+        raise ValueError(tr("Для --uflash-in обязательно укажите --uflash-out", "--uflash-out is required with --uflash-in", "--uflash-in 必须同时指定 --uflash-out"))
 
     disp = _make_cli_display(args)
     rep = disp.create_reporter()
@@ -332,7 +335,8 @@ def _only_with(option: str, used: list[str]) -> None:
     if used:
         names = ", ".join(used)
         raise ValueError(tr(f"Без {option} эти параметры ничего не меняют: {names}",
-                            f"Without {option} these options do nothing: {names}"))
+                            f"Without {option} these options do nothing: {names}",
+                            f"不搭配 {option}，这些参数不起作用：{names}"))
 
 
 def cmd_activate_swap(args: argparse.Namespace) -> int:
@@ -357,12 +361,14 @@ def cmd_activate_swap(args: argparse.Namespace) -> int:
                 tr(
                     "В текущем DataFlash нет валидных датасетов ZDC — список поддерживаемых FeC пуст (укажите --fec явно)",
                     "No valid ZDC datasets found in current DataFlash — supported FeC list is empty (pass --fec explicitly)",
+                    "当前 DataFlash 中没有有效的 ZDC 数据集——支持的 FeC 列表为空（请显式指定 --fec）",
                 )
             )
         raise ValueError(
             tr(
                 "Укажите --fec / --all-supported / --all-gateway и/или --disable / --replace",
                 "Specify --fec / --all-supported / --all-gateway and/or --disable / --replace",
+                "请指定 --fec / --all-supported / --all-gateway 和/或 --disable / --replace",
             )
         )
 
@@ -400,7 +406,7 @@ def cmd_activate_swap(args: argparse.Namespace) -> int:
     out_p.write_bytes(out_df)
     active_hex = ", ".join(summary["active_fecs"]) or "none"
     print(f"✓ DataFlash Multi-FSC -> {out_p} (NvM 0x7C CRC-32: 0x{summary['nvm_7c_crc32']:08X})")
-    print(tr(f"  Активные FeC ({len(summary['active_fecs'])}): {active_hex}", f"  Active FeCs ({len(summary['active_fecs'])}): {active_hex}"))
+    print(tr(f"  Активные FeC ({len(summary['active_fecs'])}): {active_hex}", f"  Active FeCs ({len(summary['active_fecs'])}): {active_hex}", f"  已激活的 FeC（{len(summary['active_fecs'])}）：{active_hex}"))
     return 0
 
 
@@ -411,7 +417,7 @@ def cmd_parameterize(args: argparse.Namespace) -> int:
             ("--console-ring", args.console_ring), ("--mfl-ring", args.mfl_ring)) if v is not None])
     for opt, kmh in (("--mke-speed-on", args.mke_speed_on), ("--mke-speed-off-high", args.mke_speed_off_high)):
         if kmh is not None and not 0 <= kmh <= 255:
-            raise ValueError(tr(f"{opt}: допустимо 0..255 км/ч, указано {kmh}", f"{opt}: allowed 0..255 km/h, given {kmh}"))
+            raise ValueError(tr(f"{opt}: допустимо 0..255 км/ч, указано {kmh}", f"{opt}: allowed 0..255 km/h, given {kmh}", f"{opt}：允许 0..255 km/h，实际为 {kmh}"))
     raw_df = clean_user_path(args.input).read_bytes()
     disp = _make_cli_display(args)
     rep = disp.create_reporter()
@@ -424,7 +430,7 @@ def cmd_parameterize(args: argparse.Namespace) -> int:
         dest = clean_user_path(p_s)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(export_zdc_block(raw_df, idx))
-        print(tr(f"✓ ZDC #{idx} экспортирован -> {dest}", f"✓ Exported ZDC #{idx} -> {dest}"))
+        print(tr(f"✓ ZDC #{idx} экспортирован -> {dest}", f"✓ Exported ZDC #{idx} -> {dest}", f"✓ ZDC #{idx} 已导出 -> {dest}"))
 
     modified = False
     out_df = raw_df
@@ -556,16 +562,17 @@ def cmd_parameterize(args: argparse.Namespace) -> int:
 
     if modified:
         if not args.output:
-            raise ValueError(tr("Укажите выходной файл -o / --output", "Provide -o / --output for modified DataFlash"))
+            raise ValueError(tr("Укажите выходной файл -o / --output", "Provide -o / --output for modified DataFlash", "请指定输出文件 -o / --output"))
         out_p = clean_user_path(args.output)
         out_p.parent.mkdir(parents=True, exist_ok=True)
         out_p.write_bytes(out_df)
-        print(tr(f"✓ DataFlash параметрирован -> {out_p}", f"✓ Parameterized DataFlash -> {out_p}"))
+        print(tr(f"✓ DataFlash параметрирован -> {out_p}", f"✓ Parameterized DataFlash -> {out_p}", f"✓ DataFlash 已参数化 -> {out_p}"))
     elif not args.export_block:
         raise ValueError(
             tr(
                 "Не указано ни одной операции параметризации или экспорта (см. contitool parameterize --help)",
                 "No parameterization or export options specified (see contitool parameterize --help)",
+                "未指定任何参数化或导出操作（参见 contitool parameterize --help）",
             )
         )
     return 0
@@ -585,17 +592,19 @@ def cmd_gen_rsa_key(args: argparse.Namespace) -> int:
 
 def cmd_set_rsa_key(args: argparse.Namespace) -> int:
     if not args.cflash_in and not args.dflash_in:
-        raise ValueError(tr("Укажите --cflash-in и/или --dflash-in", "Provide --cflash-in and/or --dflash-in"))
+        raise ValueError(tr("Укажите --cflash-in и/или --dflash-in", "Provide --cflash-in and/or --dflash-in", "请指定 --cflash-in 和/或 --dflash-in"))
     if args.cflash_in and not args.cflash_out:
-        raise ValueError(tr("Укажите --cflash-out", "Provide --cflash-out"))
+        raise ValueError(tr("Укажите --cflash-out", "Provide --cflash-out", "请指定 --cflash-out"))
     if args.dflash_in and not args.dflash_out:
-        raise ValueError(tr("Укажите --dflash-out", "Provide --dflash-out"))
+        raise ValueError(tr("Укажите --dflash-out", "Provide --dflash-out", "请指定 --dflash-out"))
     if args.dflash_in and args.target == "fbl":
         raise ValueError(tr(
             "--dflash-in: в DataFlash хранится только ключ SWaP, с --target fbl менять там нечего. "
             "Уберите --dflash-in или укажите --target swap / both",
             "--dflash-in: DataFlash holds only the SWaP key, with --target fbl there is nothing to change there. "
             "Leave out --dflash-in or use --target swap / both",
+            "--dflash-in：DataFlash 中只存有 SWaP 密钥，配合 --target fbl 时无需修改。"
+            "请去掉 --dflash-in，或指定 --target swap / both",
         ))
 
     disp = _make_cli_display(args)
@@ -621,6 +630,7 @@ def cmd_set_rsa_key(args: argparse.Namespace) -> int:
             tr(
                 "Укажите --key, --generate-key или --restore-stock",
                 "Specify --key, --generate-key, or --restore-stock",
+                "请指定 --key、--generate-key 或 --restore-stock",
             )
         )
 
@@ -667,6 +677,7 @@ def cmd_sign_fsc(args: argparse.Namespace) -> int:
             tr(
                 "Для подписи нужен приватный ключ RSA-1024 (.json или .private.pem с экспонентой d)!",
                 "Signing requires a private RSA-1024 key (.json or .private.pem containing private exponent d)!",
+                "签名需要 RSA-1024 私钥（.json 或包含私钥指数 d 的 .private.pem）！",
             )
         )
     fec_code = parse_fec_code(args.fec)
@@ -689,6 +700,7 @@ def cmd_sign_fsc(args: argparse.Namespace) -> int:
             tr(
                 "Укажите 5-байтный --vcrn (10 hex-символов) или передайте --dflash для авточтения VCRN!",
                 "Provide 5-byte --vcrn (10 hex chars) or pass --dflash to auto-extract VCRN!",
+                "请提供 5 字节的 --vcrn（10 个十六进制字符），或传入 --dflash 自动读取 VCRN！",
             )
         )
 
@@ -720,6 +732,7 @@ def cmd_sign_odx(args: argparse.Namespace) -> int:
             tr(
                 "Для подписи ODX нужен приватный ключ RSA-1024 (.json или .private.pem)!",
                 "ODX signing requires a private RSA-1024 key (.json or .private.pem)!",
+                "ODX 签名需要 RSA-1024 私钥（.json 或 .private.pem）！",
             )
         )
     disp = _make_cli_display(args)
@@ -747,8 +760,8 @@ def print_dtc_report(records: list[dict]) -> None:
         code, st = int(str(r.get("dtc", "0")), 16), int(str(r.get("status", "0")), 16)
         groups[dtc.group(st)].append((code, st))
     titles = {
-        "active": tr("Активные — неисправность есть сейчас", "Active — failing now"),
-        "stored": tr("Сохранённые — неисправность была", "Stored — failed earlier"),
+        "active": tr("Активные — неисправность есть сейчас", "Active — failing now", "活动——当前存在故障"),
+        "stored": tr("Сохранённые — неисправность была", "Stored — failed earlier", "已存储——曾经发生过故障"),
     }
     for key in ("active", "stored"):
         if not groups[key]:
@@ -758,7 +771,7 @@ def print_dtc_report(records: list[dict]) -> None:
             display, text = dtc.describe(code)
             print(f"  {display or '-':<8} {code:06X}  {text}  [{dtc.status_text(st)}]")
     if not groups["active"] and not groups["stored"]:
-        print(tr("Неисправностей нет.", "No faults."))
+        print(tr("Неисправностей нет.", "No faults.", "无故障。"))
     if groups["untested"]:
         print(
             tr(
@@ -766,6 +779,8 @@ def print_dtc_report(records: list[dict]) -> None:
                 "это не неисправности.",
                 f"{len(groups['untested'])} more checks have not run since codes were cleared — they have no result, "
                 "these are not faults.",
+                f"清除故障码后还有 {len(groups['untested'])} 项检查未执行——它们没有结果，"
+                "并非故障。",
             )
         )
 
@@ -779,21 +794,21 @@ def cmd_can(args: argparse.Namespace) -> int:
         passthru = discover_j2534()
         pdu_apis = dpdu.discover_dpdu()
         if not ports and not passthru and not pdu_apis:
-            print(tr("Адаптеры не обнаружены (USB/COM порты и J2534).", "No adapters detected (USB/COM ports and J2534)."))
+            print(tr("Адаптеры не обнаружены (USB/COM порты и J2534).", "No adapters detected (USB/COM ports and J2534).", "未检测到适配器（USB/COM 端口和 J2534）。"))
             return 0
         for p in ports:
             tag = "★ CAN" if p.is_likely_can else "  USB"
             print(f"{tag}  {p.device:<36}  {p.description}")
         for d in passthru:
-            note = "" if d.usable else tr(f"  [драйвер {d.bits}-бит — не подходит]", f"  [{d.bits}-bit driver — not usable]")
+            note = "" if d.usable else tr(f"  [драйвер {d.bits}-бит — не подходит]", f"  [{d.bits}-bit driver — not usable]", f"  [驱动程序为 {d.bits} 位——不适用]")
             print(f"J2534  {d.name:<36}  {d.dll}{note}")
         if passthru:
-            print(tr('J2534: --interface j2534 --port "<имя>"', 'J2534: --interface j2534 --port "<name>"'))
+            print(tr('J2534: --interface j2534 --port "<имя>"', 'J2534: --interface j2534 --port "<name>"', 'J2534：--interface j2534 --port "<名称>"'))
         for api in pdu_apis:
             note = "" if dpdu.driver_supported(api["version"]) else tr(
-                "  [30+: нестабилен — нужен --allow-dpdu-driver]", "  [30+: unstable — needs --allow-dpdu-driver]",
+                "  [30+: нестабилен — нужен --allow-dpdu-driver]", "  [30+: unstable — needs --allow-dpdu-driver]", "  [30+：不稳定——需要 --allow-dpdu-driver]",
             ) if dpdu.driver_unstable(api["version"]) else tr(
-                "  [версия не проверена — нужен --allow-dpdu-driver]", "  [unverified version — needs --allow-dpdu-driver]")
+                "  [версия не проверена — нужен --allow-dpdu-driver]", "  [unverified version — needs --allow-dpdu-driver]", "  [版本未经检验——需要 --allow-dpdu-driver]")
             print(f"D-PDU  {api['name']:<36}  {api['version'] or '?'}{note}")
         return 0
 
@@ -802,6 +817,7 @@ def cmd_can(args: argparse.Namespace) -> int:
             tr(
                 "Укажите порт адаптера через --port (список портов: contitool can ports)",
                 "Specify adapter port via --port (list available ports with: contitool can ports)",
+                "请通过 --port 指定适配器端口（可用端口列表：contitool can ports）",
             )
         )
 
@@ -818,6 +834,8 @@ def cmd_can(args: argparse.Namespace) -> int:
                 "и стабильного питания +12 В, затем добавьте флаг --yes.",
                 f"Operation '{action}' erases and programs gateway flash. Confirm CAN termination is on (or a 120 Ohm resistor is fitted) "
                 "and stable +12V bench power, then pass --yes.",
+                f"操作“{action}”将擦除并重新刷写网关存储器。请确认已启用 CAN 终端（或接有 120 Ω 电阻）"
+                "且 +12 V 电源稳定，然后添加 --yes 标志。",
             )
         )
 
@@ -832,13 +850,13 @@ def cmd_can(args: argparse.Namespace) -> int:
             print(f"✓ RSA status: {res['rsa_status']} | Session: {res['session_dir']}")
         elif action == "backup":
             ident = can_identify(args.port, interface=args.interface)
-            print(tr("Блок на связи:", "ECU found:"))
+            print(tr("Блок на связи:", "ECU found:", "模块已连接："))
             for item in ident["ident"]:
-                print(f"  {tr(item['label_ru'], item['label_en']):<22} {item['value']}")
+                print(f"  {tr(item['label_ru'], item['label_en'], item.get('label_zh')):<22} {item['value']}")
             if not args.yes and sys.stdin.isatty():
-                answer = input(tr("Продолжить чтение памяти? [y/N] ", "Read the ECU memory? [y/N] ")).strip().lower()
+                answer = input(tr("Продолжить чтение памяти? [y/N] ", "Read the ECU memory? [y/N] ", "是否继续读取存储器？[y/N] ")).strip().lower()
                 if answer not in ("y", "yes", "д", "да"):
-                    print(tr("Отменено.", "Cancelled."))
+                    print(tr("Отменено.", "Cancelled.", "已取消。"))
                     return 1
             res = can_backup(args.port, interface=args.interface, session_dir=session_dir, reporter=rep)
             print(f"✓ Backup folder: {res['session_dir']}")
@@ -848,6 +866,7 @@ def cmd_can(args: argparse.Namespace) -> int:
                     tr(
                         "Для read-mem укажите --address 0x... и --length ЧИСЛО_БАЙТ",
                         "read-mem requires --address 0x... and --length BYTE_COUNT",
+                        "read-mem 需要指定 --address 0x... 和 --length 字节数",
                     )
                 )
             out_bin = (
@@ -865,7 +884,8 @@ def cmd_can(args: argparse.Namespace) -> int:
                 reporter=rep,
             )
             print(tr(f"✓ Дамп памяти ({res['bytes']:,} Б) -> {out_bin} | Сессия: {res['session_dir']}",
-                     f"✓ Memory dump ({res['bytes']:,} B) -> {out_bin} | Session: {res['session_dir']}"))
+                     f"✓ Memory dump ({res['bytes']:,} B) -> {out_bin} | Session: {res['session_dir']}",
+                     f"✓ 内存转储（{res['bytes']:,} B）-> {out_bin} | 会话：{res['session_dir']}"))
         elif action == "health":
             res = can_health_check(
                 args.port,
@@ -874,7 +894,7 @@ def cmd_can(args: argparse.Namespace) -> int:
                 clear_dtc=args.clear_dtc,
                 reporter=rep,
             )
-            print(tr(f"✓ Шлюз на связи | Сессия: {res['session_dir']}", f"✓ Gateway online | Session: {res['session_dir']}"))
+            print(tr(f"✓ Шлюз на связи | Сессия: {res['session_dir']}", f"✓ Gateway online | Session: {res['session_dir']}", f"✓ 网关已连接 | 会话：{res['session_dir']}"))
             print_dtc_report(res.get("dtc_records") or [])
         elif action == "write-uflash":
             in_uf = clean_user_path(args.input) if args.input else None
@@ -894,6 +914,7 @@ def cmd_can(args: argparse.Namespace) -> int:
                     tr(
                         "Для write-dflash укажите -i / --input ПУТЬ_К_DFLASH.bin",
                         "write-dflash requires -i / --input PATH_TO_DFLASH.bin",
+                        "write-dflash 需要 -i / --input 指定 DFLASH.bin 路径",
                     )
                 )
             res = can_write_dflash(
@@ -910,7 +931,7 @@ def cmd_can(args: argparse.Namespace) -> int:
             )
         elif action == "write-cflash":
             if not args.input:
-                raise ValueError(tr("Для write-cflash укажите -i / --input ПУТЬ_К_CFLASH.bin", "write-cflash requires -i / --input PATH_TO_CFLASH.bin"))
+                raise ValueError(tr("Для write-cflash укажите -i / --input ПУТЬ_К_CFLASH.bin", "write-cflash requires -i / --input PATH_TO_CFLASH.bin", "write-cflash 需要 -i / --input 指定 CFLASH.bin 路径"))
             res = can_write_cflash(
                 args.port,
                 clean_user_path(args.input),
@@ -951,6 +972,7 @@ def cmd_can(args: argparse.Namespace) -> int:
                     tr(
                         "Для zdc-upload укажите -i / --input ПУТЬ_К_DFLASH.bin",
                         "zdc-upload requires -i / --input PATH_TO_DFLASH.bin",
+                        "zdc-upload 需要 -i / --input 指定 DFLASH.bin 路径",
                     )
                 )
             res = can_upload_zdc_datasets(
@@ -961,16 +983,18 @@ def cmd_can(args: argparse.Namespace) -> int:
                 reporter=rep,
             )
             print(tr(f"✓ Загружено блоков ZDC: {len(res['uploaded_blocks'])} | Сессия: {res.get('session_dir', session_dir)}",
-                     f"✓ ZDC blocks uploaded ({len(res['uploaded_blocks'])}) | Session: {res.get('session_dir', session_dir)}"))
+                     f"✓ ZDC blocks uploaded ({len(res['uploaded_blocks'])}) | Session: {res.get('session_dir', session_dir)}",
+                     f"✓ 已上传 ZDC 块数：{len(res['uploaded_blocks'])} | 会话：{res.get('session_dir', session_dir)}"))
         elif action == "learn-mfl":
             res = can_learn_mfl_button(args.port, interface=args.interface, reporter=rep)
             if res.get("captured") and res.get("keycode"):
-                print(f"✓ MFL_Tastencode = 0x{int(res['keycode']):02X} ({tr(res.get('label_ru', ''), res.get('label_en', ''))})")
+                print(f"✓ MFL_Tastencode = 0x{int(res['keycode']):02X} ({tr(res.get('label_ru', ''), res.get('label_en', ''), res.get('label_zh', ''))})")
             elif res.get("gra_button_detected"):
                 print(tr("⚠ Нажата кнопка круиз-контроля GRA_Neu / Travel Assist (нет MFL_Tastencode)",
-                         "⚠ GRA_Neu cruise/Travel Assist key detected (no MFL_Tastencode)"))
+                         "⚠ GRA_Neu cruise/Travel Assist key detected (no MFL_Tastencode)",
+                         "⚠ 检测到 GRA_Neu 巡航/Travel Assist 按键（无 MFL_Tastencode）"))
             else:
-                print(tr("⚠ За время ожидания нажатие кнопки руля не обнаружено", "⚠ No MFL button press detected within timeout"))
+                print(tr("⚠ За время ожидания нажатие кнопки руля не обнаружено", "⚠ No MFL button press detected within timeout", "⚠ 等待时间内未检测到方向盘按键按下"))
     finally:
         disp.finish()
     return 0
@@ -982,14 +1006,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         description=tr(
             f"ContiTool v{__version__} — Графическая студия и CLI для шлюзов Continental VAG MQB J533 (RH850/F1L)",
             f"ContiTool v{__version__} — Desktop GUI Studio & CLI for Continental VAG MQB Gateway J533 (RH850/F1L)",
+            f"ContiTool v{__version__} —— 面向 Continental VAG MQB J533（RH850/F1L）网关的桌面 GUI 工作台与 CLI 工具",
         ),
     )
     ap.add_argument("--version", action="version", version=f"ContiTool v{__version__}")
-    ap.add_argument("-l", "--lang", type=_cli_lang_type, choices=("ru", "en"), help=tr("Язык: ru / en", "Language: ru / en"))
-    ap.add_argument("--no-color", action="store_true", help=tr("Отключить ANSI-цвета", "Disable ANSI colors"))
+    ap.add_argument("-l", "--lang", type=_cli_lang_type, choices=("ru", "en", "zh"), help=tr("Язык: ru / en / zh", "Language: ru / en / zh", "语言：ru / en / zh"))
+    ap.add_argument("--no-color", action="store_true", help=tr("Отключить ANSI-цвета", "Disable ANSI colors", "禁用 ANSI 颜色"))
 
     sub_common = argparse.ArgumentParser(add_help=False)
-    sub_common.add_argument("-l", "--lang", type=_cli_lang_type, choices=("ru", "en"), default=argparse.SUPPRESS)
+    sub_common.add_argument("-l", "--lang", type=_cli_lang_type, choices=("ru", "en", "zh"), default=argparse.SUPPRESS)
     sub_common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
 
     sub = ap.add_subparsers(dest="cmd", required=False)
@@ -997,25 +1022,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     def _add(name: str, desc: str) -> argparse.ArgumentParser:
         return sub.add_parser(name, parents=[sub_common], help=desc, description=desc)
 
-    p_gui = _add("gui", tr("Запустить графическую программу ContiTool (по умолчанию без аргументов)", "Launch ContiTool Desktop GUI (default when run without arguments)"))
+    p_gui = _add("gui", tr("Запустить графическую программу ContiTool (по умолчанию без аргументов)", "Launch ContiTool Desktop GUI (default when run without arguments)", "启动 ContiTool 桌面图形界面（不带参数运行时默认执行）"))
     p_gui.set_defaults(func=cmd_gui)
 
-    p_wiz = _add("wizard", tr("Псевдоним для запуска графического интерфейса ContiTool", "Alias to launch ContiTool Desktop GUI"))
+    p_wiz = _add("wizard", tr("Псевдоним для запуска графического интерфейса ContiTool", "Alias to launch ContiTool Desktop GUI", "启动 ContiTool 桌面图形界面的别名"))
     p_wiz.set_defaults(func=cmd_gui)
 
-    p_bnk = _add("banks", tr("Показать справочник всех 12 банков CP и адресов DataFlash", "Show reference table of all 12 CP banks & DataFlash offsets"))
+    p_bnk = _add("banks", tr("Показать справочник всех 12 банков CP и адресов DataFlash", "Show reference table of all 12 CP banks & DataFlash offsets", "显示全部 12 个 CP 存储区及 DataFlash 偏移的参考表"))
     p_bnk.set_defaults(func=cmd_banks)
 
-    p_gde = _add("guide", tr("Показать краткую памятку (программатор 64 КБ, распиновка T20, ключи IKA)", "Show bench reference guide (64 KB programmer rule, T20 pinout, IKA keys)"))
+    p_gde = _add("guide", tr("Показать краткую памятку (программатор 64 КБ, распиновка T20, ключи IKA)", "Show bench reference guide (64 KB programmer rule, T20 pinout, IKA keys)", "显示台架速查备忘（64 KB 编程器规则、T20 引脚定义、IKA 密钥）"))
     p_gde.set_defaults(func=cmd_guide)
 
-    p_ins = _add("inspect", tr("Проверить дампы CodeFlash, DataFlash (12 банков CP + SWaP) и/или Uflash", "Inspect CodeFlash, DataFlash (12 CP banks + SWaP), and/or Uflash dumps"))
-    p_ins.add_argument("--cflash", help=tr("Путь к CodeFlash.bin (1.5 МБ) или FD_0DATA", "Path to CodeFlash.bin (1.5 MB) or FD_0DATA"))
-    p_ins.add_argument("--dflash", help=tr("Путь к DataFlash.bin (64 КБ)", "Path to DataFlash.bin (64 KB)"))
-    p_ins.add_argument("--uflash", help=tr("Путь к Uflash.bin (32 КБ)", "Path to Uflash.bin (32 KB)"))
+    p_ins = _add("inspect", tr("Проверить дампы CodeFlash, DataFlash (12 банков CP + SWaP) и/или Uflash", "Inspect CodeFlash, DataFlash (12 CP banks + SWaP), and/or Uflash dumps", "检查 CodeFlash、DataFlash（12 个 CP 存储区 + SWaP）和/或 Uflash 转储"))
+    p_ins.add_argument("--cflash", help=tr("Путь к CodeFlash.bin (1.5 МБ) или FD_0DATA", "Path to CodeFlash.bin (1.5 MB) or FD_0DATA", "CodeFlash.bin（1.5 MB）或 FD_0DATA 的路径"))
+    p_ins.add_argument("--dflash", help=tr("Путь к DataFlash.bin (64 КБ)", "Path to DataFlash.bin (64 KB)", "DataFlash.bin（64 KB）的路径"))
+    p_ins.add_argument("--uflash", help=tr("Путь к Uflash.bin (32 КБ)", "Path to Uflash.bin (32 KB)", "Uflash.bin（32 KB）的路径"))
     p_ins.set_defaults(func=cmd_inspect)
 
-    p_bcp = _add("bind-cp", tr("Под ключ: пропатчить CodeFlash + записать 16Б ключи IKA в DataFlash", "Turnkey: patch CodeFlash + write 16B IKA keys into DataFlash"))
+    p_bcp = _add("bind-cp", tr("Под ключ: пропатчить CodeFlash + записать 16Б ключи IKA в DataFlash", "Turnkey: patch CodeFlash + write 16B IKA keys into DataFlash", "一键完成：给 CodeFlash 打补丁 + 将 16 字节 IKA 密钥写入 DataFlash"))
     p_bcp.add_argument("--cflash-in", required=True)
     p_bcp.add_argument("--dflash-in", required=True)
     p_bcp.add_argument("--cflash-out", required=True)
@@ -1029,7 +1054,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p_bcp.add_argument("--ignore-input-crc", action="store_true")
     p_bcp.set_defaults(func=cmd_bind_cp)
 
-    p_pat = _add("patch-cflash", tr("Установить гибридный патч KSCHUTZ и пересчитать App CRC-16", "Install hybrid KSCHUTZ CP patch and recalculate App CRC-16"))
+    p_pat = _add("patch-cflash", tr("Установить гибридный патч KSCHUTZ и пересчитать App CRC-16", "Install hybrid KSCHUTZ CP patch and recalculate App CRC-16", "安装 KSCHUTZ 混合 CP 补丁并重新计算 App CRC-16"))
     p_pat.add_argument("-i", "--input", required=True)
     p_pat.add_argument("-o", "--output", required=True)
     mgrp = p_pat.add_mutually_exclusive_group()
@@ -1040,7 +1065,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p_pat.add_argument("--ignore-input-crc", action="store_true")
     p_pat.set_defaults(func=cmd_patch_cflash)
 
-    p_key = _add("set-cp-key", tr("Записать 16-байтный открытый ключ IKA в банк(и) 1..12 DataFlash.bin", "Write 16-byte plaintext IKA key into bank(s) 1..12 of DataFlash.bin"))
+    p_key = _add("set-cp-key", tr("Записать 16-байтный открытый ключ IKA в банк(и) 1..12 DataFlash.bin", "Write 16-byte plaintext IKA key into bank(s) 1..12 of DataFlash.bin", "将 16 字节 IKA 明文密钥写入 DataFlash.bin 的存储区 1..12"))
     p_key.add_argument("-i", "--input", required=True)
     p_key.add_argument("-o", "--output", required=True)
     p_key.add_argument("-b", "-s", "--bank", "--slot", dest="bank")
@@ -1050,14 +1075,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p_key.add_argument("--allow-suspicious-key", action="store_true")
     p_key.set_defaults(func=cmd_set_cp_key)
 
-    p_clr = _add("clear-cp-key", tr("Очистить выбранные банки CP в DataFlash.bin (FF..FF)", "Clear selected CP banks in DataFlash.bin back to FF..FF"))
+    p_clr = _add("clear-cp-key", tr("Очистить выбранные банки CP в DataFlash.bin (FF..FF)", "Clear selected CP banks in DataFlash.bin back to FF..FF", "清除 DataFlash.bin 中选定的 CP 存储区（恢复为 FF..FF）"))
     p_clr.add_argument("-i", "--input", required=True)
     p_clr.add_argument("-o", "--output", required=True)
     p_clr.add_argument("-b", "-s", "--bank", "--slot", dest="banks", nargs="+", required=True)
     p_clr.add_argument("--force-master", action="store_true")
     p_clr.set_defaults(func=cmd_clear_cp_key)
 
-    p_eng = _add("patch-engineering", tr("Инженерный режим (RSA-Free Uflash и/или Feature 0x80/81/83 + CCP в CodeFlash)", "Engineering Mode (RSA-Free Uflash and/or Feature 0x80/81/83 + CCP in CodeFlash)"))
+    p_eng = _add("patch-engineering", tr("Инженерный режим (RSA-Free Uflash и/или Feature 0x80/81/83 + CCP в CodeFlash)", "Engineering Mode (RSA-Free Uflash and/or Feature 0x80/81/83 + CCP in CodeFlash)", "工程模式（无 RSA 校验的 Uflash 和/或 CodeFlash 中的 Feature 0x80/81/83 + CCP）"))
     p_eng.add_argument("-i", "--cflash-in", dest="cflash_in")
     p_eng.add_argument("-o", "--cflash-out", dest="cflash_out")
     p_eng.add_argument("--uflash-in")
@@ -1071,51 +1096,52 @@ def build_arg_parser() -> argparse.ArgumentParser:
         tr(
             "Прямая активация/деактивация функций SWaP FeC в DataFlash (Multi-FSC, без ключей RSA и без патча CodeFlash)",
             "Directly activate/deactivate SWaP FeC features in DataFlash (Multi-FSC, no RSA keys or CodeFlash edits)",
+            "直接在 DataFlash 中激活/停用 SWaP FeC 功能（Multi-FSC，无需 RSA 密钥或修改 CodeFlash）",
         ),
     )
-    p_asw.add_argument("-i", "--input", required=True, help=tr("Путь к входному DataFlash.bin (64 КБ)", "Input DataFlash.bin path (64 KB)"))
-    p_asw.add_argument("-o", "--output", required=True, help=tr("Путь к выходному DataFlash.bin", "Output DataFlash.bin path"))
+    p_asw.add_argument("-i", "--input", required=True, help=tr("Путь к входному DataFlash.bin (64 КБ)", "Input DataFlash.bin path (64 KB)", "输入 DataFlash.bin 路径（64 KB）"))
+    p_asw.add_argument("-o", "--output", required=True, help=tr("Путь к выходному DataFlash.bin", "Output DataFlash.bin path", "输出 DataFlash.bin 路径"))
     p_asw.add_argument(
         "-f",
         "--fec",
         "--enable",
         dest="enable_fecs",
         nargs="+",
-        help=tr("Коды FeC для активации (напр. 10000100 10000300 10001100)", "FeC codes to enable (e.g. 10000100 10000300 10001100)"),
+        help=tr("Коды FeC для активации (напр. 10000100 10000300 10001100)", "FeC codes to enable (e.g. 10000100 10000300 10001100)", "要激活的 FeC 代码（如 10000100 10000300 10001100）"),
     )
     p_asw.add_argument(
         "--disable",
         dest="disable_fecs",
         nargs="+",
-        help=tr("Коды FeC для отключения", "FeC codes to disable"),
+        help=tr("Коды FeC для отключения", "FeC codes to disable", "要停用的 FeC 代码"),
     )
     p_asw.add_argument(
         "--all-supported",
         action="store_true",
-        help=tr("Включить все функции FeC, поддерживаемые текущим датасетом ZDC", "Enable all FeCs supported by current ZDC dataset"),
+        help=tr("Включить все функции FeC, поддерживаемые текущим датасетом ZDC", "Enable all FeCs supported by current ZDC dataset", "启用当前 ZDC 数据集支持的所有 FeC 功能"),
     )
     p_asw.add_argument(
         "--all-gateway",
         action="store_true",
-        help=tr("Включить все 13 стандартных функций шлюза J533", "Enable all 13 standard J533 Gateway FeCs"),
+        help=tr("Включить все 13 стандартных функций шлюза J533", "Enable all 13 standard J533 Gateway FeCs", "启用 J533 网关的全部 13 项标准 FeC 功能"),
     )
     p_asw.add_argument(
         "--replace",
         action="store_true",
-        help=tr("Отключить ранее активные FeC, не вошедшие в список включения", "Deactivate previously active FeCs not in the enabled set"),
+        help=tr("Отключить ранее активные FeC, не вошедшие в список включения", "Deactivate previously active FeCs not in the enabled set", "停用此前已激活但不在启用列表中的 FeC"),
     )
-    p_asw.add_argument("--vin", help=tr("Переопределить 17-символьный VIN в слотах FSC", "Override 17-char VIN in FSC slots"))
-    p_asw.add_argument("--no-vin", action="store_true", help=tr("Не привязывать слоты FSC к VIN (00..00)", "Leave VIN empty (00..00) in FSC slots"))
-    p_asw.add_argument("--timestamp", type=lambda x: int(x, 0), default=None, help=tr("Unix-время для слотов FSC", "Unix timestamp for FSC slots"))
+    p_asw.add_argument("--vin", help=tr("Переопределить 17-символьный VIN в слотах FSC", "Override 17-char VIN in FSC slots", "在 FSC 槽位中覆盖 17 位 VIN"))
+    p_asw.add_argument("--no-vin", action="store_true", help=tr("Не привязывать слоты FSC к VIN (00..00)", "Leave VIN empty (00..00) in FSC slots", "FSC 槽位不绑定 VIN（置为 00..00）"))
+    p_asw.add_argument("--timestamp", type=lambda x: int(x, 0), default=None, help=tr("Unix-время для слотов FSC", "Unix timestamp for FSC slots", "FSC 槽位使用的 Unix 时间戳"))
     p_asw.add_argument(
         "--auto-parameterize",
         action="store_true",
-        help=tr("Автоматически параметрировать ZDC #1 / ZDC #4 под включаемые функции FeC", "Auto-parameterize ZDC #1 / ZDC #4 for enabled FeC features"),
+        help=tr("Автоматически параметрировать ZDC #1 / ZDC #4 под включаемые функции FeC", "Auto-parameterize ZDC #1 / ZDC #4 for enabled FeC features", "根据要启用的 FeC 功能自动参数化 ZDC #1 / ZDC #4"),
     )
     p_asw.add_argument("--fpa-preset", choices=("surgical", "fwd", "fwd_dcc", "awd", "awd_dcc"))
     p_asw.add_argument("--button-mode", choices=("keep", "console", "both", "mfl"))
     p_asw.add_argument("--mfl-key", type=lambda x: int(x, 0))
-    p_asw.add_argument("--kl15-memory", action="store_true", help=tr("Оставлять выбранный профиль после выключения зажигания", "Keep the selected profile after the ignition is off"))
+    p_asw.add_argument("--kl15-memory", action="store_true", help=tr("Оставлять выбранный профиль после выключения зажигания", "Keep the selected profile after the ignition is off", "点火关闭后保留所选驾驶模式"))
     p_asw.set_defaults(func=cmd_activate_swap)
 
     p_par = _add(
@@ -1123,10 +1149,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         tr(
             "Редактирование параметрии ZDC в DataFlash (FPA профили, кнопки MODE+MFL, память Kl.15, MKE, Старт-Стоп, BEM, паспорт)",
             "Edit ZDC parameterization in DataFlash (FPA profiles, MODE+MFL buttons, Kl.15 memory, MKE, Start-Stop, BEM, passport)",
+            "编辑 DataFlash 中的 ZDC 参数（FPA 驾驶模式、MODE+MFL 按键、Kl.15 记忆、MKE、启停、BEM、护照）",
         ),
     )
-    p_par.add_argument("-i", "--input", required=True, help=tr("Входной DataFlash.bin (64 КБ)", "Input DataFlash.bin (64 KB)"))
-    p_par.add_argument("-o", "--output", help=tr("Выходной DataFlash.bin", "Output DataFlash.bin"))
+    p_par.add_argument("-i", "--input", required=True, help=tr("Входной DataFlash.bin (64 КБ)", "Input DataFlash.bin (64 KB)", "输入 DataFlash.bin（64 KB）"))
+    p_par.add_argument("-o", "--output", help=tr("Выходной DataFlash.bin", "Output DataFlash.bin", "输出 DataFlash.bin"))
     p_par.add_argument("--fpa-preset", choices=("fwd", "fwd_dcc", "awd", "awd_dcc", "erase"))
     p_par.add_argument("--fpa-schema", choices=("JC00", "PC00", "NC00"))
     p_par.add_argument("--enable-fpa-slots", type=int, nargs="+")
@@ -1152,11 +1179,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p_par.add_argument("--import-block", action="append", metavar="IDX=PATH")
     p_par.set_defaults(func=cmd_parameterize)
 
-    p_grk = _add("gen-rsa-key", tr("Сгенерировать ключевую пару RSA-1024 (e = 3) в .json + .pem", "Generate RSA-1024 (e = 3) keypair (.json + .pem)"))
+    p_grk = _add("gen-rsa-key", tr("Сгенерировать ключевую пару RSA-1024 (e = 3) в .json + .pem", "Generate RSA-1024 (e = 3) keypair (.json + .pem)", "生成 RSA-1024（e = 3）密钥对（.json + .pem）"))
     p_grk.add_argument("-o", "--output", required=True)
     p_grk.set_defaults(func=cmd_gen_rsa_key)
 
-    p_srk = _add("set-rsa-key", tr("Вшить модуль RSA-1024 (e = 3) в CodeFlash и/или DataFlash NvM 0x7C", "Embed RSA-1024 (e = 3) public modulus into CodeFlash and/or DataFlash NvM 0x7C"))
+    p_srk = _add("set-rsa-key", tr("Вшить модуль RSA-1024 (e = 3) в CodeFlash и/или DataFlash NvM 0x7C", "Embed RSA-1024 (e = 3) public modulus into CodeFlash and/or DataFlash NvM 0x7C", "将 RSA-1024（e = 3）公钥模数写入 CodeFlash 和/或 DataFlash NvM 0x7C"))
     p_srk.add_argument("-k", "--key")
     p_srk.add_argument("--generate-key")
     p_srk.add_argument("--cflash-in")
@@ -1168,7 +1195,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p_srk.add_argument("--ignore-input-crc", action="store_true")
     p_srk.set_defaults(func=cmd_set_rsa_key)
 
-    p_fsc = _add("sign-fsc", tr("Подписать 171-байтный сертификат SWaP FSC v2 (RIPEMD-160 + RSA-1024)", "Sign 171-byte SWaP FSC v2 certificate (RIPEMD-160 + RSA-1024)"))
+    p_fsc = _add("sign-fsc", tr("Подписать 171-байтный сертификат SWaP FSC v2 (RIPEMD-160 + RSA-1024)", "Sign 171-byte SWaP FSC v2 certificate (RIPEMD-160 + RSA-1024)", "签署 171 字节的 SWaP FSC v2 证书（RIPEMD-160 + RSA-1024）"))
     p_fsc.add_argument("-k", "--key", required=True)
     p_fsc.add_argument("--fec", required=True)
     p_fsc.add_argument("--dflash")
@@ -1179,7 +1206,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p_fsc.add_argument("-o", "--output")
     p_fsc.set_defaults(func=cmd_sign_fsc)
 
-    p_odx = _add("sign-odx", tr("Подписать прошивку CodeFlash / FD_0DATA для ODX (<FW-SIGNATURE>)", "Sign CodeFlash / FD_0DATA for ODX (<FW-SIGNATURE>)"))
+    p_odx = _add("sign-odx", tr("Подписать прошивку CodeFlash / FD_0DATA для ODX (<FW-SIGNATURE>)", "Sign CodeFlash / FD_0DATA for ODX (<FW-SIGNATURE>)", "为 ODX 签署 CodeFlash / FD_0DATA 固件（<FW-SIGNATURE>）"))
     p_odx.add_argument("-i", "--input", required=True)
     p_odx.add_argument("-k", "--key", required=True)
     p_odx.add_argument("-o", "--output")
@@ -1187,12 +1214,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p_odx.set_defaults(func=cmd_sign_odx)
 
     iface_choices = tuple(code for code, _, _ in SUPPORTED_CAN_INTERFACES)
-    p_can = _add("can", tr("Работа со шлюзом по Diagnosis CAN (500 кбит/с, нужен CAN-терминатор или резистор 120 Ом)", "Live Diagnosis CAN operations (500 kbit/s, CAN termination or a 120 Ohm resistor required)"))
+    p_can = _add("can", tr("Работа со шлюзом по Diagnosis CAN (500 кбит/с, нужен CAN-терминатор или резистор 120 Ом)", "Live Diagnosis CAN operations (500 kbit/s, CAN termination or a 120 Ohm resistor required)", "通过诊断 CAN 在线操作网关（500 kbit/s，需 CAN 终端或 120 Ω 电阻）"))
     p_can.add_argument(
         "can_action",
         choices=("ports", "verify", "backup", "read-mem", "write-uflash", "write-dflash", "write-cflash", "zdc-upload", "learn-mfl", "health", "turnkey"),
     )
-    p_can.add_argument("--port", help=tr("Порт адаптера (напр. COM4 или /dev/cu.usbmodem...)", "Adapter port (e.g. COM4 or /dev/cu.usbmodem...)"))
+    p_can.add_argument("--port", help=tr("Порт адаптера (напр. COM4 или /dev/cu.usbmodem...)", "Adapter port (e.g. COM4 or /dev/cu.usbmodem...)", "适配器端口（如 COM4 或 /dev/cu.usbmodem...）"))
     p_can.add_argument("--interface", choices=iface_choices, default="slcan")
     p_can.add_argument(
         "-i",
@@ -1201,32 +1228,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--cflash",
         "--uflash",
         dest="input",
-        help=tr("Входной дамп для write-uflash / write-dflash / write-cflash", "Input dump for write-uflash / write-dflash / write-cflash"),
+        help=tr("Входной дамп для write-uflash / write-dflash / write-cflash", "Input dump for write-uflash / write-dflash / write-cflash", "write-uflash / write-dflash / write-cflash 的输入转储文件"),
     )
-    p_can.add_argument("-o", "--output-dir", help=tr("Папка для сохранения бэкапов и отчётов (по умолчанию contitool_runs рядом с программой)", "Base output directory (default: contitool_runs next to the program)"))
-    p_can.add_argument("--address", type=lambda x: int(x, 0), help=tr("Начальный адрес для read-mem (напр. 0xFF200000)", "Start address for read-mem (e.g. 0xFF200000)"))
-    p_can.add_argument("--length", type=lambda x: int(x, 0), help=tr("Длина в байтах для read-mem (напр. 0x10000)", "Byte length for read-mem (e.g. 0x10000)"))
-    p_can.add_argument("--out-file", help=tr("Путь к выходному файлу для read-mem", "Output file path for read-mem"))
-    p_can.add_argument("--restore-stock", action="store_true", help=tr("Вернуть заводскую проверку RSA в write-uflash", "Restore stock RSA check in write-uflash"))
-    p_can.add_argument("--raw-image", action="store_true", help=tr("Записать входной Uflash без автопатча", "Write raw Uflash image without auto-patching"))
-    p_can.add_argument("--full-rewrite", action="store_true", help=tr("Перезаписать все пользовательские блоки DataFlash (для write-dflash)", "Rewrite all user DataFlash blocks (for write-dflash)"))
-    p_can.add_argument("--allow-icus-tail", action="store_true", help=tr("Разрешить запись в область 0xF800..0xFFFF (только при явной необходимости)", "Allow writing DataFlash tail 0xF800..0xFFFF"))
-    p_can.add_argument("--raw-faci", action="store_true", help=tr("Записать все изменённые блоки CodeFlash напрямую через FACI без UDS", "Write all changed CodeFlash blocks directly via FACI without UDS"))
-    p_can.add_argument("--overwrite-selfid", action="store_true", help=tr("Не сохранять родной SELFID процессора при записи бут-сектора 0xAB00", "Allow overwriting MCU SELFID at 0x0000AB00"))
+    p_can.add_argument("-o", "--output-dir", help=tr("Папка для сохранения бэкапов и отчётов (по умолчанию contitool_runs рядом с программой)", "Base output directory (default: contitool_runs next to the program)", "保存备份和报告的基础输出目录（默认：程序旁的 contitool_runs）"))
+    p_can.add_argument("--address", type=lambda x: int(x, 0), help=tr("Начальный адрес для read-mem (напр. 0xFF200000)", "Start address for read-mem (e.g. 0xFF200000)", "read-mem 的起始地址（如 0xFF200000）"))
+    p_can.add_argument("--length", type=lambda x: int(x, 0), help=tr("Длина в байтах для read-mem (напр. 0x10000)", "Byte length for read-mem (e.g. 0x10000)", "read-mem 的字节长度（如 0x10000）"))
+    p_can.add_argument("--out-file", help=tr("Путь к выходному файлу для read-mem", "Output file path for read-mem", "read-mem 的输出文件路径"))
+    p_can.add_argument("--restore-stock", action="store_true", help=tr("Вернуть заводскую проверку RSA в write-uflash", "Restore stock RSA check in write-uflash", "在 write-uflash 中恢复原厂 RSA 校验"))
+    p_can.add_argument("--raw-image", action="store_true", help=tr("Записать входной Uflash без автопатча", "Write raw Uflash image without auto-patching", "直接写入输入 Uflash 镜像，不自动打补丁"))
+    p_can.add_argument("--full-rewrite", action="store_true", help=tr("Перезаписать все пользовательские блоки DataFlash (для write-dflash)", "Rewrite all user DataFlash blocks (for write-dflash)", "重写全部用户 DataFlash 块（用于 write-dflash）"))
+    p_can.add_argument("--allow-icus-tail", action="store_true", help=tr("Разрешить запись в область 0xF800..0xFFFF (только при явной необходимости)", "Allow writing DataFlash tail 0xF800..0xFFFF", "允许写入 DataFlash 尾部 0xF800..0xFFFF"))
+    p_can.add_argument("--raw-faci", action="store_true", help=tr("Записать все изменённые блоки CodeFlash напрямую через FACI без UDS", "Write all changed CodeFlash blocks directly via FACI without UDS", "通过 FACI 直接写入所有已修改的 CodeFlash 块，不经 UDS"))
+    p_can.add_argument("--overwrite-selfid", action="store_true", help=tr("Не сохранять родной SELFID процессора при записи бут-сектора 0xAB00", "Allow overwriting MCU SELFID at 0x0000AB00", "写入 0x0000AB00 引导扇区时允许覆盖 MCU SELFID"))
     p_can.add_argument("--ignore-input-crc", action="store_true")
-    p_can.add_argument("--set", dest="set_pairs", action="append", metavar="BANK=KEY", help=tr("Прописать ключи IKA в DataFlash по CAN (для turnkey)", "Bind IKA keys into DataFlash over CAN (for turnkey)"))
+    p_can.add_argument("--set", dest="set_pairs", action="append", metavar="BANK=KEY", help=tr("Прописать ключи IKA в DataFlash по CAN (для turnkey)", "Bind IKA keys into DataFlash over CAN (for turnkey)", "通过 CAN 将 IKA 密钥绑定到 DataFlash（用于 turnkey）"))
     p_can.add_argument("--force-master", action="store_true")
     p_can.add_argument("--allow-suspicious-key", action="store_true")
-    p_can.add_argument("--clear-dtc", action="store_true", help=tr("Очистить ошибки DTC (для health / turnkey)", "Clear DTCs (for health / turnkey)"))
-    p_can.add_argument("--bypass-eeprom-mask", action="store_true", help=tr("Включить обход маски 95640 (для turnkey)", "Enable 95640 mask bypass (for turnkey)"))
-    p_can.add_argument("--no-cp-patch", action="store_true", help=tr("Не патчить KSCHUTZ CP в turnkey", "Skip KSCHUTZ CP patch in turnkey"))
-    p_can.add_argument("--no-engineering-patch", action="store_true", help=tr("Не патчить Engineering Mode в CodeFlash в turnkey", "Skip CodeFlash Engineering patch in turnkey"))
-    p_can.add_argument("--yes", action="store_true", help=tr("Подтвердить запись во Flash и включённый CAN-терминатор", "Confirm flash erase/write and CAN termination"))
+    p_can.add_argument("--clear-dtc", action="store_true", help=tr("Очистить ошибки DTC (для health / turnkey)", "Clear DTCs (for health / turnkey)", "清除 DTC 故障码（用于 health / turnkey）"))
+    p_can.add_argument("--bypass-eeprom-mask", action="store_true", help=tr("Включить обход маски 95640 (для turnkey)", "Enable 95640 mask bypass (for turnkey)", "启用 95640 掩码绕过（用于 turnkey）"))
+    p_can.add_argument("--no-cp-patch", action="store_true", help=tr("Не патчить KSCHUTZ CP в turnkey", "Skip KSCHUTZ CP patch in turnkey", "在 turnkey 中跳过 KSCHUTZ CP 补丁"))
+    p_can.add_argument("--no-engineering-patch", action="store_true", help=tr("Не патчить Engineering Mode в CodeFlash в turnkey", "Skip CodeFlash Engineering patch in turnkey", "在 turnkey 中跳过 CodeFlash 工程模式补丁"))
+    p_can.add_argument("--yes", action="store_true", help=tr("Подтвердить запись во Flash и включённый CAN-терминатор", "Confirm flash erase/write and CAN termination", "确认擦写 Flash 且已启用 CAN 终端"))
     p_can.add_argument(
         "--allow-dpdu-driver",
         action="store_true",
         help=tr("Разрешить установленный драйвер D-PDU непроверенной версии (он перепрошьёт VCI под себя)",
-                "Allow an unverified installed D-PDU driver version (it reflashes the VCI to its own version)"),
+                "Allow an unverified installed D-PDU driver version (it reflashes the VCI to its own version)",
+                "允许使用版本未经检验的已安装 D-PDU 驱动程序（它会将 VCI 刷写为其自身版本）"),
     )
     p_can.set_defaults(func=cmd_can)
 
@@ -1255,7 +1283,7 @@ def main(argv: list[str] | None = None) -> int:
         print(format_startup_banner(Style(err_color)), file=sys.stderr)
         return args.func(args)
     except (ValueError, RuntimeError, OSError) as exc:
-        print(f"\n✗ {tr('Ошибка', 'Error')}: {exc}", file=sys.stderr)
+        print(f"\n✗ {tr('Ошибка', 'Error', '错误')}: {exc}", file=sys.stderr)
         print(_issue_hint(), file=sys.stderr)
         return 1
     except Exception:  # noqa: BLE001 - an unexpected error: keep the traceback, point at the issue tracker
@@ -1272,6 +1300,8 @@ def _issue_hint() -> str:
         "Приложите журналы операции из папки contitool_runs (без дампов *.bin). В личные сообщения автору не пишите.",
         f"If the cause is unclear, open an issue on GitHub: {ISSUES_PAGE}\n"
         "Attach the operation logs from the contitool_runs folder (not the *.bin dumps). Please do not message the author.",
+        f"如果原因不明，请在 GitHub Issues 上描述问题：{ISSUES_PAGE}\n"
+        "请附上 contitool_runs 文件夹中的操作日志（不要附上 *.bin 转储文件）。请勿私信作者。",
     )
 
 

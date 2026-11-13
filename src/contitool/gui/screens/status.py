@@ -28,7 +28,7 @@ UNKNOWN = "—"
 
 
 def _unknown(need: str) -> State:
-    return State(UNKNOWN, "muted", tr(f"Нужен дамп {need}", f"Requires the {need} dump"), known=False, key="unknown")
+    return State(UNKNOWN, "muted", tr(f"Нужен дамп {need}", f"Requires the {need} dump", f"需要 {need} 转储"), known=False, key="unknown")
 
 
 def component_protection(ws: Workspace) -> State:
@@ -45,25 +45,26 @@ def component_protection(ws: Workspace) -> State:
     )
     if mode == "STOCK":
         return State(
-            tr("заводская", "factory"),
+            tr("заводская", "factory", "原厂"),
             "ok",
             tr(
                 "Адаптированы только заводские модули автомобиля.",
                 "The gateway only works with the vehicle's factory-paired modules.",
+                "网关仅适用于车辆的原厂配对模块。",
             ),
             key="stock",
         )
     if mode in ("HYBRID", "GLOBAL_PLAIN"):
         detail = (
-            tr(f"Заводские модули не затронуты, привязано своих: {bound}.", f"Factory modules untouched, {bound} bound by key.")
+            tr(f"Заводские модули не затронуты, привязано своих: {bound}.", f"Factory modules untouched, {bound} bound by key.", f"原厂模块未受影响，已用密钥绑定：{bound}。")
             if mode == "HYBRID"
-            else tr("Все модули проверяются по открытому ключу.", "All modules are checked against a plaintext key.")
+            else tr("Все модули проверяются по открытому ключу.", "All modules are checked against a plaintext key.", "所有模块均按明文密钥校验。")
         )
-        return State(tr("изменена", "modified"), "info", detail, key="modified")
+        return State(tr("изменена", "modified", "已修改"), "info", detail, key="modified")
     return State(
-        tr("не распознана", "unrecognised"),
+        tr("не распознана", "unrecognised", "未识别"),
         "warn",
-        tr(f"Прошивка содержит неизвестную модификацию ({mode}).", f"The firmware contains an unknown modification ({mode})."),
+        tr(f"Прошивка содержит неизвестную модификацию ({mode}).", f"The firmware contains an unknown modification ({mode}).", f"固件包含未知修改 ({mode})。"),
         key="unknown",
     )
 
@@ -77,19 +78,20 @@ def engineering(ws: Workspace) -> State:
     parts = [c.eng_gate_unlocked, c.ccp_blacklist_bypassed, c.a167_branch_bypassed]
     names = ("Feature 0x80/81/83", "ASAM CCP", "RAM-Loader 0x6F0")
     if all(parts):
-        return State(tr("включён", "on"), "info", ", ".join(names) + ".", key="on")
+        return State(tr("включён", "on", "开启"), "info", ", ".join(names) + ".", key="on")
     if not any(parts):
         return State(
-            tr("выключен", "off"),
+            tr("выключен", "off", "关闭"),
             "ok",
             tr(
                 "Заводское состояние: инженерные службы выключены.",
                 "Factory state: the engineering services are off.",
+                "出厂状态：工程服务已关闭。",
             ),
             key="off",
         )
     on = ", ".join(n for n, p in zip(names, parts, strict=True) if p)
-    return State(tr("частично", "partial"), "warn", tr(f"Включено: {on}.", f"Enabled: {on}."), key="partial")
+    return State(tr("частично", "partial", "部分"), "warn", tr(f"Включено: {on}.", f"Enabled: {on}.", f"已开启：{on}。"), key="partial")
 
 
 def bootloader(ws: Workspace) -> State:
@@ -100,25 +102,26 @@ def bootloader(ws: Workspace) -> State:
     u = inf.uflash_info
     if not u.signature_found:
         return State(
-            tr("не распознан", "unrecognised"),
+            tr("не распознан", "unrecognised", "未识别"),
             "warn",
-            tr("Сигнатура загрузчика не найдена по известному адресу.", "The bootloader signature is not at the known address."),
+            tr("Сигнатура загрузчика не найдена по известному адресу.", "The bootloader signature is not at the known address.", "在已知地址未找到引导加载程序签名。"),
             key="unknown",
         )
     if u.rsa_bypassed:
         return State(
-            tr("инженерный", "engineering"),
+            tr("инженерный", "engineering", "工程"),
             "info",
             tr(
                 "Подпись VAG не проверяется — изменённый CodeFlash записывается по CAN.",
                 "The VAG signature is not checked — a modified CodeFlash can be written over CAN.",
+                "不校验 VAG 签名 — 可通过 CAN 写入修改过的 CodeFlash。",
             ),
             key="open",
         )
     return State(
-        tr("заводской", "factory"),
+        tr("заводской", "factory", "原厂"),
         "ok",
-        tr("Принимается только CodeFlash с подписью VAG.", "Only CodeFlash signed by VAG is accepted."),
+        tr("Принимается только CodeFlash с подписью VAG.", "Only CodeFlash signed by VAG is accepted.", "仅接受带 VAG 签名的 CodeFlash。"),
         key="stock",
     )
 
@@ -130,8 +133,8 @@ def _key(ws: Workspace, which: str) -> State:
     c = inf.cflash_info
     mod, stock = (c.swap_rsa_mod, STOCK_SWAP_MODULUS) if which == "swap" else (c.fbl_rsa_mod, STOCK_FBL_MODULUS)
     if not mod or mod == stock:
-        return State(tr("заводской VAG", "factory VAG"), "ok", key="stock")
-    return State(tr("свой", "custom"), "info", tr(f"Модуль {mod[:6].hex().upper()}…", f"Modulus {mod[:6].hex().upper()}…"), key="custom")
+        return State(tr("заводской VAG", "factory VAG", "原厂 VAG"), "ok", key="stock")
+    return State(tr("свой", "custom", "自定义"), "info", tr(f"Модуль {mod[:6].hex().upper()}…", f"Modulus {mod[:6].hex().upper()}…", f"模数 {mod[:6].hex().upper()}…"), key="custom")
 
 
 def swap_key(ws: Workspace) -> State:
@@ -150,8 +153,8 @@ def active_features(ws: Workspace) -> list[tuple[str, str, bool]]:
 
 
 def fec_name(code: int) -> str:
-    ru, en = KNOWN_GATEWAY_FECS.get(code, ("Неизвестная функция", "Unknown feature"))
-    return tr(ru, en).replace(f" (0x{code:08X})", "")
+    ru, en, zh = KNOWN_GATEWAY_FECS.get(code, ("Неизвестная функция", "Unknown feature", "未知功能"))
+    return tr(ru, en, zh).replace(f" (0x{code:08X})", "")
 
 
 def active_features_detailed(ws: Workspace) -> list[tuple[int, str, str, bool, bool]]:
@@ -168,23 +171,23 @@ def active_features_detailed(ws: Workspace) -> list[tuple[int, str, str, bool, b
 
 # Status bits of one feature in UDS 22 3C 00 (VW SWaP): 0xFF = active, 0xB0 = supported but no certificate
 _SWAP_CHECKS = (
-    (0x02, "сторнирована", "cancelled"),
-    (0x04, "сертификат выпущен для другого блока (VCRN)", "the certificate is for another ECU (VCRN)"),
-    (0x08, "истёк срок или не выполнено условие действия", "expired or its validity condition is not met"),
-    (0x10, "не подходит к конфигурации блока", "does not fit the ECU configuration"),
-    (0x20, "этой функции нет в прошивке", "this firmware has no such feature"),
-    (0x40, "подпись сертификата не прошла проверку", "the certificate signature check failed"),
+    (0x02, "сторнирована", "cancelled", "已取消"),
+    (0x04, "сертификат выпущен для другого блока (VCRN)", "the certificate is for another ECU (VCRN)", "证书签发给另一模块 (VCRN)"),
+    (0x08, "истёк срок или не выполнено условие действия", "expired or its validity condition is not met", "已过期或未满足生效条件"),
+    (0x10, "не подходит к конфигурации блока", "does not fit the ECU configuration", "与模块配置不匹配"),
+    (0x20, "этой функции нет в прошивке", "this firmware has no such feature", "固件中无此功能"),
+    (0x40, "подпись сертификата не прошла проверку", "the certificate signature check failed", "证书签名校验失败"),
 )
 
 
 def swap_live_state(st: int) -> State:
     """What the gateway's own status byte for one feature means; `detail` lists the failed checks."""
     if st & SWAP_STATUS_ACTIVE == SWAP_STATUS_ACTIVE:  # the gateway's own test (IsFecActive)
-        return State(tr("активна", "active"), "ok", key="on")
+        return State(tr("активна", "active", "已激活"), "ok", key="on")
     if not st & 0x01:
-        return State(tr("не активирована", "not activated"), "muted", key="off")
-    why = "; ".join(tr(ru, en) for bit, ru, en in _SWAP_CHECKS if not st & bit)
-    return State(tr("не принята", "rejected"), "err", why, key="err")
+        return State(tr("не активирована", "not activated", "未激活"), "muted", key="off")
+    why = "; ".join(tr(ru, en, zh) for bit, ru, en, zh in _SWAP_CHECKS if not st & bit)
+    return State(tr("не принята", "rejected", "已拒绝"), "err", why, key="err")
 
 
 def swap_live_summary(features: list[dict], ws: Workspace) -> State:
@@ -196,12 +199,12 @@ def swap_live_summary(features: list[dict], ws: Workspace) -> State:
     missing = rejected + sorted(expected - active - set(rejected))
     if missing:
         names = ", ".join(fec_name(c) for c in missing)
-        return State(tr(f"Блок не принял: {names}", f"The ECU did not accept: {names}"), "err", key="err")
+        return State(tr(f"Блок не принял: {names}", f"The ECU did not accept: {names}", f"模块未接受：{names}"), "err", key="err")
     if not active:
-        return State(tr("Активных функций в блоке нет", "No features are active in the ECU"), "muted", key="off")
-    text = tr(f"Активно в блоке: {len(active)}", f"Active in the ECU: {len(active)}")
+        return State(tr("Активных функций в блоке нет", "No features are active in the ECU", "模块中没有激活的功能"), "muted", key="off")
+    text = tr(f"Активно в блоке: {len(active)}", f"Active in the ECU: {len(active)}", f"模块中已激活：{len(active)}")
     if expected:
-        text += tr(" — всё, что записано в DataFlash, принято", " — everything in DataFlash was accepted")
+        text += tr(" — всё, что записано в DataFlash, принято", " — everything in DataFlash was accepted", " — DataFlash 中记录的内容均已接受")
     return State(text, "ok", key="on")
 
 
@@ -243,16 +246,16 @@ def dataset_state(ws: Workspace) -> State:
     ds = inf.dflash_datasets
     if not ds.has_any_valid_dataset:
         return State(
-            tr("датасет пуст", "dataset empty"),
+            tr("датасет пуст", "dataset empty", "数据集为空"),
             "warn",
-            tr("Параметрия ZDC в DataFlash не записана.", "No ZDC dataset flashed in DataFlash."),
+            tr("Параметрия ZDC в DataFlash не записана.", "No ZDC dataset flashed in DataFlash.", "DataFlash 中未刷写 ZDC 数据集。"),
             key="off",
         )
-    label = ds.dataset_pn or ds.maingw_tag or tr("датасет ОК", "dataset OK")
+    label = ds.dataset_pn or ds.maingw_tag or tr("датасет ОК", "dataset OK", "数据集正常")
     return State(
         label,
         "ok",
-        tr(f"Поддерживается FeC: {len(ds.supported_fecs)}.", f"{len(ds.supported_fecs)} FeCs supported."),
+        tr(f"Поддерживается FeC: {len(ds.supported_fecs)}.", f"{len(ds.supported_fecs)} FeCs supported.", f"支持 {len(ds.supported_fecs)} 个 FeC。"),
         key="on",
     )
 
@@ -266,33 +269,36 @@ def parameterization(ws: Workspace) -> State:
     valid_cnt = sum(1 for b in ds.blocks if b.crc_ok)
     if not ds.has_any_valid_dataset:
         return State(
-            tr("пусто", "empty"),
+            tr("пусто", "empty", "空"),
             "warn",
             tr(
                 "Параметрия в этом дампе не настроена. Её можно создать по шаблону автомобиля.",
                 "This dump has no parameterization yet. It can be created from a car template.",
+                "该转储尚未配置参数化。可根据车辆模板创建。",
             ),
             key="off",
         )
     unsup = unsupported_active_fecs(ws)
     if unsup:
         return State(
-            tr("нужна настройка", "needs setup"),
+            tr("нужна настройка", "needs setup", "需要设置"),
             "warn",
             tr(
                 f"Для части включённых FEC ({len(unsup)}) в параметрии нет данных. Кнопка ниже их добавит.",
                 f"The parameterization has no data for some enabled FECs ({len(unsup)}). The button below adds "
                 "them.",
+                f"部分已启用的 FEC ({len(unsup)}) 在参数化中没有数据。下方按钮将添加这些数据。",
             ),
             key="warn",
         )
-    label = ds.dataset_pn or tr("настроено", "configured")
+    label = ds.dataset_pn or tr("настроено", "configured", "已配置")
     return State(
         label,
         "ok",
         tr(
             f"Настроено разделов параметрии: {valid_cnt} из 7.",
             f"Configured parameterization sections: {valid_cnt} of 7.",
+            f"已配置的参数化分区：{valid_cnt} / 7。",
         ),
         key="on",
     )
@@ -306,20 +312,20 @@ def swap_features(ws: Workspace) -> State:
     sw = inf.dflash_swap
     if not sw.initialized:
         return State(
-            tr("не настроены", "not set up"),
+            tr("не настроены", "not set up", "未设置"),
             "muted",
-            tr("Область SWaP в DataFlash пуста.", "The SWaP area in DataFlash is empty."),
+            tr("Область SWaP в DataFlash пуста.", "The SWaP area in DataFlash is empty.", "DataFlash 中的 SWaP 区域为空。"),
             key="off",
         )
     active = len(sw.active_fscs)
     if not active:
         return State(
-            tr("нет активных", "none active"),
+            tr("нет активных", "none active", "无激活项"),
             "muted",
-            tr(f"Свободных слотов: {sw.free_slots}.", f"{sw.free_slots} free slots."),
+            tr(f"Свободных слотов: {sw.free_slots}.", f"{sw.free_slots} free slots.", f"空闲槽位：{sw.free_slots}。"),
             key="off",
         )
-    return State(tr(f"активно: {active}", f"{active} active"), "info", key="on")
+    return State(tr(f"активно: {active}", f"{active} active", f"已激活：{active}"), "info", key="on")
 
 
 def passport_rows(ws: Workspace) -> list[tuple[str, str, str]]:
@@ -329,14 +335,14 @@ def passport_rows(ws: Workspace) -> list[tuple[str, str, str]]:
     if cf and cf.cflash_info:
         c = cf.cflash_info
         if c.sw_ver:
-            rows.append((tr("Версия ПО", "Software"), c.sw_ver, "muted"))
+            rows.append((tr("Версия ПО", "Software", "软件"), c.sw_ver, "muted"))
         if c.hw_ver:
-            rows.append((tr("Оборудование", "Hardware"), c.hw_ver, "muted"))
+            rows.append((tr("Оборудование", "Hardware", "硬件"), c.hw_ver, "muted"))
         rows.append(
             (
-                tr("Контрольная сумма", "Checksum"),
-                tr("верна", "valid") if c.crc_ok else tr("не сходится", "mismatch") if c.crc_range_count
-                else tr("нет таблицы CRC: приложение стёрто или повреждено", "no CRC table: application erased or damaged"),
+                tr("Контрольная сумма", "Checksum", "校验和"),
+                tr("верна", "valid", "正确") if c.crc_ok else tr("не сходится", "mismatch", "不匹配") if c.crc_range_count
+                else tr("нет таблицы CRC: приложение стёрто или повреждено", "no CRC table: application erased or damaged", "无 CRC 表：应用已擦除或损坏"),
                 "ok" if c.crc_ok else "err",
             )
         )

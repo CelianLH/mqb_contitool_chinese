@@ -32,8 +32,10 @@ class DumpFileSelector(QFrame):
         *,
         title_ru: str,
         title_en: str,
+        title_zh: str | None = None,
         hint_ru: str = "",
         hint_en: str = "",
+        hint_zh: str | None = None,
         expected_kinds: tuple[str, ...] | None = None,
         dialog_filter: str = "Binary & Key Files (*.bin *.raw *.fsc *.json *.pem);;All Files (*)",
         parent: QWidget | None = None,
@@ -42,8 +44,10 @@ class DumpFileSelector(QFrame):
         self.setAcceptDrops(True)
         self._title_ru = title_ru
         self._title_en = title_en
+        self._title_zh = title_zh
         self._hint_ru = hint_ru
         self._hint_en = hint_en
+        self._hint_zh = hint_zh
         self._expected_kinds = expected_kinds
         self._dialog_filter = dialog_filter
         self._detected: DetectedDumpFile | None = None
@@ -90,12 +94,12 @@ class DumpFileSelector(QFrame):
         self.retranslate_ui()
 
     def retranslate_ui(self) -> None:
-        self.lbl_title.setText(tr(self._title_ru, self._title_en))
-        self.lbl_hint.setText(tr(self._hint_ru, self._hint_en))
-        self.lbl_hint.setVisible(bool(self._hint_ru or self._hint_en))
-        self.ed_path.setPlaceholderText(tr("Перетащите файл или выберите…", "Drop a file or browse…"))
-        self.btn_browse.setText(tr("Обзор…", "Browse…"))
-        self.btn_clear.setToolTip(tr("Очистить", "Clear"))
+        self.lbl_title.setText(tr(self._title_ru, self._title_en, self._title_zh))
+        self.lbl_hint.setText(tr(self._hint_ru, self._hint_en, self._hint_zh))
+        self.lbl_hint.setVisible(bool(self._hint_ru or self._hint_en or self._hint_zh))
+        self.ed_path.setPlaceholderText(tr("Перетащите файл или выберите…", "Drop a file or browse…", "拖入文件或浏览…"))
+        self.btn_browse.setText(tr("Обзор…", "Browse…", "浏览…"))
+        self.btn_clear.setToolTip(tr("Очистить", "Clear", "清空"))
         self._refresh_badge()
 
     @property
@@ -132,7 +136,7 @@ class DumpFileSelector(QFrame):
         start_dir = str(self.current_path.parent) if self.current_path else str(Path.cwd())
         chosen, _ = QFileDialog.getOpenFileName(
             self,
-            tr(self._title_ru, self._title_en),
+            tr(self._title_ru, self._title_en, self._title_zh),
             start_dir,
             self._dialog_filter,
         )
@@ -156,7 +160,7 @@ class DumpFileSelector(QFrame):
         det = self._detected
         if det is None:
             set_tone(self.lbl_badge, "muted")
-            self.lbl_badge.setText(tr("Файл не выбран", "No file selected"))
+            self.lbl_badge.setText(tr("Файл не выбран", "No file selected", "未选择文件"))
         elif not det.valid:
             set_tone(self.lbl_badge, "err")
             self.lbl_badge.setText(f"✗  {det.summary_text}")
@@ -167,6 +171,7 @@ class DumpFileSelector(QFrame):
                 tr(
                     f"✗  Не тот тип файла ({det.summary_text}). Ожидается: {exp_str}",
                     f"✗  Wrong file type ({det.summary_text}). Expected: {exp_str}",
+                    f"✗  文件类型不正确（{det.summary_text}）。应为：{exp_str}",
                 )
             )
         else:

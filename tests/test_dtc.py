@@ -38,9 +38,9 @@ def test_codes_resolve_to_odis_display_codes_and_descriptions() -> None:
 
 def test_table_entries_are_complete() -> None:
     assert len(J533_DTCS) >= 200
-    for code, (display, ru, en) in J533_DTCS.items():
+    for code, (display, ru, en, zh) in J533_DTCS.items():
         assert 0 <= code <= 0xFFFFFF
-        assert ru.strip() and en.strip(), f"{code:06X} has an empty description"
+        assert ru.strip() and en.strip() and zh.strip(), f"{code:06X} has an empty description"
         for part in filter(None, display.split(" / ")):
             assert re.fullmatch(r"[PCBU][0-9A-F]{6}", part), f"{code:06X}: odd display code {part!r}"
 

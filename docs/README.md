@@ -49,3 +49,25 @@ This directory contains concrete, byte-accurate engineering documentation for th
    - Exact `Feature 0x80/0x81/0x83`, `ASAM CCP` blacklist, and `0x0000A167` patch sites.
    - `10 40` / `10 4F` UDS sessions, `SecurityAccess Level 3` (`27 03 / 27 04` with both VAG login `20103 = 0x00004E87` and `0xCAFFE012`), `ASAM CCP v2.1` (`0x1BFC8600 / 0x1BFC8601`), full-block `ZDC` dataset upload with per-block `02EF`, guided `DataFlash` `SWaP` activation (`can_activate_swap`), and automatic `0x0600` coding sync.
    - `RSA-1024 (e = 3)` key generation, synchronized `CodeFlash` + `DataFlash NvM 0x7C` modulus replacement, 171-byte `VAG SWaP FSC v2` (`RIPEMD-160`) signing & OBD activation, and `ODX` `<FW-SIGNATURE>` (`SHA-1`) signing.
+
+---
+
+## 中文文档 (ZH)
+
+1. **[J533 实时诊断 CAN 读写机制（`can-read-write.zh.md`）](can-read-write.zh.md)**
+   - 在 `J533 T20` 上的台架接线（`Pin 19 = Diag CAN-H`，`Pin 9 = Diag CAN-L`，`120 Ω`，`500 kbit/s`），CAN ID `0x710/0x77A` 与 `0x6F0/0x6F1`，`RH850/F1L` 存储映射，以及受支持的 `3Q0` Continental（`RH850/F1L`）与不受支持的 `5Q0` Continental、`Lear`（`NXP PowerPC MPC5607B / MPC5748G`）平台。
+   - 进入工厂 Stage-2 `CAN RAM-Loader`（`0x0100120E`）：两阶段 `0x22` 溢出（`0xFEDE0B18`，`330` B → `0xFEDE0C62..69`）、`0x0100120E` 描述符 + `F15B` 填充、Stage 1 静默的根因分析与零序列号 UDS 治愈方案（`can_cure_fbl_fingerprint`）。
+   - 看门狗喂狗的 `FED_READER`（`64 KB` 批量，`~61 s` 完整 `Cflash` 转储）、确定性的 `FACI Blank Check` `DataFlash` 读取器（`DFLASH_READER_STUB`）与安全取消（`_hand_back_after_cancel`）。
+   - 原生 RAM `FACI` 驱动：`Uflash`（`32 KB`）、差分 `DataFlash`（`64 KB`）、`CodeFlash` 引导块（`0x0000..0xBFFF`、`Block 4` `"NIGB"`、`--raw-faci`）。
+   - 标准 `ISO 14229 UDS` `FD_0DATA` 刷写、卡在 `FBL` 的网关恢复（`can_restore_backup`），以及 `VAS 6154 / VNCI`（`D-PDU`）与 `J2534` 上的硬件 `ISO-TP`。
+2. **[部件保护（`KSCHUTZ` `#MoLaLi`）与 CAN/UDS 协议（`component-protection.zh.md`）](component-protection.zh.md)**
+   - `KSCHUTZ` 与硬件 `ICUS0` 架构、12 个从属存储区与主密钥 `GFA`（`0xDA00`）、从属 `K3`（`IKA`）的来源。
+   - 38 字节 `CodeFlash` 混合跳板（`0x0016FF80`）与外部 `ST M95640` SPI EEPROM 位掩码绕过。
+   - 完整的 12 存储区 CP 参考表、64 KB `DataFlash.bin` 存储映射、`R7F7010543`（`64 KB`）台架编程器规则。
+   - 运行时 4 消息 `80 01 → C0 01 → 80 02 → C0 02` `AES-128-ECB` 握手、`0x6B4` `VIN_01` 多路复用帧、两步从属 ECU UDS 密钥适配（`2E 00 BE → 2E 00 BD`）。
+3. **[工程模式、服务协议与 `RSA-1024` / `SWaP` / `ODX` 密码学（`engineering-and-swap.zh.md`）](engineering-and-swap.zh.md)**
+   - 精确的 `Feature 0x80/0x81/0x83`、`ASAM CCP` 黑名单与 `0x0000A167` 补丁点。
+   - `10 40` / `10 4F` UDS 会话、`SecurityAccess Level 3`（`27 03 / 27 04`）、`ASAM CCP v2.1`、整块 `ZDC` 数据集上传、引导式 `DataFlash` `SWaP` 激活（`can_activate_swap`）、自动 `0x0600` 编码同步。
+   - `RSA-1024 (e = 3)` 密钥生成、同步的 `CodeFlash` + `DataFlash NvM 0x7C` 模数替换、171 字节 `VAG SWaP FSC v2`（`RIPEMD-160`）签名与 OBD 激活、`ODX` `<FW-SIGNATURE>`（`SHA-1`）签名。
+
+> 完整中文索引见 [`README.zh.md`](README.zh.md)。

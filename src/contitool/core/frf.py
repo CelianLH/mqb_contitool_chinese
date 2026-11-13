@@ -67,12 +67,13 @@ def _local(tag: str) -> str:
 def read_frf(data: bytes) -> FrfImage:
     """Decrypt and check an FRF for the J533 gateway; raises ValueError with the reason when it is not one."""
     if len(data) > FRF_MAX_BYTES:
-        raise ValueError(tr(f"Файл слишком велик для FRF шлюза: {len(data):,} Б", f"Too large for a gateway FRF: {len(data):,} B"))
+        raise ValueError(tr(f"Файл слишком велик для FRF шлюза: {len(data):,} Б", f"Too large for a gateway FRF: {len(data):,} B", f"文件对于网关 FRF 来说过大：{len(data):,} 字节"))
     ks = _keystream()
     if len(data) > len(ks):
         raise ValueError(tr(
             f"FRF длиннее известного ключевого потока ({len(data):,} > {len(ks):,} Б) — такой ContiTool не расшифрует",
             f"The FRF is longer than the known keystream ({len(data):,} > {len(ks):,} B) — ContiTool cannot decrypt it",
+            f"FRF 比已知的密钥流更长（{len(data):,} > {len(ks):,} 字节）——ContiTool 无法解密该文件",
         ))
     plain = bytes(a ^ b for a, b in zip(data, ks))
     try:
@@ -80,19 +81,19 @@ def read_frf(data: bytes) -> FrfImage:
         odx_name = next(n for n in zf.namelist() if n.lower().endswith(".odx"))
         root = ET.fromstring(zf.read(odx_name))  # noqa: S314 - a file the user picked; no entities are resolved
     except (zipfile.BadZipFile, StopIteration, ET.ParseError, KeyError, zlib.error) as exc:
-        raise ValueError(tr("Это не FRF ODIS или он повреждён", "Not an ODIS FRF, or it is damaged")) from exc
+        raise ValueError(tr("Это не FRF ODIS или он повреждён", "Not an ODIS FRF, or it is damaged", "这不是 ODIS FRF，或者文件已损坏")) from exc
     return _from_odx(root, odx_name.rsplit("/", 1)[-1].rsplit(".", 1)[0], "FRF")
 
 
 def read_odx(data: bytes, name: str = "") -> FrfImage:
     """The same flash container without the FRF wrapping: a plain ODX-F file (FL_..._S.odx). `name`: its file name."""
     if len(data) > FRF_MAX_BYTES:
-        raise ValueError(tr(f"Файл слишком велик для ODX шлюза: {len(data):,} Б", f"Too large for a gateway ODX: {len(data):,} B"))
+        raise ValueError(tr(f"Файл слишком велик для ODX шлюза: {len(data):,} Б", f"Too large for a gateway ODX: {len(data):,} B", f"文件对于网关 ODX 来说过大：{len(data):,} 字节"))
     try:
         # a BOM or a blank line before <?xml is common in hand-copied files and harmless, but expat refuses it
         root = ET.fromstring(data.lstrip(_XML_LEAD))  # noqa: S314 - a file the user picked; no entities are resolved
     except ET.ParseError as exc:
-        raise ValueError(tr("Это не ODX или он повреждён", "Not an ODX file, or it is damaged")) from exc
+        raise ValueError(tr("Это не ODX или он повреждён", "Not an ODX file, or it is damaged", "这不是 ODX 文件，或者文件已损坏")) from exc
     return _from_odx(root, name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].rsplit(".", 1)[0], "ODX")
 
 
@@ -112,12 +113,13 @@ def _from_odx(root: ET.Element, name: str, kind: str) -> FrfImage:
             method = next((c.text for c in el if _local(c.tag) == "ENCRYPT-COMPRESS-METHOD"), "00")
             if (method or "00").strip() != "00":
                 raise ValueError(tr(f"Данные {kind} сжаты или зашифрованы (метод {method}) — не поддерживается",
-                                    f"The {kind} data is compressed or encrypted (method {method}) — not supported"))
+                                    f"The {kind} data is compressed or encrypted (method {method}) — not supported",
+                                    f"{kind} 数据已被压缩或加密（方法 {method}）——不受支持"))
             hex_text = next((c.text for c in el if _local(c.tag) == "DATA"), "") or ""
             try:
                 app = bytes.fromhex("".join(hex_text.split()))
             except ValueError as exc:
-                raise ValueError(tr(f"Данные приложения в {kind} повреждены", f"The {kind} application data is damaged")) from exc
+                raise ValueError(tr(f"Данные приложения в {kind} повреждены", f"The {kind} application data is damaged", f"{kind} 中的应用程序数据已损坏")) from exc
         elif tag == "SECURITY":
             method = next((c.text or "" for c in el if _local(c.tag) == "SECURITY-METHOD"), "")
             sig = next((c.text or "" for c in el if _local(c.tag) == "FW-SIGNATURE"), "")
@@ -135,14 +137,17 @@ def _from_odx(root: ET.Element, name: str, kind: str) -> FrfImage:
 
     if app is None or len(app) != APP_SIZE_FRF:
         raise ValueError(tr(f"В {kind} нет приложения шлюза J533 (FD_0DATA, 1 523 200 Б с 0xC200)",
-                            f"The {kind} has no J533 gateway application (FD_0DATA, 1,523,200 B at 0xC200)"))
+                            f"The {kind} has no J533 gateway application (FD_0DATA, 1,523,200 B at 0xC200)",
+                            f"{kind} 中没有 J533 网关应用程序（FD_0DATA，从 0xC200 起 1,523,200 字节）"))
     if signature is None or len(signature) != 128:
         raise ValueError(tr(f"В {kind} нет подписи приложения (SIG_SHA1-RSA1024, 128 Б)",
-                            f"The {kind} has no application signature (SIG_SHA1-RSA1024, 128 B)"))
+                            f"The {kind} has no application signature (SIG_SHA1-RSA1024, 128 B)",
+                            f"{kind} 中没有应用程序签名（SIG_SHA1-RSA1024，128 字节）"))
     stored, calc = app_crc(app)
     if stored != calc:
         raise ValueError(tr(f"Приложение в {kind} повреждено: CRC-16 0x{stored:04X} != 0x{calc:04X}",
-                            f"The {kind} application is damaged: CRC-16 0x{stored:04X} != 0x{calc:04X}"))
+                            f"The {kind} application is damaged: CRC-16 0x{stored:04X} != 0x{calc:04X}",
+                            f"{kind} 中的应用程序已损坏：CRC-16 0x{stored:04X} != 0x{calc:04X}"))
     m = re.match(r"EMEM_(\w+?)(\d{4})_", mem or "")
     part, ver = (m.group(1), m.group(2)) if m else ("", "")
     return FrfImage(name or (f"FL_{part}_{ver}_S" if part else kind), part, ver, app, signature, idents, kind)
@@ -169,21 +174,23 @@ def frf_signature_problem(frf: FrfImage, *, fbl_modulus: bytes | None = None, fb
         ": загрузчик не примет приложение и блок останется в загрузчике. Ничего не стёрто.",
         "The FRF signature does not verify with this ECU's bootloader key" + (" (it has its own key)" if custom else "") +
         ": the bootloader would refuse the application and the ECU would stay in it. Nothing is erased.",
+        "FRF 签名与该模块引导加载程序的密钥不匹配" + ("（该模块使用自己的密钥）" if custom else "") +
+        "：引导加载程序将拒绝该应用程序，模块会停留在引导加载程序状态。未擦除任何内容。",
     )
 
 
 def frf_ident_problems(frf: FrfImage, ecu: dict[str, str]) -> tuple[list[str], list[str]]:
     """(hardware mismatches — refused, other mismatches — ODIS would refuse, the user may override) for the ECU's DIDs."""
-    labels = {"F187": tr("номер детали", "part number"), "F189": tr("версия ПО", "software version"),
-              "F191": tr("номер оборудования", "hardware number"), "F1A3": tr("версия оборудования", "hardware version")}
+    labels = {"F187": tr("номер детали", "part number", "零件号"), "F189": tr("версия ПО", "software version", "软件版本"),
+              "F191": tr("номер оборудования", "hardware number", "硬件编号"), "F1A3": tr("версия оборудования", "hardware version", "硬件版本")}
     hard: list[str] = []
     soft: list[str] = []
     for did, allowed in frf.idents.items():
         have = (ecu.get(did) or "").strip()
         if not have:  # a gateway stuck in its bootloader may not answer every one: the user decides
-            soft.append(tr(f"{labels[did]} блока не прочитан", f"the ECU's {labels[did]} could not be read"))
+            soft.append(tr(f"{labels[did]} блока не прочитан", f"the ECU's {labels[did]} could not be read", f"无法读取模块的{labels[did]}"))
         elif have not in {a.strip() for a in allowed}:
-            line = tr(f"{labels[did]} блока {have} нет в списке FRF", f"the ECU's {labels[did]} {have} is not in the FRF's list")
+            line = tr(f"{labels[did]} блока {have} нет в списке FRF", f"the ECU's {labels[did]} {have} is not in the FRF's list", f"模块的{labels[did]} {have} 不在 FRF 的列表中")
             (hard if did in HARDWARE_IDENTS else soft).append(line)
     return hard, soft
 

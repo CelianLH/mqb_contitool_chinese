@@ -7,14 +7,14 @@ from contitool.i18n import tr
 
 # ISO 14229-1 DTC status bits, as they read to a technician
 _STATUS_WORDS = (
-    ("активна сейчас", "active now"),  # 0 testFailed
-    ("была в этом цикле", "failed this cycle"),  # 1 testFailedThisOperationCycle
-    ("ожидает подтверждения", "pending"),  # 2 pendingDTC
-    ("подтверждена", "confirmed"),  # 3 confirmedDTC
-    ("не проверялась после стирания", "not tested since clear"),  # 4 testNotCompletedSinceLastClear
-    ("была после стирания", "failed since clear"),  # 5 testFailedSinceLastClear
-    ("не проверялась в этом цикле", "not tested this cycle"),  # 6 testNotCompletedThisOperationCycle
-    ("запрошена лампа", "warning lamp requested"),  # 7 warningIndicatorRequested
+    ("активна сейчас", "active now", "当前激活"),  # 0 testFailed
+    ("была в этом цикле", "failed this cycle", "本循环内已失败"),  # 1 testFailedThisOperationCycle
+    ("ожидает подтверждения", "pending", "待确认"),  # 2 pendingDTC
+    ("подтверждена", "confirmed", "已确认"),  # 3 confirmedDTC
+    ("не проверялась после стирания", "not tested since clear", "清除后尚未检测"),  # 4 testNotCompletedSinceLastClear
+    ("была после стирания", "failed since clear", "清除后已失败"),  # 5 testFailedSinceLastClear
+    ("не проверялась в этом цикле", "not tested this cycle", "本循环内尚未检测"),  # 6 testNotCompletedThisOperationCycle
+    ("запрошена лампа", "warning lamp requested", "已请求点亮警告灯"),  # 7 warningIndicatorRequested
 )
 _FAILED_ANY = 0x01 | 0x02 | 0x04 | 0x08 | 0x20
 
@@ -23,9 +23,9 @@ def describe(code: int) -> tuple[str, str]:
     """(ODIS display code, description). Codes outside the MQB gateway table get an empty display code."""
     hit = J533_DTCS.get(code)
     if hit is None:
-        return "", tr("Нет описания для этого блока", "No description for this ECU")
-    display, ru, en = hit
-    return display, tr(ru, en)
+        return "", tr("Нет описания для этого блока", "No description for this ECU", "该控制单元没有描述")
+    display, ru, en, zh = hit
+    return display, tr(ru, en, zh)
 
 
 def group(status: int) -> str:
@@ -40,4 +40,4 @@ def group(status: int) -> str:
 
 
 def status_text(status: int) -> str:
-    return ", ".join(tr(ru, en) for bit, (ru, en) in enumerate(_STATUS_WORDS) if status & (1 << bit))
+    return ", ".join(tr(ru, en, zh) for bit, (ru, en, zh) in enumerate(_STATUS_WORDS) if status & (1 << bit))

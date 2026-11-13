@@ -58,7 +58,7 @@ def plain_step(text: str) -> str:
 
 def _duration(sec: float) -> str:
     if sec < 10:
-        return tr(f"{sec:.1f} с".replace(".", ","), f"{sec:.1f} s")
+        return tr(f"{sec:.1f} с".replace(".", ","), f"{sec:.1f} s", f"{sec:.1f} 秒")
     return format_eta(sec)
 
 
@@ -185,25 +185,25 @@ class ExecutionPanel(QFrame):
 
     # ────────────────────────────── text ──────────────────────────────
     def retranslate_ui(self) -> None:
-        self.lbl_title.setText(tr("Журнал", "Log"))
-        self.btn_short.setText(tr("Кратко", "Summary"))
-        self.btn_full.setText(tr("Подробно", "Detailed"))
-        self.btn_full.setToolTip(tr("Полный технический лог: адреса, UDS, CAN", "Full technical log: addresses, UDS, CAN"))
-        self.btn_open_dir.setText(tr("Открыть папку", "Open folder"))
-        self.btn_copy.setText(tr("Копировать", "Copy"))
-        self.btn_copy.setToolTip(tr("Копирует подробный лог", "Copies the detailed log"))
-        self.btn_clear.setText(tr("Очистить", "Clear"))
-        self.btn_stop.setText(tr("Остановить", "Stop"))
+        self.lbl_title.setText(tr("Журнал", "Log", "日志"))
+        self.btn_short.setText(tr("Кратко", "Summary", "简要"))
+        self.btn_full.setText(tr("Подробно", "Detailed", "详细"))
+        self.btn_full.setToolTip(tr("Полный технический лог: адреса, UDS, CAN", "Full technical log: addresses, UDS, CAN", "完整技术日志：地址、UDS、CAN"))
+        self.btn_open_dir.setText(tr("Открыть папку", "Open folder", "打开文件夹"))
+        self.btn_copy.setText(tr("Копировать", "Copy", "复制"))
+        self.btn_copy.setToolTip(tr("Копирует подробный лог", "Copies the detailed log", "复制详细日志"))
+        self.btn_clear.setText(tr("Очистить", "Clear", "清空"))
+        self.btn_stop.setText(tr("Остановить", "Stop", "停止"))
         self._apply_status()
         self._render_short()
 
     def _apply_status(self) -> None:
         labels = {
-            "idle": (theme.TEXT_MUTED, "muted", tr("Готов к работе", "Ready")),
-            "running": (theme.INFO, "info", tr("Выполняется", "Running")),
-            "ok": (theme.OK, "ok", tr("Готово", "Done")),
-            "err": (theme.ERR, "err", tr("Ошибка", "Failed")),
-            "cancel": (theme.WARN, "warn", tr("Остановлено", "Stopped")),
+            "idle": (theme.TEXT_MUTED, "muted", tr("Готов к работе", "Ready", "就绪")),
+            "running": (theme.INFO, "info", tr("Выполняется", "Running", "运行中")),
+            "ok": (theme.OK, "ok", tr("Готово", "Done", "完成")),
+            "err": (theme.ERR, "err", tr("Ошибка", "Failed", "失败")),
+            "cancel": (theme.WARN, "warn", tr("Остановлено", "Stopped", "已停止")),
         }
         col, tone, text = labels[self._state]
         self.lbl_dot.setPixmap(dot_icon(col).pixmap(16, 16))
@@ -262,7 +262,7 @@ class ExecutionPanel(QFrame):
             if snap.speed_bps > 0:
                 parts.append(f"{snap.speed_bps / 1024.0:.1f} KB/s")
             if snap.eta_sec is not None:
-                parts.append(tr(f"осталось {format_eta(snap.eta_sec)}", f"{format_eta(snap.eta_sec)} left"))
+                parts.append(tr(f"осталось {format_eta(snap.eta_sec)}", f"{format_eta(snap.eta_sec)} left", f"剩余 {format_eta(snap.eta_sec)}"))
         parts.append(format_eta(time.monotonic() - self._started_mono))
         self.lbl_metrics.setText("  ·  ".join(parts))
 
@@ -302,9 +302,9 @@ class ExecutionPanel(QFrame):
             self._op = None
             self._render_short()
         col, word = {
-            "ok": (theme.OK, tr("Готово", "Done")),
-            "err": (theme.ERR, tr("Ошибка", "Failed")),
-            "cancel": (theme.WARN, tr("Остановлено", "Stopped")),
+            "ok": (theme.OK, tr("Готово", "Done", "完成")),
+            "err": (theme.ERR, tr("Ошибка", "Failed", "失败")),
+            "cancel": (theme.WARN, tr("Остановлено", "Stopped", "已停止")),
         }[self._state]
         self._full_line(f"<span style='color:{col}'>── {word} · {_duration(elapsed)}</span>")
 
@@ -325,10 +325,10 @@ class ExecutionPanel(QFrame):
         mono = mono_font().family()
         muted, secondary = theme.TEXT_MUTED, theme.TEXT_SECONDARY
         states = {
-            "running": (theme.INFO, tr("выполняется", "running")),
-            "ok": (theme.OK, tr("готово", "done")),
-            "err": (theme.ERR, tr("ошибка", "failed")),
-            "cancel": (theme.WARN, tr("остановлено", "stopped")),
+            "running": (theme.INFO, tr("выполняется", "running", "运行中")),
+            "ok": (theme.OK, tr("готово", "done", "完成")),
+            "err": (theme.ERR, tr("ошибка", "failed", "失败")),
+            "cancel": (theme.WARN, tr("остановлено", "stopped", "已停止")),
         }
         rows: list[str] = []
         for it in self._items:

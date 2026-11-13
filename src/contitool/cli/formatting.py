@@ -29,7 +29,7 @@ from contitool.core.constants import (
     STOCK_SWAP_MODULUS,
     T20_BENCH_PINS,
 )
-from contitool.i18n import get_lang, tr
+from contitool.i18n import tr
 from contitool.progress import LogEntry, OperationReporter, ProgressSnapshot, StepSnapshot
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -225,6 +225,7 @@ def format_startup_banner(style: Style) -> str:
                 tr(
                     "БЕСПЛАТНЫЙ ИНСТРУМЕНТ СООБЩЕСТВА — СТРОГО НЕ ДЛЯ ПРОДАЖИ! (FREE • NOT FOR SALE)",
                     "FREE COMMUNITY RESEARCH TOOL — STRICTLY NOT FOR SALE!",
+                    "免费社区研究工具 — 严禁用于销售！",
                 )
             )
         ),
@@ -233,6 +234,7 @@ def format_startup_banner(style: Style) -> str:
                 tr(
                     "Предоставляется «КАК ЕСТЬ» (AS IS) без каких-либо гарантий. Всегда сохраняйте бэкап дампов!",
                     "Provided 'AS IS' without warranty of any kind. Always keep a verified full backup!",
+                    "按“原样”（AS IS）提供，不附带任何形式的保证。请务必始终保留经验证的完整备份！",
                 )
             )
         ),
@@ -241,6 +243,7 @@ def format_startup_banner(style: Style) -> str:
                 tr(
                     "Не знаете, зачем это вам, или сомневаетесь в адаптере — не пользуйтесь. Лучше блок на столе.",
                     "If you do not know why you need it or doubt your adapter, do not use it. Bench, not car.",
+                    "如果您不知道为什么要用它，或对适配器存疑，请不要使用。建议在台架上操作，而不是装在车上。",
                 )
             )
         ),
@@ -249,6 +252,7 @@ def format_startup_banner(style: Style) -> str:
                 tr(
                     "В машине — на свой риск, автор не отвечает. Проблемы — в GitHub Issues, не в личку.",
                     "In a car it is at your own risk. Problems go to GitHub Issues, not to the author's DMs.",
+                    "在车上操作风险自负，作者不承担责任。遇到问题请提交到 GitHub Issues，而不是私信作者。",
                 )
             )
         ),
@@ -273,44 +277,45 @@ def format_cflash_report(summary: CflashSummary, style: Style | None = None, pat
         else st.badge_err(f"0x{summary.crc_stored:04X} != 0x{summary.crc_calc:04X}")
         if summary.crc_range_count
         else st.badge_err(tr("нет таблицы CRC — приложение стёрто (блок в загрузчике) или повреждено",
-                             "no CRC table — application erased (unit in its bootloader) or damaged"))
+                             "no CRC table — application erased (unit in its bootloader) or damaged",
+                             "无 CRC 表 — 应用程序已被擦除（模块处于引导加载程序中）或已损坏"))
     )
     cp_map = {
-        "STOCK": st.dim(tr("STOCK (штатный KSCHUTZ 0x40)", "STOCK (factory KSCHUTZ 0x40)")),
-        "HYBRID": st.badge_ok(tr("HYBRID (гибридный трамплин CP)", "HYBRID (selective CP trampoline)")),
-        "GLOBAL_PLAIN": st.badge_warn(tr("GLOBAL_PLAIN (стендовый 0x10)", "GLOBAL_PLAIN (bench 0x10)")),
+        "STOCK": st.dim(tr("STOCK (штатный KSCHUTZ 0x40)", "STOCK (factory KSCHUTZ 0x40)", "原厂（出厂 KSCHUTZ 0x40）")),
+        "HYBRID": st.badge_ok(tr("HYBRID (гибридный трамплин CP)", "HYBRID (selective CP trampoline)", "HYBRID（选择性 CP 跳板）")),
+        "GLOBAL_PLAIN": st.badge_warn(tr("GLOBAL_PLAIN (стендовый 0x10)", "GLOBAL_PLAIN (bench 0x10)", "GLOBAL_PLAIN（台架 0x10）")),
     }
     hook_loc = f" @ 0x{summary.hook_vaddr:06X}" if summary.hook_vaddr is not None else ""
     cp_str = cp_map.get(summary.hook_mode, st.yellow(summary.hook_mode)) + hook_loc
 
     mask_str = (
-        st.badge_ok(tr("ОТКЛЮЧЕНА (дооснащение в пустые банки разрешено)", "BYPASSED (empty-bank retrofit enabled)"))
+        st.badge_ok(tr("ОТКЛЮЧЕНА (дооснащение в пустые банки разрешено)", "BYPASSED (empty-bank retrofit enabled)", "已绕过（允许加装到空存储区）"))
         if summary.mask_bypassed
-        else st.dim(tr("ШТАТНАЯ (проверка маски 95640 активна)", "STOCK (95640 mask check active)"))
+        else st.dim(tr("ШТАТНАЯ (проверка маски 95640 активна)", "STOCK (95640 mask check active)", "原厂（95640 掩码校验已启用）"))
     )
     eng_unlocked_all = (
         summary.eng_gate_unlocked and summary.ccp_blacklist_bypassed and summary.a167_branch_bypassed
     )
     eng_str = (
-        st.badge_ok(tr("АКТИВЕН (Feature 0x80/81/83 + CCP + RAM-Loader)", "UNLOCKED (Feature 0x80/81/83 + CCP + RAM-Loader)"))
+        st.badge_ok(tr("АКТИВЕН (Feature 0x80/81/83 + CCP + RAM-Loader)", "UNLOCKED (Feature 0x80/81/83 + CCP + RAM-Loader)", "已解锁（Feature 0x80/81/83 + CCP + RAM-Loader）"))
         if eng_unlocked_all
-        else st.dim(tr("ЗАКРЫТ (заводской серийный режим)", "STOCK (factory locked)"))
+        else st.dim(tr("ЗАКРЫТ (заводской серийный режим)", "STOCK (factory locked)", "原厂（出厂锁定）"))
     )
 
     lines = [
-        st.bold(tr("═══ CodeFlash / Прошивка приложения ═══", "═══ CodeFlash / Application Firmware ═══")),
+        st.bold(tr("═══ CodeFlash / Прошивка приложения ═══", "═══ CodeFlash / Application Firmware ═══", "═══ CodeFlash / 应用程序固件 ═══")),
     ]
     if path_label:
-        lines.append(f"  {tr('Файл', 'File')}:              {path_label}")
+        lines.append(f"  {tr('Файл', 'File', '文件')}:              {path_label}")
     lines.extend(
         [
-            f"  {tr('Номер блока / HW', 'Part Number / HW')}:  {st.bold(summary.hw_pn or '—')}  ({summary.hw_ver or '—'})",
+            f"  {tr('Номер блока / HW', 'Part Number / HW', '零件号 / HW')}:  {st.bold(summary.hw_pn or '—')}  ({summary.hw_ver or '—'})",
             f"  FAZIT:             {summary.fazit or '—'}",
             f"  SHA-256:           {summary.sha256[:24]}…",
             f"  App CRC-16:        {crc_badge}",
-            f"  {tr('Режим CP (KSCHUTZ)', 'CP Mode (KSCHUTZ)')}: {cp_str}",
-            f"  {tr('Маска 95640 EEPROM', '95640 EEPROM Mask')}: {mask_str}",
-            f"  {tr('Инженерный режим', 'Engineering Mode')}:  {eng_str}",
+            f"  {tr('Режим CP (KSCHUTZ)', 'CP Mode (KSCHUTZ)', 'CP 模式（KSCHUTZ）')}: {cp_str}",
+            f"  {tr('Маска 95640 EEPROM', '95640 EEPROM Mask', '95640 EEPROM 掩码')}: {mask_str}",
+            f"  {tr('Инженерный режим', 'Engineering Mode', '工程模式')}:  {eng_str}",
             f"  SWaP RSA-1024:     {_rsa_label(summary.swap_rsa_mod, STOCK_SWAP_MODULUS)}",
             f"  FBL ODX RSA-1024:  {_rsa_label(summary.fbl_rsa_mod, STOCK_FBL_MODULUS)}",
         ]
@@ -321,19 +326,19 @@ def format_cflash_report(summary: CflashSummary, style: Style | None = None, pat
 def format_uflash_report(summary: UflashSummary, style: Style | None = None, path_label: str = "") -> str:
     st = style or Style(False)
     rsa_str = (
-        st.badge_ok(tr("ИНЖЕНЕРНЫЙ RSA-FREE FBL (+0x342A пропатчен)", "ENGINEERING RSA-FREE FBL (+0x342A patched)"))
+        st.badge_ok(tr("ИНЖЕНЕРНЫЙ RSA-FREE FBL (+0x342A пропатчен)", "ENGINEERING RSA-FREE FBL (+0x342A patched)", "工程 RSA-FREE FBL（+0x342A 已打补丁）"))
         if summary.rsa_bypassed
-        else st.dim(tr("ЗАВОДСКАЯ ПРОВЕРКА RSA-1024 АКТИВНА", "STOCK RSA-1024 CHECK ACTIVE"))
+        else st.dim(tr("ЗАВОДСКАЯ ПРОВЕРКА RSA-1024 АКТИВНА", "STOCK RSA-1024 CHECK ACTIVE", "原厂 RSA-1024 校验已启用"))
     )
     lines = [
-        st.bold(tr("═══ Загрузчик Uflash (32 КБ @ 0x01000000) ═══", "═══ Uflash Bootloader (32 KB @ 0x01000000) ═══")),
+        st.bold(tr("═══ Загрузчик Uflash (32 КБ @ 0x01000000) ═══", "═══ Uflash Bootloader (32 KB @ 0x01000000) ═══", "═══ Uflash 引导加载程序（32 KB @ 0x01000000）═══")),
     ]
     if path_label:
-        lines.append(f"  {tr('Файл', 'File')}:          {path_label}")
+        lines.append(f"  {tr('Файл', 'File', '文件')}:          {path_label}")
     lines.extend(
         [
-            f"  {tr('Сигнатура FBL', 'FBL Signature')}: {st.badge_ok('OK') if summary.signature_found else st.badge_warn('CUSTOM')}",
-            f"  {tr('Статус RSA', 'RSA Status')}:    {rsa_str}",
+            f"  {tr('Сигнатура FBL', 'FBL Signature', 'FBL 签名')}: {st.badge_ok('OK') if summary.signature_found else st.badge_warn('CUSTOM')}",
+            f"  {tr('Статус RSA', 'RSA Status', 'RSA 状态')}:    {rsa_str}",
             f"  SHA-256:       {summary.sha256}",
         ]
     )
@@ -353,14 +358,15 @@ def format_dflash_report(
             tr(
                 "═══ DataFlash (64 КБ) — 12 банков Component Protection + Master #0 ═══",
                 "═══ DataFlash (64 KB) — 12 Component Protection Banks + Master #0 ═══",
+                "═══ DataFlash（64 KB）— 12 个部件保护存储区 + 主存储区 #0 ═══",
             )
         ),
     ]
     if path_label:
-        lines.append(f"  {tr('Файл', 'File')}: {path_label}")
+        lines.append(f"  {tr('Файл', 'File', '文件')}: {path_label}")
     header = (
-        f"  {'#':>2}  {'VAG':<4}  {'Offset':<8}  {tr('Статус', 'State'):<14}  "
-        f"{'CRC-32':<10}  {tr('Ключ (16 Б) / Заголовок', 'Key (16 B) / Header'):<34}  {tr('Блок VAG', 'VAG ECU')}"
+        f"  {'#':>2}  {'VAG':<4}  {'Offset':<8}  {tr('Статус', 'State', '状态'):<14}  "
+        f"{'CRC-32':<10}  {tr('Ключ (16 Б) / Заголовок', 'Key (16 B) / Header', '密钥（16 字节）/ 头'):<34}  {tr('Блок VAG', 'VAG ECU', 'VAG 模块')}"
     )
     lines.append(st.dim(header))
     lines.append("  " + ("─" * 106))
@@ -372,7 +378,7 @@ def format_dflash_report(
         if s.kind == "PLAIN":
             st_col = st.green(pad_ansi("PLAIN (IKA)", 14))
         elif s.kind == "SHE":
-            st_col = st.cyan(pad_ansi(tr("SHE (Завод)", "SHE (Stock)"), 14))
+            st_col = st.cyan(pad_ansi(tr("SHE (Завод)", "SHE (Stock)", "SHE（原厂）"), 14))
         elif s.kind == "EMPTY":
             st_col = st.dim(pad_ansi("EMPTY (FF)", 14))
         else:
@@ -396,6 +402,7 @@ def format_dflash_report(
                 tr(
                     "═══ Параметризация ZDC (0x0000..0x303F) и совместимость FeC ═══",
                     "═══ ZDC Parameterization (0x0000..0x303F) & FeC Compatibility ═══",
+                    "═══ ZDC 参数化（0x0000..0x303F）与 FeC 兼容性 ═══",
                 )
             )
         )
@@ -403,12 +410,12 @@ def format_dflash_report(
         pn_str = dataset_summary.dataset_pn or "—"
         ver_str = f" ({dataset_summary.dataset_ver})" if dataset_summary.dataset_ver else ""
         tag_str = f" [{dataset_summary.maingw_tag}]" if dataset_summary.maingw_tag else ""
-        lines.append(f"  {tr('Датасет (F1A0/F1A1)', 'Dataset (F1A0/F1A1)')}: {pn_str}{ver_str}{tag_str}")
+        lines.append(f"  {tr('Датасет (F1A0/F1A1)', 'Dataset (F1A0/F1A1)', '数据集（F1A0/F1A1）')}: {pn_str}{ver_str}{tag_str}")
         lines.append(
-            f"  {tr('Блоки ZDC CRC OK', 'Valid ZDC Blocks')}:   {valid_cnt} / {len(dataset_summary.blocks)}"
+            f"  {tr('Блоки ZDC CRC OK', 'Valid ZDC Blocks', '有效的 ZDC 块')}:   {valid_cnt} / {len(dataset_summary.blocks)}"
         )
         sup_hex = ", ".join(f"0x{c:08X}" for c in dataset_summary.supported_fecs) or "—"
-        lines.append(f"  {tr('Поддерживаемые FeC', 'Supported FeCs')}:   {sup_hex}")
+        lines.append(f"  {tr('Поддерживаемые FeC', 'Supported FeCs', '支持的 FeC')}:   {sup_hex}")
         for blk in dataset_summary.blocks:
             bst = (
                 st.dim("EMPTY")
@@ -428,6 +435,7 @@ def format_dflash_report(
                 tr(
                     "═══ SWaP / FeC и идентификаторы в DataFlash ═══",
                     "═══ DataFlash SWaP / FeC & Vehicle Identity ═══",
+                    "═══ DataFlash 中的 SWaP / FeC 与车辆标识 ═══",
                 )
             )
         )
@@ -435,18 +443,18 @@ def format_dflash_report(
         lines.append(f"  VCRN (DID 0x3C03): {swap_summary.vcrn.hex().upper() if swap_summary.vcrn else '—'}")
         lines.append(f"  SWaP RSA NvM 0x7C: {_rsa_label(swap_summary.swap_rsa_mod, STOCK_SWAP_MODULUS)}")
         lines.append(
-            f"  {tr('Сертификаты FSC', 'Active FSCs')}:   "
-            f"{len(swap_summary.active_fscs)} ({tr('свободно слотов', 'free slots')}: {swap_summary.free_slots})"
+            f"  {tr('Сертификаты FSC', 'Active FSCs', '已激活的 FSC')}:   "
+            f"{len(swap_summary.active_fscs)} ({tr('свободно слотов', 'free slots', '空闲槽位')}: {swap_summary.free_slots})"
         )
         for fsc in swap_summary.active_fscs:
             fec_names = KNOWN_GATEWAY_FECS.get(fsc.fec_code)
-            desc = (fec_names[1] if get_lang() == "en" else fec_names[0]) if fec_names else "Custom FeC"
+            desc = tr(fec_names[0], fec_names[1], fec_names[2]) if fec_names else "Custom FeC"
             kind_tag = "[Multi-FSC]" if fsc.factory_eol else "[RSA-FSC]"
             ds_badge = ""
             if dataset_summary is not None:
                 sup = check_fec_dataset_support(dataset_summary, fsc.fec_code)
                 ds_badge = (
-                    f"  {st.badge_ok(tr('Датасет ОК', 'Dataset OK'))}"
+                    f"  {st.badge_ok(tr('Датасет ОК', 'Dataset OK', '数据集正常'))}"
                     if sup.supported
                     else f"  {st.badge_warn('Unsupported Dataset')}"
                 )
@@ -464,10 +472,11 @@ def format_banks_table(style: Style | None = None) -> str:
             tr(
                 "═══ Справочник всех 12 ведомых банков CP + Мастер-банк #0 (Continental J533) ═══",
                 "═══ Reference Table of All 12 Slave CP Banks + Master Bank #0 (Continental J533) ═══",
+                "═══ 全部 12 个从 CP 存储区 + 主存储区 #0 参考表（Continental J533）═══",
             )
         ),
         st.dim(
-            f"  {'#':>2}  {'VAG':<4}  {'NvM':<6}  {'Primary/Mirror':<15}  {'CP CAN TX / RX':<21}  {tr('Блок VAG', 'VAG ECU')}"
+            f"  {'#':>2}  {'VAG':<4}  {'NvM':<6}  {'Primary/Mirror':<15}  {'CP CAN TX / RX':<21}  {tr('Блок VAG', 'VAG ECU', 'VAG 模块')}"
         ),
         "  " + ("─" * 102),
     ]
@@ -488,6 +497,7 @@ def format_guide_text(style: Style | None = None) -> str:
             tr(
                 "═══ Краткое руководство ContiTool (для начинающих и опытных) ═══",
                 "═══ ContiTool Quick-Start Guide (Beginner & Bench Reference) ═══",
+                "═══ ContiTool 快速入门指南（初学者与台架参考）═══",
             )
         ),
         "",
@@ -495,6 +505,7 @@ def format_guide_text(style: Style | None = None) -> str:
             tr(
                 "1. ПОЛНАЯ ЗАМЕНА ПРОГРАММАТОРА ПО CAN (+ ПРАВИЛО 64 КБ ДЛЯ СТОРОННИХ ДАМПОВ):",
                 "1. FULL BENCH PROGRAMMER REPLACEMENT OVER CAN (+ 64 KB EXTERNAL DUMP RULE):",
+                "1. 通过 CAN 完整替代台架编程器（+ 第三方转储的 64 KB 规则）：",
             )
         ),
         tr(
@@ -506,17 +517,22 @@ def format_guide_text(style: Style | None = None) -> str:
             "   CodeFlash 1.5 MB (including boot blocks 0x0000..0xBFFF), DataFlash 64 KB, and Uflash 32 KB!\n"
             "   If importing an external dump: despite package marking R7F7010343AFP, silicon has 64 KB DataFlash\n"
             "   (CP banks live in 0xC000..0xFFFF) — always use profile R7F7010543 (64 KB Dflash)!",
+            "   ContiTool 通过诊断 CAN 直接读写网关的全部存储区域：\n"
+            "   CodeFlash 1.5 MB（含引导块 0x0000..0xBFFF）、DataFlash 64 KB 和 Uflash 32 KB！\n"
+            "   若导入第三方转储：尽管封装标记为 R7F7010343AFP，硅片实际为 64 KB DataFlash\n"
+            "   （CP 存储区位于 0xC000..0xFFFF）——请始终使用配置 R7F7010543（64 KB Dflash）！",
         ),
         "",
         st.cyan(
             tr(
                 "2. ПОДКЛЮЧЕНИЕ НА СТОЛЕ К РАЗЪЁМУ J533 T20 (Diagnosis CAN 500 кбит/с):",
                 "2. J533 T20 BENCH WIRING (Diagnosis CAN 500 kbit/s):",
+                "2. J533 T20 台架接线（诊断 CAN 500 kbit/s）：",
             )
         ),
     ]
-    for pin, sig, desc_ru, desc_en in T20_BENCH_PINS:
-        desc = desc_ru if get_lang() == "ru" else desc_en
+    for pin, sig, desc_ru, desc_en, desc_zh in T20_BENCH_PINS:
+        desc = tr(desc_ru, desc_en, desc_zh)
         lines.append(f"   • Pin {pin:>2} ({sig:<12}) — {desc}")
     lines.extend(
         [
@@ -524,6 +540,7 @@ def format_guide_text(style: Style | None = None) -> str:
                 tr(
                     "   ⚠ ОБЯЗАТЕЛЬНО: включите терминатор в адаптере или установите резистор 120 Ом между Pin 19 (CAN-H) и Pin 9 (CAN-L)!",
                     "   ⚠ MANDATORY: turn on the adapter's terminator or fit a 120 Ohm resistor between Pin 19 (CAN-H) and Pin 9 (CAN-L)!",
+                    "   ⚠ 必做：开启适配器的终端电阻，或在 Pin 19（CAN-H）与 Pin 9（CAN-L）之间接入 120 Ω 电阻！",
                 )
             ),
             "",
@@ -531,6 +548,7 @@ def format_guide_text(style: Style | None = None) -> str:
                 tr(
                     "3. ГДЕ БРАТЬ 16-БАЙТНЫЙ ОТКРЫТЫЙ КЛЮЧ IKA ВЕДОМОГО БЛОКА:",
                     "3. WHERE TO GET THE 16-BYTE PLAINTEXT IKA KEY OF A SLAVE ECU:",
+                    "3. 从何处获取从模块的 16 字节明文 IKA 密钥：",
                 )
             ),
             tr(
@@ -540,6 +558,9 @@ def format_guide_text(style: Style | None = None) -> str:
                 "   • Option A (donor's native key): extract the 16B plaintext IKA key from the slave ECU dump (5F, 17, 47, 3C…).\n"
                 "   • Option B (custom paired key): generate a random 16B key in ContiTool and write it to both ECUs.\n"
                 "   • NEVER write 00..00 (GFA) or copy the 16B SHE M1 header (00..00E5)!",
+                "   • 方案 A（使用原车钥匙）：从从模块的转储（5F、17、47、3C…）中提取 16 字节明文 IKA 密钥。\n"
+                "   • 方案 B（自定义配对密钥）：在 ContiTool 中生成随机 16 字节密钥，并写入两个模块。\n"
+                "   • 切勿写入 00..00（GFA），也不要复制 SHE M1 的前 16 字节头（00..00E5）！",
             ),
             "",
             st.dim(f"{AUTHOR_CREDIT} • {AUTHOR_SITE_URL} • {AUTHOR_DRIVE2_URL} • {AUTHOR_TG_URL}"),

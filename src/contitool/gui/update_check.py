@@ -49,16 +49,17 @@ class UpdateChecker(QObject):
             data = json.loads(bytes(reply.readAll().data()))
         except ValueError as exc:
             if manual:
-                QMessageBox.warning(self._win, tr("Проверка обновлений", "Checking for updates"),
-                                    tr(f"Не удалось связаться с GitHub: {exc}", f"Could not reach GitHub: {exc}"))
+                QMessageBox.warning(self._win, tr("Проверка обновлений", "Checking for updates", "检查更新"),
+                                    tr(f"Не удалось связаться с GitHub: {exc}", f"Could not reach GitHub: {exc}", f"无法连接 GitHub：{exc}"))
             return
         QSettings().setValue(_LAST, time.time())
         release = newer_release(data, __version__)
         if release is None:
             if manual:
-                QMessageBox.information(self._win, tr("Проверка обновлений", "Checking for updates"),
+                QMessageBox.information(self._win, tr("Проверка обновлений", "Checking for updates", "检查更新"),
                                         tr(f"У вас последняя версия ContiTool ({__version__}).",
-                                           f"You have the latest ContiTool ({__version__})."))
+                                           f"You have the latest ContiTool ({__version__}).",
+                                           f"您已是最新版本 ContiTool（{__version__}）。"))
             return
         if manual or QSettings().value(_SKIP, "") != release.version:
             self._offer(release)
@@ -66,17 +67,19 @@ class UpdateChecker(QObject):
     def _offer(self, release: Release) -> None:
         box = QMessageBox(self._win)
         box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle(tr("Обновление ContiTool", "ContiTool update"))
+        box.setWindowTitle(tr("Обновление ContiTool", "ContiTool update", "ContiTool 更新"))
         box.setText(tr(f"Вышла ContiTool {release.version} — у вас {__version__}.",
-                       f"ContiTool {release.version} is out — you have {__version__}."))
+                       f"ContiTool {release.version} is out — you have {__version__}.",
+                       f"ContiTool {release.version} 已发布 — 您当前为 {__version__}。"))
         box.setInformativeText(tr(
             "Скачайте архив, распакуйте его в новую папку и запускайте оттуда: настройки подхватятся сами.",
             "Download the archive, unpack it into a new folder and run it from there: your settings carry over.",
+            "下载压缩包，解压到新文件夹后从那里运行：设置会自动沿用。",
         ))
-        download = box.addButton(tr("Скачать", "Download"), QMessageBox.ButtonRole.AcceptRole)
-        notes = box.addButton(tr("Что нового", "What's new"), QMessageBox.ButtonRole.ActionRole)
-        skip = box.addButton(tr("Пропустить эту версию", "Skip this version"), QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton(tr("Позже", "Later"), QMessageBox.ButtonRole.RejectRole)
+        download = box.addButton(tr("Скачать", "Download", "下载"), QMessageBox.ButtonRole.AcceptRole)
+        notes = box.addButton(tr("Что нового", "What's new", "更新内容"), QMessageBox.ButtonRole.ActionRole)
+        skip = box.addButton(tr("Пропустить эту версию", "Skip this version", "跳过此版本"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Позже", "Later", "稍后"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         if clicked is download:

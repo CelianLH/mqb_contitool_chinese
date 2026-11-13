@@ -180,7 +180,7 @@ def _probe_beacon_in_loader(link: J533CanLink, reporter: OperationReporter) -> s
     return beacon_bytes.decode("ascii")
 
 
-STAGE1_SILENT = (  # (ru, en): the language can change while the app runs
+STAGE1_SILENT = (  # (ru, en, zh): the language can change while the app runs
     "Блок не ответил на этапе 1 входа в заводской RAM-Loader (multi-DID), хотя на предыдущие запросы отвечал. "
     "Без этого ответа вход не срабатывает, поэтому ключ не отправлялся. Так молчат блоки, в последнем отпечатке "
     "программирования которых (F15B) ненулевой серийник тестера: прошитые ContiTool до 2.0.1e (01..06) или "
@@ -193,6 +193,11 @@ STAGE1_SILENT = (  # (ru, en): the language can change while the app runs
     "(01..06) or by a tester with a serial of its own — ODIS included, so a reflash through ODIS does not cure "
     "it. One reflash of the application over UDS with a zero serial, from this ECU's CodeFlash file, does — "
     "ContiTool offers it. If the serial in the F15B below is zero, please report it with the archive.",
+    "模块未应答进入工厂 RAM-Loader 的第 1 阶段（multi-DID），尽管它应答了此前的请求。没有该应答，入口无法生效，"
+    "因此未发送任何密钥。编程指纹（F15B）中带有非零测试仪序列号的网关会以这种方式保持沉默：由 2.0.1e 之前的 "
+    "ContiTool（01..06）刷写，或由带有自身序列号的测试仪刷写——包括 ODIS，因此通过 ODIS 重新刷写也无法修复。"
+    "使用本模块 CodeFlash 文件中零序列号对应用程序进行一次 UDS 重新刷写即可修复——ContiTool 会自行提议此操作。"
+    "如果下方 F15B 中的序列号为零，请报告此问题并附上报告。",
 )
 
 
@@ -209,6 +214,7 @@ def _note_silent_stage1(link: J533CanLink, reporter: OperationReporter, info: di
         "серийник тестера. Читаем F15B для отчёта…",
         "The ECU did not answer stage 1 — this happens when the programming fingerprint (F15B) carries a non-zero "
         "tester serial. Reading F15B for the report…",
+        "模块未应答第 1 阶段——当编程指纹（F15B）中带有非零测试仪序列号时会出现此情况。正在读取 F15B 以生成报告…",
     ))
     try:
         resp = link.request_uds(b"\x22\xf1\x5b", 0x62, timeout=1.0)
@@ -221,7 +227,7 @@ def _note_silent_stage1(link: J533CanLink, reporter: OperationReporter, info: di
 def _hand_back_after_cancel(link: J533CanLink, reporter: OperationReporter) -> None:
     """Cancelled outside a write (a read, a backup, before the first erase): do not leave the gateway in the
     RAM-loader with no application running. NULL_REPORTER: the user's cancel must not stop this reset too."""
-    reporter.info(tr("Операция отменена — возвращаем шлюз в штатный режим", "Cancelled — returning the gateway to its application"))
+    reporter.info(tr("Операция отменена — возвращаем шлюз в штатный режим", "Cancelled — returning the gateway to its application", "操作已取消——正在将网关恢复为其应用程序"))
     with contextlib.suppress(*LINK_ERRORS):
         _reset_to_application(link, allow_fbl=True)
 
@@ -271,7 +277,8 @@ def _fbl_seed(link: J533CanLink, reporter: OperationReporter) -> bytes:
         if not _is_sa_delay_nrc(exc):
             raise
     reporter.info(tr("Загрузчик не выдаёт ключ (NRC 0x37) — сбрасываем блок и пробуем ещё раз…",
-                     "The bootloader refuses the seed (NRC 0x37) — resetting the ECU and trying again…"))
+                     "The bootloader refuses the seed (NRC 0x37) — resetting the ECU and trying again…",
+                     "引导加载程序拒绝提供种子密钥（NRC 0x37）——正在复位模块并重试…"))
     with contextlib.suppress(*LINK_ERRORS):
         link.request_uds(b"\x11\x01", 0x51, timeout=1.5, allow_pending=True)
     time.sleep(2.5)
@@ -287,6 +294,7 @@ def _fbl_seed(link: J533CanLink, reporter: OperationReporter) -> bytes:
             "10 секунд и включите снова — операция продолжится сама.",
             "The bootloader keeps access closed until power is removed (NRC 0x37). Switch the ECU off for "
             "10 seconds and on again — the operation carries on by itself.",
+            "引导加载程序在断电前保持访问关闭（NRC 0x37）。请将模块断电 10 秒后重新上电——操作将自动继续。",
         )
     )
     deadline = time.monotonic() + POWER_CYCLE_WAIT
@@ -304,7 +312,7 @@ def _fbl_seed(link: J533CanLink, reporter: OperationReporter) -> bytes:
             if isinstance(exc, UdsNegativeResponse) and exc.sid in (0x10, 0x27):
                 continue  # not switched off yet, or caught while it starts up
             raise
-        reporter.success(tr("Блок снова выдаёт ключ — продолжаем", "The ECU gives a seed again — carrying on"))
+        reporter.success(tr("Блок снова выдаёт ключ — продолжаем", "The ECU gives a seed again — carrying on", "模块再次提供种子密钥——继续"))
         return seed
     raise FblKeyLockedError(
         tr(
@@ -312,6 +320,7 @@ def _fbl_seed(link: J533CanLink, reporter: OperationReporter) -> bytes:
             "операцию.",
             "The bootloader never gave a seed (NRC 0x37). Switch the ECU off for 10 seconds, on again, and repeat "
             "the operation.",
+            "引导加载程序始终未提供种子密钥（NRC 0x37）。请将模块断电 10 秒、重新上电后重试操作。",
         )
     )
 
@@ -323,7 +332,7 @@ def _enter_ram_loader_once(link: J533CanLink, reporter: OperationReporter) -> di
         "payload_sha256": EXPECTED_BEACON_SHA256,
         "flash_commands_sent": False,
     }
-    reporter.can_log(tr("UDS 10 03 -> Расширенная диагностическая сессия", "UDS 10 03 -> Extended Diagnostic Session"))
+    reporter.can_log(tr("UDS 10 03 -> Расширенная диагностическая сессия", "UDS 10 03 -> Extended Diagnostic Session", "UDS 10 03 -> 扩展诊断会话"))
     try:
         info["session_1003"] = link.request_uds(b"\x10\x03", 0x50, timeout=2.0).hex()
     except RuntimeError as exc:
@@ -334,10 +343,11 @@ def _enter_ram_loader_once(link: J533CanLink, reporter: OperationReporter) -> di
             tr(
                 "Шлюз уже находится в загрузчике FBL (NRC 0x7E на 10 03) — прямой переход к 10 02",
                 "Gateway is already in FBL bootloader (NRC 0x7E on 10 03) — proceeding directly to 10 02",
+                "网关已处于 FBL 引导加载程序中（10 03 返回 NRC 0x7E）——直接进入 10 02",
             )
         )
     else:
-        reporter.can_log(tr("UDS 27 03 / 27 04 -> Разблокировка предпосылок программирования", "UDS 27 03 / 27 04 -> Precondition SecurityAccess"))
+        reporter.can_log(tr("UDS 27 03 / 27 04 -> Разблокировка предпосылок программирования", "UDS 27 03 / 27 04 -> Precondition SecurityAccess", "UDS 27 03 / 27 04 -> 解锁编程前提条件"))
         try:
             info["security_2703"] = link.request_uds(b"\x27\x03", 0x67, timeout=2.0).hex()
         except RuntimeError as exc:
@@ -348,17 +358,18 @@ def _enter_ram_loader_once(link: J533CanLink, reporter: OperationReporter) -> di
                 tr(
                     "Шлюз находится в загрузчике FBL после сброса (NRC на 27 03) — прямой переход к 10 02",
                     "Gateway is in FBL bootloader after reset (NRC on 27 03) — proceeding directly to 10 02",
+                    "复位后网关处于 FBL 引导加载程序中（27 03 返回 NRC）——直接进入 10 02",
                 )
             )
         else:
             info["security_2704"] = link.request_uds(bytes.fromhex("2704caffe012"), 0x67, timeout=2.0).hex()
             info["preconditions"] = link.request_uds(bytes.fromhex("31010203"), 0x71, timeout=2.0).hex()
 
-    reporter.can_log(tr("UDS 10 02 -> Переход в загрузчик FBL (Programming Session)", "UDS 10 02 -> Entering FBL Programming Session"))
+    reporter.can_log(tr("UDS 10 02 -> Переход в загрузчик FBL (Programming Session)", "UDS 10 02 -> Entering FBL Programming Session", "UDS 10 02 -> 进入 FBL 编程会话"))
     info["session_1002"] = link.request_uds(b"\x10\x02", 0x50, timeout=5.0, allow_pending=True).hex()
     time.sleep(1.0)
 
-    reporter.can_log(tr("UDS 27 11 + multi-DID 0x22 Stage 1/2 -> Подготовка дескриптора 0x0100120E", "UDS 27 11 + multi-DID 0x22 Stage 1/2 -> Staging descriptor 0x0100120E"))
+    reporter.can_log(tr("UDS 27 11 + multi-DID 0x22 Stage 1/2 -> Подготовка дескриптора 0x0100120E", "UDS 27 11 + multi-DID 0x22 Stage 1/2 -> Staging descriptor 0x0100120E", "UDS 27 11 + multi-DID 0x22 第 1/2 阶段 -> 准备描述符 0x0100120E"))
     with link.no_link_recycle():  # from here to the beacon the entry must not pause for a TX link reopen
         return _stage_and_trigger_loader(link, reporter, info, stage1, stage2, trigger)
 
@@ -395,6 +406,7 @@ def _stage_and_trigger_loader(
         tr(
             f"Сервисный RAM-Loader активен и подтверждён маяком: {beacon} (0x6F1)",
             f"Service RAM-Loader active and confirmed by beacon: {beacon} (0x6F1)",
+            f"服务 RAM-Loader 已激活并经信标确认：{beacon} (0x6F1)",
         )
     )
     return info
@@ -412,7 +424,7 @@ def _stage2_and_trigger(
     except TimeoutError:
         info["stage2_response"] = "suppressed"
 
-    reporter.can_log(tr("UDS 27 12 Trigger -> Передача управления в заводской RAM-Loader (0x6F0/0x6F1)", "UDS 27 12 Trigger -> Jumping to factory RAM-Loader (0x6F0/0x6F1)"))
+    reporter.can_log(tr("UDS 27 12 Trigger -> Передача управления в заводской RAM-Loader (0x6F0/0x6F1)", "UDS 27 12 Trigger -> Jumping to factory RAM-Loader (0x6F0/0x6F1)", "UDS 27 12 触发 -> 跳转至工厂 RAM-Loader (0x6F0/0x6F1)"))
     link.send_uds(trigger)
     try:
         trig_resp = link.receive_uds(timeout=0.2)
@@ -447,17 +459,23 @@ def _j2534_wrapper_problem(bus: Any) -> str:
         "driver connected through the VW D-PDU driver. It gives no raw CAN, and only about every fifth frame of a "
         "memory stream gets through, so memory cannot be read or written through the RAM-Loader this way. UDS "
         "requests do get through.",
+        f"适配器“{bus.module_label}”（{bus.module_vendor or '?'}）并非 VAS 6154：它是通过 VW D-PDU 驱动程序连接的"
+        "另一厂商 J2534 驱动程序。它不提供 raw CAN，内存流中大约只有每第五帧能通过，因此无法通过 RAM-Loader 以"
+        "此方式读写内存。但 UDS 请求可以通过。",
     )
     if dev is not None and dev.usable:
         tail = tr(f" Выберите в окне «Подключение» адаптер J2534 «{dev.name}» напрямую, без драйвера VW.",
-                  f" Pick the J2534 adapter “{dev.name}” directly in the Connection window, without the VW driver.")
+                  f" Pick the J2534 adapter “{dev.name}” directly in the Connection window, without the VW driver.",
+                  f"请在「连接」窗口中直接选择 J2534 适配器“{dev.name}”，不要经过 VW 驱动程序。")
     elif dev is not None:
         tail = tr(f" Его драйвер J2534 «{dev.name}» {dev.bits}-разрядный, а ContiTool работает только с 64-разрядными.",
-                  f" Its J2534 driver “{dev.name}” is {dev.bits}-bit, and ContiTool works only with 64-bit ones.")
+                  f" Its J2534 driver “{dev.name}” is {dev.bits}-bit, and ContiTool works only with 64-bit ones.",
+                  f"其 J2534 驱动程序“{dev.name}”为 {dev.bits} 位，而 ContiTool 仅支持 64 位驱动程序。")
     else:
         tail = ""
     return head + tail + tr(" Для чтения памяти подойдёт CANable, candleLight или VAS 6154 / VNCI с raw CAN.",
-                            " A CANable, candleLight or a VAS 6154 / VNCI with raw CAN can read memory.")
+                            " A CANable, candleLight or a VAS 6154 / VNCI with raw CAN can read memory.",
+                            "CANable、candleLight 或带 raw CAN 的 VAS 6154 / VNCI 可读取内存。")
 
 
 def _refuse_memory_via_j2534_wrapper(link: Any) -> None:
@@ -486,6 +504,7 @@ def enter_ram_loader(
                     tr(
                         "Проверяем, не активен ли уже заводской RAM-Loader (0x6F0)…",
                         "Checking whether the factory RAM-Loader (0x6F0) is already active…",
+                        "正在检查工厂 RAM-Loader (0x6F0) 是否已激活…",
                     )
                 )
                 beacon = _probe_beacon_in_loader(link, reporter)
@@ -493,6 +512,7 @@ def enter_ram_loader(
                     tr(
                         f"Заводской RAM-Loader уже активен ({beacon})",
                         f"Factory RAM-Loader is already active ({beacon})",
+                        f"工厂 RAM-Loader 已激活 ({beacon})",
                     )
                 )
                 return {
@@ -508,6 +528,7 @@ def enter_ram_loader(
             tr(
                 f"Первая попытка входа не удалась ({first_err}) — выполняем мягкий сброс шлюза и повтор…",
                 f"Initial entry failed ({first_err}) — resetting gateway back to Application and retrying…",
+                f"首次进入失败 ({first_err})——正在将网关复位回应用程序并重试…",
             )
         )
         _reset_to_application(link, reporter=reporter, allow_fbl=True)
@@ -586,13 +607,15 @@ def read_memory_bytes(
     return bytes(out)
 
 
-SLOW_ADAPTER_HINT = (  # (ru, en): the language can change while the app runs
+SLOW_ADAPTER_HINT = (  # (ru, en, zh): the language can change while the app runs
     "Адаптер теряет кадры, когда блок передаёт память на полной скорости шины. Так ведут себя SLCAN-клоны с "
     "последовательным портом (CH340 и т. п. на 115200 бод): для UDS их хватает, для чтения памяти — нет. "
     "Нужен адаптер с прямым USB (CANable, candleLight) или VAS 6154 / VNCI.",
     "The adapter loses frames while the ECU streams memory at full bus speed. Serial SLCAN clones (CH340 etc. at "
     "115200 baud) behave like this: fine for UDS, too slow for memory reads. Use a native USB adapter "
     "(CANable, candleLight) or VAS 6154 / VNCI.",
+    "当模块以总线全速传输内存时，适配器会丢失帧。带串口的 SLCAN 克隆（如 115200 波特的 CH340 等）正是如此："
+    "用于 UDS 尚可，用于内存读取则速度不足。请使用原生 USB 适配器（CANable、candleLight）或 VAS 6154 / VNCI。",
 )
 
 
@@ -605,6 +628,8 @@ NONRAW_ADAPTER_HINT = (
     "The adapter refused raw CAN (RawMode), and through the plain D-PDU link the memory stream from the ECU did not "
     "arrive in full. Memory cannot be read with this adapter. Use a CANable, candleLight or a VAS 6154 / VNCI with "
     "raw CAN.",
+    "适配器拒绝提供 raw CAN（RawMode），且通过普通 D-PDU 链路，模块的内存流未能完整到达。"
+    "无法用此适配器读取内存。请使用 CANable、candleLight 或带 raw CAN 的 VAS 6154 / VNCI。",
 )
 
 
@@ -657,6 +682,7 @@ def read_memory_area(
                     tr(
                         f"{label}: сбой чтения @ 0x{addr:08X} ({exc}) — повтор {attempt + 1}/{AREA_READ_RETRIES}",
                         f"{label}: read failed @ 0x{addr:08X} ({exc}) — retry {attempt + 1}/{AREA_READ_RETRIES}",
+                        f"{label}：读取失败 @ 0x{addr:08X} ({exc})——重试 {attempt + 1}/{AREA_READ_RETRIES}",
                     )
                 )
                 time.sleep(2.5)  # a 64 KB stream lasts ~2.1 s: let a broken one run out before the next sync
@@ -678,6 +704,7 @@ def read_memory_area(
                 tr(
                     f"{label}: прочитано {offset:,} / {total:,} байт ({offset * 100.0 / total:.1f}%)",
                     f"{label}: read {offset:,} / {total:,} bytes ({offset * 100.0 / total:.1f}%)",
+                    f"{label}：已读取 {offset:,} / {total:,} 字节 ({offset * 100.0 / total:.1f}%)",
                 )
             )
 
@@ -702,6 +729,7 @@ def read_memory_area(
         tr(
             f"{label}: чтение завершено ({len(raw):,} Б, SHA-256: {sha[:16]}…)",
             f"{label}: read complete ({len(raw):,} B, SHA-256: {sha[:16]}…)",
+            f"{label}：读取完成 ({len(raw):,} B，SHA-256：{sha[:16]}…)",
         )
     )
     return result
@@ -713,6 +741,7 @@ def run_rsa_probe(link: J533CanLink, *, reporter: OperationReporter = NULL_REPOR
         tr(
             "Запуск RSA-пробника (вызов 0x010033FC на 128 байтах 0xFF)…",
             "Running live RSA probe (calling 0x010033FC on 128 bytes of 0xFF)…",
+            "正在运行 RSA 探测（在 128 字节 0xFF 上调用 0x010033FC）…",
         )
     )
     link.send_loader_payload(RSA_PROBE_PAYLOAD, reporter=reporter)
@@ -782,7 +811,8 @@ def _probe_app_or_fbl(link: J533CanLink, *, attempts: int, allow_fbl: bool) -> t
             # Where FBL is no acceptable landing nothing short of that proof counts: F1DF bit 2 is only the result
             # of a check whose code lies outside the dump, and a clear bit is no evidence the application started.
             last_err = RuntimeError(tr(f"на 10 03 ответ есть, а на F197/0600 нет — работа приложения не подтверждена ({exc})",
-                                       f"10 03 answered but F197/0600 did not, so the Application is not proven ({exc})"))
+                                       f"10 03 answered but F197/0600 did not, so the Application is not proven ({exc})",
+                                       f"10 03 有应答，但 F197/0600 无应答，因此无法确认应用程序正在运行 ({exc})"))
             time.sleep(0.5)
             continue
         # Where landing in FBL is acceptable, a running application mistaken for FBL is the costlier error (the
@@ -795,7 +825,7 @@ def _probe_app_or_fbl(link: J533CanLink, *, attempts: int, allow_fbl: bool) -> t
         except LINK_ERRORS:
             pass
         return sess, f1df_val is not None and bool(f1df_val & 0x04)
-    raise RuntimeError(tr(f"Приложение шлюза не запустилось: {last_err}", f"Application did not come up: {last_err}"))
+    raise RuntimeError(tr(f"Приложение шлюза не запустилось: {last_err}", f"Application did not come up: {last_err}", f"网关应用程序未启动：{last_err}"))
 
 
 def _return_to_application(
@@ -819,6 +849,7 @@ def _return_to_application(
                 "(заливка бэкапа или прошивка через ODIS).",
                 "The gateway was already in its FBL bootloader before this operation and is still there: its "
                 "application has to be restored (write a backup back, or an ODIS flash).",
+                "网关在本次操作前已处于 FBL 引导加载程序中，且仍保持其中：必须恢复其应用程序（写回备份或执行 ODIS 刷写）。",
             )
         )
     return info
@@ -845,6 +876,7 @@ def _reset_to_application(
             tr(
                 "Отправка команды сброса FE FF через заводской RAM-Loader (0x6F0)…",
                 "Sending FE FF MCU reset via factory RAM-Loader (0x6F0)…",
+                "正在通过工厂 RAM-Loader (0x6F0) 发送 FE FF 复位命令…",
             )
         )
         info["loader_reset"] = _loader_reset_command(link)
@@ -860,20 +892,20 @@ def _reset_to_application(
 
 
 # Identification the gateway answers in the extended session (checked on 3Q0907530AA / HW 3Q0907530C / SW 5366)
-ECU_IDENT_DIDS: tuple[tuple[int, str, str], ...] = (
-    (0xF187, "Номер детали", "Part number"),
-    (0xF191, "Номер оборудования", "Hardware number"),
-    (0xF189, "Версия ПО", "Software version"),
+ECU_IDENT_DIDS: tuple[tuple[int, str, str, str], ...] = (
+    (0xF187, "Номер детали", "Part number", "零件号"),
+    (0xF191, "Номер оборудования", "Hardware number", "硬件编号"),
+    (0xF189, "Версия ПО", "Software version", "软件版本"),
     # Boot software (FBL) identification: the RAM-loader entry is staged inside the FBL, so this is the version
     # that decides whether it works. An ODIS recovery flash can change it without touching F189.
-    (0xF180, "Версия загрузчика", "Boot software version"),
-    (0xF1A3, "Версия оборудования", "Hardware version"),
-    (0xF197, "Система", "System name"),
-    (0xF18C, "Серийный номер", "Serial number"),
-    (0xF17C, "FAZIT", "FAZIT"),
-    (0xF19E, "Вариант ODX", "ODX variant"),
-    (0xF1A2, "Версия ODX", "ODX version"),
-    (0x0600, "Кодирование", "Coding"),
+    (0xF180, "Версия загрузчика", "Boot software version", "引导软件版本"),
+    (0xF1A3, "Версия оборудования", "Hardware version", "硬件版本"),
+    (0xF197, "Система", "System name", "系统名称"),
+    (0xF18C, "Серийный номер", "Serial number", "序列号"),
+    (0xF17C, "FAZIT", "FAZIT", "FAZIT"),
+    (0xF19E, "Вариант ODX", "ODX variant", "ODX 变体"),
+    (0xF1A2, "Версия ODX", "ODX version", "ODX 版本"),
+    (0x0600, "Кодирование", "Coding", "编码"),
 )
 
 
@@ -905,6 +937,8 @@ def unsupported_ecu_reason(ident: list[dict[str, str]]) -> str | None:
             "ContiTool поддерживает только шлюзы Continental 3Q0 907 530 на базе Renesas RH850/F1L (HW 5xx / SW 5xxx).",
             "This is a Lear gateway based on NXP PowerPC (MPC5607B / MPC5748G). "
             "ContiTool only supports Continental 3Q0 907 530 gateways based on Renesas RH850/F1L (HW 5xx / SW 5xxx).",
+            "这是基于 NXP PowerPC（MPC5607B / MPC5748G）的 Lear 网关。"
+            "ContiTool 仅支持基于 Renesas RH850/F1L 的 Continental 3Q0 907 530 网关（HW 5xx / SW 5xxx）。",
         )
 
     # 2. First-generation MQB gateways (5Q0 / 8V0 / 5QE / 8S0, or early HW 2xx / SW 2xxx) on NXP MPC5607B PowerPC
@@ -924,12 +958,16 @@ def unsupported_ecu_reason(ident: list[dict[str, str]]) -> str | None:
                 "а не Renesas RH850/F1L. ContiTool поддерживает только поколение 3Q0 907 530 на базе Renesas RH850/F1L (HW 5xx / SW 5xxx).",
                 "This is a first-generation Continental 5Q0 gateway (HW 2xx / SW 2xxx) based on NXP PowerPC (MPC5607B), "
                 "not Renesas RH850/F1L. ContiTool only supports 3Q0 907 530 gateways based on Renesas RH850/F1L (HW 5xx / SW 5xxx).",
+                "这是基于 NXP PowerPC（MPC5607B）的第一代 Continental 5Q0 网关（HW 2xx / SW 2xxx），"
+                "而非 Renesas RH850/F1L。ContiTool 仅支持基于 Renesas RH850/F1L 的 3Q0 907 530 网关（HW 5xx / SW 5xxx）。",
             )
         return tr(
             "Это шлюз первого поколения MQB (5Q0 / 8V0) на процессоре NXP PowerPC (MPC5607B), а не Renesas RH850/F1L. "
             "ContiTool поддерживает только шлюзы Continental 3Q0 907 530 на базе Renesas RH850/F1L (HW 5xx / SW 5xxx).",
             "This is a first-generation MQB gateway (5Q0 / 8V0) based on NXP PowerPC (MPC5607B), not Renesas RH850/F1L. "
             "ContiTool only supports Continental 3Q0 907 530 gateways based on Renesas RH850/F1L (HW 5xx / SW 5xxx).",
+            "这是基于 NXP PowerPC（MPC5607B）的第一代 MQB 网关（5Q0 / 8V0），而非 Renesas RH850/F1L。"
+            "ContiTool 仅支持基于 Renesas RH850/F1L 的 Continental 3Q0 907 530 网关（HW 5xx / SW 5xxx）。",
         )
 
     # 3. Other VAG gateway/ECU families (e.g. MQB-A0 2Q0 907 530, MQB-Evo 5WA 907 530)
@@ -937,6 +975,7 @@ def unsupported_ecu_reason(ident: list[dict[str, str]]) -> str | None:
         return tr(
             "Этот блок не относится к линейке Continental 3Q0 907 530 на процессоре Renesas RH850/F1L и не поддерживается программой.",
             "This ECU is not a Continental 3Q0 907 530 gateway based on Renesas RH850/F1L and is not supported.",
+            "该模块不属于基于 Renesas RH850/F1L 的 Continental 3Q0 907 530 系列，程序不支持。",
         )
 
     return None
@@ -956,11 +995,11 @@ def can_identify(
     in_fbl = False
     with J533CanLink(port, interface=interface, bus=bus) as link:
         if link.interface == "dpdu" and callable(getattr(link.bus, "describe", None)):
-            reporter.info(tr("Модуль D-PDU: ", "D-PDU module: ") + link.bus.describe())
+            reporter.info(tr("Модуль D-PDU: ", "D-PDU module: ", "D-PDU 模块：") + link.bus.describe())
             if (wrapped := _j2534_wrapper_bus(link)) is not None:
                 result["adapter_warning"] = _j2534_wrapper_problem(wrapped)
                 reporter.warning(result["adapter_warning"])
-        reporter.step(1, 2, tr("Проверка связи с блоком (UDS 10 03)", "Checking the link to the ECU (UDS 10 03)"))
+        reporter.step(1, 2, tr("Проверка связи с блоком (UDS 10 03)", "Checking the link to the ECU (UDS 10 03)", "正在检查与模块的通信 (UDS 10 03)"))
         try:
             link.request_uds(b"\x10\x03", 0x50, timeout=2.0)
         except LINK_ERRORS as exc:
@@ -973,19 +1012,21 @@ def can_identify(
                         "CAN-H на Pin 19, CAN-L на Pin 9 и что включён CAN-терминатор (или стоит резистор 120 Ом между ними).",
                         f"The ECU does not answer on CAN ({exc}). Check +12 V (Pin 1 and Pin 14), ground (Pin 11), "
                         "CAN-H on Pin 19, CAN-L on Pin 9 and that CAN termination is on (or a 120 Ω resistor between them).",
+                        f"模块无 CAN 应答 ({exc})。请检查 +12 V 电源（Pin 1 与 Pin 14）、接地（Pin 11）、"
+                        "Pin 19 的 CAN-H、Pin 9 的 CAN-L，并确认已启用 CAN 终端（或在两者之间接 120 Ω 电阻）。",
                     )
                 ) from exc
         result["responding"] = True
-        reporter.step(2, 2, tr("Чтение идентификации блока", "Reading the ECU identification"))
-        for did, ru, en in ECU_IDENT_DIDS:
+        reporter.step(2, 2, tr("Чтение идентификации блока", "Reading the ECU identification", "正在读取模块识别信息"))
+        for did, ru, en, zh in ECU_IDENT_DIDS:
             try:
                 raw = link.request_uds(bytes([0x22, did >> 8, did & 0xFF]), 0x62, timeout=2.0)[3:]
             except LINK_ERRORS:
                 continue  # this ECU variant does not support the identifier
             text = raw.rstrip(b"\x00 ").decode("latin-1")
             value = text.strip() if text and all(32 <= ord(ch) < 127 for ch in text) else raw.hex().upper()
-            result["ident"].append({"did": f"{did:04X}", "label_ru": ru, "label_en": en, "value": value})
-            reporter.info(f"{did:04X} {tr(ru, en)}: {value}")
+            result["ident"].append({"did": f"{did:04X}", "label_ru": ru, "label_en": en, "label_zh": zh, "value": value})
+            reporter.info(f"{did:04X} {tr(ru, en, zh)}: {value}")
 
         # Cold-boot FBL Default Session answers `10 03 -> 50 03`, omits Application-only DIDs (`F197`, `0600`),
         # and reports bit 2 (`0x04`, e.g. `0x44`) in `22 F1 DF` when the Application is erased or invalid.
@@ -1011,6 +1052,7 @@ def can_identify(
                 tr(
                     "Блок отвечает из загрузчика FBL — основная прошивка сейчас не запущена.",
                     "The ECU answered from the FBL bootloader — the main application is not running.",
+                    "模块从 FBL 引导加载程序应答——主应用程序当前未运行。",
                 )
             )
     return result
@@ -1033,13 +1075,13 @@ def can_swap_status(
 ) -> dict[str, Any]:
     """Which SWaP features the gateway itself reports as active (UDS 22 3C 00). Read-only."""
     with J533CanLink(port, interface=interface, bus=bus) as link:
-        reporter.step(1, 1, tr("Чтение состояния функций SWaP (UDS 22 3C 00)", "Reading SWaP feature states (UDS 22 3C 00)"))
+        reporter.step(1, 1, tr("Чтение состояния функций SWaP (UDS 22 3C 00)", "Reading SWaP feature states (UDS 22 3C 00)", "正在读取 SWaP 功能状态 (UDS 22 3C 00)"))
         link.request_uds(b"\x10\x03", 0x50, timeout=2.0)
         for attempt in range(3):
             raw = link.request_uds(bytes([0x22, SWAP_STATUS_DID >> 8, SWAP_STATUS_DID & 0xFF]), 0x62, timeout=2.0)[3:]
             if len(raw) % 5:
                 raise RuntimeError(
-                    tr(f"Неожиданный ответ 22 3C 00: {raw.hex().upper()}", f"Unexpected 22 3C 00 answer: {raw.hex().upper()}")
+                    tr(f"Неожиданный ответ 22 3C 00: {raw.hex().upper()}", f"Unexpected 22 3C 00 answer: {raw.hex().upper()}", f"意外的 22 3C 00 应答：{raw.hex().upper()}")
                 )
             features = [
                 {"fsid": int.from_bytes(raw[i : i + 4], "big"), "status": raw[i + 4]}
@@ -1076,27 +1118,27 @@ def can_health_check(
     }
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
-            reporter.step(1, total_steps, tr("Перевод шлюза в штатный режим и сессию 10 03", "Resetting gateway into normal Application mode (10 03)"))
+            reporter.step(1, total_steps, tr("Перевод шлюза в штатный режим и сессию 10 03", "Resetting gateway into normal Application mode (10 03)", "正在将网关复位为正常应用程序模式 (10 03)"))
             reporter.progress(15, 100)
             result.update(_reset_to_application(link, reporter=reporter))
 
-            reporter.step(2, total_steps, tr("Проверка связи с приложением (TesterPresent 3E 00)", "Verifying Application communication (TesterPresent 3E 00)"))
+            reporter.step(2, total_steps, tr("Проверка связи с приложением (TesterPresent 3E 00)", "Verifying Application communication (TesterPresent 3E 00)", "正在验证应用程序通信 (TesterPresent 3E 00)"))
             result["tester_present"] = link.request_uds(b"\x3e\x00", 0x7E, timeout=2.0).hex()
             result["application_communication_ok"] = True
             reporter.progress(50, 100)
-            reporter.success(tr("Штатное приложение шлюза J533 на связи (50 03 / 7E 00)!", "Gateway Application is alive and responding (50 03 / 7E 00)!"))
+            reporter.success(tr("Штатное приложение шлюза J533 на связи (50 03 / 7E 00)!", "Gateway Application is alive and responding (50 03 / 7E 00)!", "J533 网关应用程序在线并应答 (50 03 / 7E 00)！"))
 
             step_idx = 3
             if clear_dtc:
-                reporter.step(3, total_steps, tr("Очистка регистра ошибок DTC (UDS 14 FF FF FF)", "Clearing Diagnostic Trouble Codes (UDS 14 FF FF FF)"))
+                reporter.step(3, total_steps, tr("Очистка регистра ошибок DTC (UDS 14 FF FF FF)", "Clearing Diagnostic Trouble Codes (UDS 14 FF FF FF)", "正在清除故障码 (UDS 14 FF FF FF)"))
                 result["clear_dtc_response"] = link.request_uds(
                     bytes.fromhex("14ffffff"), 0x54, timeout=5.0, allow_pending=True
                 ).hex()
                 time.sleep(0.5)
-                reporter.info(tr("Команда очистки DTC выполнена успешно (0x54)", "ClearDiagnosticInformation accepted (0x54)"))
+                reporter.info(tr("Команда очистки DTC выполнена успешно (0x54)", "ClearDiagnosticInformation accepted (0x54)", "清除故障码命令已被接受 (0x54)"))
                 step_idx = 4
 
-            reporter.step(step_idx, total_steps, tr("Чтение регистра ошибок DTC (UDS 19 02 FF)", "Reading Diagnostic Trouble Codes (UDS 19 02 FF)"))
+            reporter.step(step_idx, total_steps, tr("Чтение регистра ошибок DTC (UDS 19 02 FF)", "Reading Diagnostic Trouble Codes (UDS 19 02 FF)", "正在读取故障码 (UDS 19 02 FF)"))
             try:
                 resp = link.request_uds(bytes.fromhex("1902ff"), 0x59, timeout=3.0)
                 result["dtc_supported"] = True
@@ -1118,6 +1160,7 @@ def can_health_check(
                     tr(
                         f"Прочитано записей DTC: {len(dtc_list)} (активных/подтверждённых: {active_cnt})",
                         f"Read {len(dtc_list)} DTC records (active/confirmed: {active_cnt})",
+                        f"已读取 {len(dtc_list)} 条 DTC 记录（活动/已确认：{active_cnt}）",
                     )
                 )
             except RuntimeError as dtc_err:
@@ -1157,13 +1200,13 @@ def can_verify(
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
             if not no_enter:
-                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по Diagnosis CAN (без стирания/записи)", "Entering factory RAM-Loader over Diagnosis CAN (read-only)"))
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по Diagnosis CAN (без стирания/записи)", "Entering factory RAM-Loader over Diagnosis CAN (read-only)", "正在通过诊断 CAN 进入工厂 RAM-Loader（只读）"))
                 report["loader_session"] = enter_ram_loader(link, reporter=reporter)
             else:
-                reporter.step(1, total_steps, tr("Проверка активного заводского RAM-Loader (0x6F0)", "Checking active factory RAM-Loader (0x6F0)"))
+                reporter.step(1, total_steps, tr("Проверка активного заводского RAM-Loader (0x6F0)", "Checking active factory RAM-Loader (0x6F0)", "正在检查活动的工厂 RAM-Loader (0x6F0)"))
                 report["beacon"] = _probe_beacon_in_loader(link, reporter)
 
-            reporter.step(2, total_steps, tr("Вычитывание загрузчика Uflash (32 КБ @ 0x01000000)", "Reading Uflash bootloader (32 KB @ 0x01000000)"))
+            reporter.step(2, total_steps, tr("Вычитывание загрузчика Uflash (32 КБ @ 0x01000000)", "Reading Uflash bootloader (32 KB @ 0x01000000)", "正在读取 Uflash 引导加载程序 (32 KB @ 0x01000000)"))
             uf_path = out_dir / "Uflash.bin"
             uf_read = read_memory_area(
                 link,
@@ -1180,7 +1223,7 @@ def can_verify(
             report["uflash_signature_found"] = uf_info.signature_found
             report["uflash_rsa_bypassed"] = uf_info.rsa_bypassed
 
-            reporter.step(3, total_steps, tr("Запуск живого RSA-пробника в RAM (0x010033FC)", "Running live RSA verification probe in RAM (0x010033FC)"))
+            reporter.step(3, total_steps, tr("Запуск живого RSA-пробника в RAM (0x010033FC)", "Running live RSA verification probe in RAM (0x010033FC)", "正在 RAM 中运行实时 RSA 校验探测 (0x010033FC)"))
             rsa_res = run_rsa_probe(link, reporter=reporter)
             report["rsa_probe"] = rsa_res
             report["rsa_status"] = rsa_res["rsa_status"]
@@ -1189,6 +1232,7 @@ def can_verify(
                     tr(
                         "Статус загрузчика: ИНЖЕНЕРНЫЙ RSA-FREE FBL АКТИВЕН (rsa_status = 0)",
                         "Bootloader status: ENGINEERING RSA-FREE FBL ACTIVE (rsa_status = 0)",
+                        "引导加载程序状态：工程 RSA-FREE FBL 已激活 (rsa_status = 0)",
                     )
                 )
             else:
@@ -1196,11 +1240,12 @@ def can_verify(
                     tr(
                         f"Статус загрузчика: Заводская проверка RSA-1024 АКТИВНА (rsa_status = {rsa_res['rsa_status']})",
                         f"Bootloader status: Stock RSA-1024 check is ACTIVE (rsa_status = {rsa_res['rsa_status']})",
+                        f"引导加载程序状态：原厂 RSA-1024 校验已激活 (rsa_status = {rsa_res['rsa_status']})",
                     )
                 )
 
             if return_to_app:
-                reporter.step(4, total_steps, tr("Возврат шлюза в штатный рабочий режим (10 03)", "Returning gateway to normal Application mode (10 03)"))
+                reporter.step(4, total_steps, tr("Возврат шлюза в штатный рабочий режим (10 03)", "Returning gateway to normal Application mode (10 03)", "正在将网关恢复为正常应用程序模式 (10 03)"))
                 report["return_to_app"] = _return_to_application(link, report.get("loader_session"), reporter=reporter)
 
             report["complete"] = True
@@ -1247,10 +1292,10 @@ def can_backup(
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
             if not no_enter:
-                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (режим только чтение)", "Entering factory RAM-Loader over CAN (read-only mode)"))
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (режим только чтение)", "Entering factory RAM-Loader over CAN (read-only mode)", "正在通过 CAN 进入工厂 RAM-Loader（只读模式）"))
                 manifest["loader_session"] = enter_ram_loader(link, reporter=reporter)
             else:
-                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)"))
+                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)", "正在检查活动的 RAM-Loader (0x6F0)"))
                 manifest["beacon"] = _probe_beacon_in_loader(link, reporter)
 
             for idx, area_key in enumerate(selected, start=2):
@@ -1262,6 +1307,7 @@ def can_backup(
                     tr(
                         f"Чтение {fname} ({size_kb:,} КБ: 0x{start_addr:08X}..0x{end_addr - 1:08X})",
                         f"Reading {fname} ({size_kb:,} KB: 0x{start_addr:08X}..0x{end_addr - 1:08X})",
+                        f"正在读取 {fname} ({size_kb:,} KB：0x{start_addr:08X}..0x{end_addr - 1:08X})",
                     ),
                 )
                 file_path = out_dir / fname
@@ -1286,7 +1332,7 @@ def can_backup(
                 }
 
             if return_to_app:
-                reporter.step(total_steps, total_steps, tr("Возврат шлюза в штатный режим после бэкапа", "Returning gateway to normal Application mode"))
+                reporter.step(total_steps, total_steps, tr("Возврат шлюза в штатный режим после бэкапа", "Returning gateway to normal Application mode", "备份后正在将网关恢复为正常应用程序模式"))
                 manifest["return_to_app"] = _return_to_application(link, manifest.get("loader_session"), reporter=reporter)
 
             manifest["complete"] = True
@@ -1295,6 +1341,7 @@ def can_backup(
                 tr(
                     f"Полный бэкап сохранён в папку: {out_dir}",
                     f"Full backup saved to folder: {out_dir}",
+                    f"完整备份已保存至文件夹：{out_dir}",
                 )
             )
             return manifest
@@ -1342,10 +1389,10 @@ def can_read_memory(
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
             if not no_enter:
-                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение памяти)", "Entering factory RAM-Loader over CAN (memory read)"))
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по CAN (чтение памяти)", "Entering factory RAM-Loader over CAN (memory read)", "正在通过 CAN 进入工厂 RAM-Loader（内存读取）"))
                 report["loader_session"] = enter_ram_loader(link, reporter=reporter)
             else:
-                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)"))
+                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)", "正在检查活动的 RAM-Loader (0x6F0)"))
                 report["beacon"] = _probe_beacon_in_loader(link, reporter)
 
             reporter.step(
@@ -1354,6 +1401,7 @@ def can_read_memory(
                 tr(
                     f"Чтение памяти 0x{address:08X}..0x{address + length - 1:08X} ({length:,} Б)",
                     f"Reading memory 0x{address:08X}..0x{address + length - 1:08X} ({length:,} B)",
+                    f"正在读取内存 0x{address:08X}..0x{address + length - 1:08X} ({length:,} B)",
                 ),
             )
             if output_file.exists():
@@ -1380,11 +1428,12 @@ def can_read_memory(
                 tr(
                     f"Прочитано {len(raw):,} Б -> {output_file} (SHA-256: {report['sha256'][:16]}…)",
                     f"Read {len(raw):,} B -> {output_file} (SHA-256: {report['sha256'][:16]}…)",
+                    f"已读取 {len(raw):,} B -> {output_file} (SHA-256：{report['sha256'][:16]}…)",
                 )
             )
 
             if return_to_app:
-                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)"))
+                reporter.step(3, total_steps, tr("Возврат шлюза в штатный режим (10 03)", "Returning gateway to normal Application mode (10 03)", "正在将网关恢复为正常应用程序模式 (10 03)"))
                 report["return_to_app"] = _return_to_application(link, report.get("loader_session"), reporter=reporter)
 
             report["complete"] = True
@@ -1439,6 +1488,7 @@ def _execute_faci_payloads(
                 tr(
                     f"{pkt_label}: ошибка FACI: marker={marker}, FSTATR=0x{fstatr:08X}, last_offset=0x{last_offset:08X}",
                     f"{pkt_label} FACI status error: marker={marker}, FSTATR=0x{fstatr:08X}, last_offset=0x{last_offset:08X}",
+                    f"{pkt_label} FACI 状态错误：marker={marker}, FSTATR=0x{fstatr:08X}, last_offset=0x{last_offset:08X}",
                 )
             )
     return packets_log
@@ -1470,10 +1520,10 @@ def can_write_uflash(
 
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
-            reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по Diagnosis CAN", "Entering factory RAM-Loader over Diagnosis CAN"))
+            reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по Diagnosis CAN", "Entering factory RAM-Loader over Diagnosis CAN", "正在通过诊断 CAN 进入工厂 RAM-Loader"))
             result["loader_session"] = enter_ram_loader(link, reporter=reporter)
 
-            reporter.step(2, total_steps, tr("Чтение текущего загрузчика Uflash из блока (32 КБ)", "Reading current physical Uflash from gateway (32 KB)"))
+            reporter.step(2, total_steps, tr("Чтение текущего загрузчика Uflash из блока (32 КБ)", "Reading current physical Uflash from gateway (32 KB)", "正在从网关读取当前物理 Uflash (32 KB)"))
             backup_dir = out_dir / "backup"
             backup_dir.mkdir(parents=True, exist_ok=True)
             cur_uf_path = backup_dir / "Uflash_before.bin"
@@ -1511,6 +1561,7 @@ def can_write_uflash(
                     tr(
                         "Входной файл Uflash не принадлежит этому шлюзу (отличается за пределами +0x342A)! Запись заблокирована.",
                         "Input Uflash does not match physical Uflash outside +0x342A! Write refused for safety.",
+                        "输入的 Uflash 在 +0x342A 之外与物理 Uflash 不匹配！为安全起见已拒绝写入。",
                     )
                 )
 
@@ -1525,13 +1576,14 @@ def can_write_uflash(
                     tr(
                         "Нужная версия Uflash уже прошита в блоке — повторное стирание не требуется!",
                         "Target Uflash image is already programmed in gateway — skipping erase/write!",
+                        "目标 Uflash 镜像已刷入网关——跳过擦除/写入！",
                     )
                 )
                 result["already_matching"] = True
                 result["step3_skipped_backup"] = True
             else:
                 if not skip_full_backup:
-                    reporter.step(3, total_steps, tr("Обязательный полный бэкап Cflash + Dflash перед стиранием Uflash", "Mandatory full Cflash + Dflash backup before erasing Uflash"))
+                    reporter.step(3, total_steps, tr("Обязательный полный бэкап Cflash + Dflash перед стиранием Uflash", "Mandatory full Cflash + Dflash backup before erasing Uflash", "擦除 Uflash 前强制进行 Cflash + Dflash 完整备份"))
                     read_memory_area(
                         link,
                         CFLASH_ADDR_START,
@@ -1549,7 +1601,7 @@ def can_write_uflash(
                         reporter=reporter,
                     )
                 else:
-                    reporter.step(3, total_steps, tr("Полное чтение блока уже есть — остальные области не читаются", "A complete read of this ECU is on file — the other areas are not read again"))
+                    reporter.step(3, total_steps, tr("Полное чтение блока уже есть — остальные области не читаются", "A complete read of this ECU is on file — the other areas are not read again", "已存在该模块的完整读取记录——不再重复读取其他区域"))
 
                 payloads, pages = build_uflash_faci_payloads(candidate)
                 result["payload_sha256"] = _digest(payloads[0])
@@ -1562,6 +1614,7 @@ def can_write_uflash(
                     tr(
                         f"Запись Uflash через FACI в RAM ({pages} стр. = {pages * 256:,} Б) — НЕ ОТКЛЮЧАЙТЕ ПИТАНИЕ!",
                         f"FACI Uflash programming in RAM ({pages} pages = {pages * 256:,} B) — DO NOT CUT POWER!",
+                        f"通过 FACI 在 RAM 中编程 Uflash ({pages} 页 = {pages * 256:,} B)——切勿断电！",
                     ),
                 )
                 result["flash_commands_sent"] = True
@@ -1582,10 +1635,11 @@ def can_write_uflash(
                     tr(
                         f"Запись FACI завершена штатно (marker=1, FSTATR=0x{result['fstatr']:04X})",
                         f"FACI programming completed cleanly (marker=1, FSTATR=0x{result['fstatr']:04X})",
+                        f"FACI 编程顺利完成 (marker=1, FSTATR=0x{result['fstatr']:04X})",
                     )
                 )
 
-            reporter.step(5, total_steps, tr("Контрольное побайтовое вычитывание Uflash (32 КБ) и RSA-пробник", "Full 32 KB Uflash readback verification & RSA probe"))
+            reporter.step(5, total_steps, tr("Контрольное побайтовое вычитывание Uflash (32 КБ) и RSA-пробник", "Full 32 KB Uflash readback verification & RSA probe", "完整 32 KB Uflash 回读校验 & RSA 探测"))
             rb_path = out_dir / "Uflash_readback.bin"
             rb = read_memory_area(
                 link,
@@ -1609,7 +1663,7 @@ def can_write_uflash(
                 raise RuntimeError("Stock RSA verification was requested, but rsa_status is still 0")
 
             if return_to_app:
-                reporter.step(6, total_steps, tr("Перезапуск шлюза и проверка штатного режима (10 03 / 3E 00)", "Resetting gateway & verifying normal Application communication"))
+                reporter.step(6, total_steps, tr("Перезапуск шлюза и проверка штатного режима (10 03 / 3E 00)", "Resetting gateway & verifying normal Application communication", "正在复位网关并校验正常应用程序通信"))
                 result["return_to_app"] = _return_to_application(
                     link, result.get("loader_session"), reporter=reporter
                 )
@@ -1619,10 +1673,12 @@ def can_write_uflash(
             reporter.progress(100, 100)
             if result.get("already_matching"):
                 reporter.success(tr("Загрузчик Uflash не менялся: в блоке уже нужная версия, сверка совпала",
-                                    "Uflash bootloader left as is: the gateway already had this version, readback matches"))
+                                    "Uflash bootloader left as is: the gateway already had this version, readback matches",
+                                    "Uflash 引导加载程序保持不变：网关已具有此版本，回读一致"))
             else:
                 reporter.success(tr("Загрузчик Uflash успешно прошит и побайтово верифицирован!",
-                                    "Uflash bootloader successfully programmed and verified byte-for-byte!"))
+                                    "Uflash bootloader successfully programmed and verified byte-for-byte!",
+                                    "Uflash 引导加载程序已成功刷写并逐字节校验！"))
             return result
         except OperationCancelledError:
             _hand_back_after_cancel(link, reporter)
@@ -1648,6 +1704,8 @@ def _validate_dflash_candidate_blank_state(raw_cand: bytes) -> None:
                 "без аппаратного Blank Check 0x71). Снимите свежий бэкап DataFlash перед записью!",
                 "Candidate DataFlash contains RV40F erased-cell read noise instead of FF..FF (legacy CPU-bus dump "
                 "captured without hardware Blank Check 0x71). Read a fresh DataFlash backup before writing!",
+                "候选 DataFlash 包含 RV40F 擦除单元读取噪声而非 FF..FF（旧版 CPU 总线转储，未通过硬件 Blank Check 0x71 "
+                "采集）。写入前请重新读取一份全新的 DataFlash 备份！",
             )
         )
 
@@ -1699,6 +1757,7 @@ def can_write_dflash(
             tr(
                 f"Ожидается полный 64-КБ образ DataFlash ({DFLASH_SIZE:,} байт), получено {len(raw_cand):,} байт",
                 f"Expected full 64 KB DataFlash image ({DFLASH_SIZE:,} bytes), got {len(raw_cand):,} bytes",
+                f"期望完整的 64 KB DataFlash 镜像（{DFLASH_SIZE:,} 字节），实际收到 {len(raw_cand):,} 字节",
             )
         )
     if not allow_icus_tail and raw_cand[DFLASH_ICUS_RESERVED_OFFSET:] != b"\xff" * (DFLASH_SIZE - DFLASH_ICUS_RESERVED_OFFSET):
@@ -1706,6 +1765,7 @@ def can_write_dflash(
             tr(
                 f"Хвостовая область DataFlash 0x{DFLASH_ICUS_RESERVED_OFFSET:04X}..0xFFFF защищена аппаратно под ключи ICUSB и должна оставаться FF..FF",
                 f"DataFlash tail 0x{DFLASH_ICUS_RESERVED_OFFSET:04X}..0xFFFF is hardware-guarded for ICUSB keys and must remain FF..FF",
+                f"DataFlash 尾部 0x{DFLASH_ICUS_RESERVED_OFFSET:04X}..0xFFFF 受硬件保护用于 ICUSB 密钥，必须保持 FF..FF",
             )
         )
     _validate_dflash_candidate_blank_state(raw_cand)
@@ -1722,13 +1782,13 @@ def can_write_dflash(
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
             if not no_enter:
-                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по Diagnosis CAN", "Entering factory RAM-Loader over Diagnosis CAN"))
+                reporter.step(1, total_steps, tr("Вход в заводской RAM-Loader по Diagnosis CAN", "Entering factory RAM-Loader over Diagnosis CAN", "正在通过诊断 CAN 进入工厂 RAM-Loader"))
                 result["loader_session"] = enter_ram_loader(link, reporter=reporter)
             else:
-                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)"))
+                reporter.step(1, total_steps, tr("Проверка активного RAM-Loader (0x6F0)", "Checking active RAM-Loader (0x6F0)", "正在检查活动的 RAM-Loader (0x6F0)"))
                 result["beacon"] = _probe_beacon_in_loader(link, reporter)
 
-            reporter.step(2, total_steps, tr("Чтение текущего образа DataFlash из блока (64 КБ)", "Reading current physical DataFlash from gateway (64 KB)"))
+            reporter.step(2, total_steps, tr("Чтение текущего образа DataFlash из блока (64 КБ)", "Reading current physical DataFlash from gateway (64 KB)", "正在从网关读取当前物理 DataFlash (64 KB)"))
             backup_dir = out_dir / "backup"
             backup_dir.mkdir(parents=True, exist_ok=True)
             cur_df_path = backup_dir / "Dflash_before.bin"
@@ -1747,6 +1807,7 @@ def can_write_dflash(
                     tr(
                         "Исходный файл DataFlash не совпадает с фактическим дампом в шлюзе! Запись остановлена для защиты данных.",
                         "Input base DataFlash differs from physical gateway DataFlash! Write refused for safety.",
+                        "输入的基线 DataFlash 与网关中的物理 DataFlash 不一致！为安全起见已拒绝写入。",
                     )
                 )
 
@@ -1761,11 +1822,15 @@ def can_write_dflash(
                         "Since the backup the ECU itself changed the same DataFlash blocks you edited: "
                         f"{', '.join(f'0x{o:04X}' for o in conflicts)}. Write stopped before any erase command: "
                         "take a fresh backup and make your edits on it.",
+                        "自备份以来，模块自行更改了与您所编辑相同的 DataFlash 块："
+                        f"{', '.join(f'0x{o:04X}' for o in conflicts)}。写入已在任何擦除命令之前停止："
+                        "请重新做一份备份并在其上修改。",
                     ))
                 if kept:
                     reporter.info(tr(
                         f"Блок сам изменил после бэкапа {', '.join(result['kept_ecu_blocks'])} — эти блоки остаются как в блоке.",
                         f"The ECU changed {', '.join(result['kept_ecu_blocks'])} itself since the backup — these stay as the ECU has them.",
+                        f"自备份以来模块自行更改了 {', '.join(result['kept_ecu_blocks'])}——这些块保持模块中的现状。",
                     ))
 
             tail = slice(DFLASH_ICUS_RESERVED_OFFSET, DFLASH_SIZE)
@@ -1778,6 +1843,8 @@ def can_write_dflash(
                         "(ключи ICU-S), а образ ожидает там FF. Запись остановлена до первой команды стирания.",
                         f"This ECU holds data (ICU-S keys) in the protected DataFlash area 0x{DFLASH_ICUS_RESERVED_OFFSET:04X}..0xFFFF "
                         "while the image expects FF there. Write stopped before any erase command.",
+                        f"此模块在受保护的 DataFlash 区域 0x{DFLASH_ICUS_RESERVED_OFFSET:04X}..0xFFFF 中有数据 "
+                        "（ICU-S 密钥），而镜像期望该处为 FF。写入已在任何擦除命令之前停止。",
                     )
                 )
 
@@ -1804,12 +1871,13 @@ def can_write_dflash(
                     tr(
                         "Целевой образ DataFlash уже полностью совпадает с памятью шлюза — перезапись не требуется!",
                         "Candidate DataFlash already matches physical gateway memory — skipping erase/write!",
+                        "候选 DataFlash 已与网关物理内存完全一致——跳过擦除/写入！",
                     )
                 )
                 result["already_matching"] = True
             else:
                 if not skip_full_backup:
-                    reporter.step(3, total_steps, tr("Обязательный полный бэкап Cflash + Uflash перед записью DataFlash", "Mandatory full Cflash + Uflash backup before writing DataFlash"))
+                    reporter.step(3, total_steps, tr("Обязательный полный бэкап Cflash + Uflash перед записью DataFlash", "Mandatory full Cflash + Uflash backup before writing DataFlash", "写入 DataFlash 前强制进行 Cflash + Uflash 完整备份"))
                     read_memory_area(
                         link,
                         CFLASH_ADDR_START,
@@ -1827,7 +1895,7 @@ def can_write_dflash(
                         reporter=reporter,
                     )
                 else:
-                    reporter.step(3, total_steps, tr("Полное чтение блока уже есть — остальные области не читаются", "A complete read of this ECU is on file — the other areas are not read again"))
+                    reporter.step(3, total_steps, tr("Полное чтение блока уже есть — остальные области не читаются", "A complete read of this ECU is on file — the other areas are not read again", "已存在该模块的完整读取记录——不再重复读取其他区域"))
 
                 selfid_16b = read_memory_bytes(link, SELFID_OFFSET, SELFID_SIZE)
                 payloads = build_dflash_faci_payloads(
@@ -1843,6 +1911,7 @@ def can_write_dflash(
                     tr(
                         f"Запись DataFlash через FACI ({len(blocks_to_write)} бл. × 64 Б = {len(blocks_to_write) * 64:,} Б) — НЕ ОТКЛЮЧАЙТЕ ПИТАНИЕ!",
                         f"Programming DataFlash via FACI ({len(blocks_to_write)} × 64 B = {len(blocks_to_write) * 64:,} B) — DO NOT CUT POWER!",
+                        f"通过 FACI 编程 DataFlash ({len(blocks_to_write)} × 64 B = {len(blocks_to_write) * 64:,} B)——切勿断电！",
                     ),
                 )
                 result["flash_commands_sent"] = True
@@ -1862,10 +1931,11 @@ def can_write_dflash(
                     tr(
                         f"Блоки DataFlash успешно записаны через FACI ({len(blocks_to_write)} бл., FSTATR=0x{result['fstatr']:04X})",
                         f"DataFlash blocks programmed cleanly via FACI ({len(blocks_to_write)} blocks, FSTATR=0x{result['fstatr']:04X})",
+                        f"DataFlash 块已通过 FACI 顺利编程 ({len(blocks_to_write)} 块，FSTATR=0x{result['fstatr']:04X})",
                     )
                 )
 
-            reporter.step(5, total_steps, tr("Контрольное побайтовое вычитывание всех 64 КБ DataFlash", "Full 64 KB DataFlash readback verification"))
+            reporter.step(5, total_steps, tr("Контрольное побайтовое вычитывание всех 64 КБ DataFlash", "Full 64 KB DataFlash readback verification", "完整 64 KB DataFlash 回读校验"))
             rb_path = out_dir / "Dflash_readback.bin"
             rb = read_memory_area(
                 link,
@@ -1882,6 +1952,7 @@ def can_write_dflash(
                     tr(
                         f"Сверка DataFlash не совпала по адресу {rb.get('first_mismatch_address')!r}",
                         f"DataFlash readback mismatch at {rb.get('first_mismatch_address')!r}",
+                        f"DataFlash 回读在 {rb.get('first_mismatch_address')!r} 处不匹配",
                     )
                 )
 
@@ -1889,7 +1960,7 @@ def can_write_dflash(
             written = [idx for idx, _c, off, sz, *_ in ZDC_DATASET_SPECS if current_df[off : off + sz] != raw_cand[off : off + sz]]
             result["zdc_blocks_written"] = written
             if return_to_app:
-                reporter.step(6, total_steps, tr("Перезапуск шлюза и проверка штатного режима (10 03 / 3E 00)", "Resetting gateway & verifying normal Application communication"))
+                reporter.step(6, total_steps, tr("Перезапуск шлюза и проверка штатного режима (10 03 / 3E 00)", "Resetting gateway & verifying normal Application communication", "正在复位网关并校验正常应用程序通信"))
                 result["return_to_app"] = _return_to_application(
                     link, result.get("loader_session"), reporter=reporter
                 )
@@ -1903,6 +1974,7 @@ def can_write_dflash(
                 tr(
                     "DataFlash (64 КБ) успешно записан по CAN и побайтово верифицирован!",
                     "DataFlash (64 KB) successfully programmed over CAN and verified byte-for-byte!",
+                    "DataFlash (64 KB) 已通过 CAN 成功刷写并逐字节校验！",
                 )
             )
             return result
@@ -1943,13 +2015,17 @@ def _sync_coding_for_zdc(link: J533CanLink, written_df: bytes, blocks: list[int]
     info["before"] = coding.hex().upper()
     if want == coding:
         reporter.info(tr("Кодировка 0x0600 уже согласована с записанными датасетами",
-                         "Coding 0x0600 already matches the written datasets"))
+                         "Coding 0x0600 already matches the written datasets",
+                         "编码 0x0600 已与已写入的数据集一致"))
         return info
     changes = ", ".join(
         f"байт {i}: {coding[i]:02X} -> {want[i]:02X}" for i in range(len(want)) if want[i] != coding[i]
     )
     changes_en = ", ".join(
         f"byte {i}: {coding[i]:02X} -> {want[i]:02X}" for i in range(len(want)) if want[i] != coding[i]
+    )
+    changes_zh = ", ".join(
+        f"字节 {i}：{coding[i]:02X} -> {want[i]:02X}" for i in range(len(want)) if want[i] != coding[i]
     )
     try:
         _uds_write_workshop_fingerprint(link)
@@ -1964,11 +2040,14 @@ def _sync_coding_for_zdc(link: J533CanLink, written_df: bytes, blocks: list[int]
             f"измените кодировку вручную: {changes}.",
             f"DataFlash is written, but coding 0x0600 could not be written ({exc}). Without it the datasets are not "
             f"used — change the coding by hand: {changes_en}.",
+            f"DataFlash 已写入，但编码 0x0600 写入失败 ({exc})。没有它数据集将不会被使用——"
+            f"请手动修改编码：{changes_zh}。",
         ))
         return info
     info["after"] = want.hex().upper()
     reporter.success(tr(f"Кодировка 0x0600 согласована с датасетами ({changes})",
-                        f"Coding 0x0600 aligned with the datasets ({changes_en})"))
+                        f"Coding 0x0600 aligned with the datasets ({changes_en})",
+                        f"编码 0x0600 已与数据集对齐 ({changes_zh})"))
     info["restart"] = _reset_to_application(link, reporter=reporter)
     return info
 
@@ -1990,7 +2069,7 @@ def _enter_fbl_uds_programming(link: J533CanLink, reporter: OperationReporter, *
         # have to stop the entry. Whether programming may start is the answer to `10 02` below. Transport errors
         # are not RuntimeError and still end the operation.
         if not (_is_fbl_session_nrc(exc) or _is_fbl_precondition_nrc(exc)):
-            reporter.can_log(tr(f"Предусловие отклонено ({exc}) — пробуем 10 02", f"Precondition refused ({exc}) — trying 10 02"))
+            reporter.can_log(tr(f"Предусловие отклонено ({exc}) — пробуем 10 02", f"Precondition refused ({exc}) — trying 10 02", f"前提条件被拒绝 ({exc})——尝试 10 02"))
     link.request_uds(b"\x10\x02", 0x50, timeout=5.0, allow_pending=True, **kw)
     time.sleep(1.0)
 
@@ -2025,6 +2104,7 @@ def _note_hw_fallback(link: Any, info: dict[str, Any], reporter: OperationReport
             "(медленнее, но надёжно)",
             f"The adapter's hardware ISO-TP failed ({where}) — continuing on the verified software path "
             "(slower, but reliable)",
+            f"适配器的硬件 ISO-TP 在 ({where}) 处失败——继续使用经验证的软件路径（较慢但可靠）",
         ))
     link.on_hw_fallback = note
 
@@ -2063,8 +2143,9 @@ def _program_application_uds(
         if not hw_uds and (why := getattr(getattr(link, "bus", None), "uds_refusal", "")):
             info["hardware_isotp_refused"] = why
             reporter.info(tr(f"Аппаратный ISO-TP адаптера не включился ({why}) — передача идёт программным путём",
-                             f"The adapter's hardware ISO-TP did not come up ({why}) — transferring on the software path"))
-        reporter.can_log(tr("Вход в сессию программирования FBL (10 02) и авторизация SA2 (27 11/12)…", "Entering FBL Programming Session (10 02) & unlocking SA2 (27 11/12)…"))
+                             f"The adapter's hardware ISO-TP did not come up ({why}) — transferring on the software path",
+                             f"适配器的硬件 ISO-TP 未启用 ({why})——改用软件路径传输"))
+        reporter.can_log(tr("Вход в сессию программирования FBL (10 02) и авторизация SA2 (27 11/12)…", "Entering FBL Programming Session (10 02) & unlocking SA2 (27 11/12)…", "进入 FBL 编程会话 (10 02) 并解锁 SA2 (27 11/12)…"))
         _enter_fbl_uds_programming(link, reporter)
         seed_resp = _fbl_seed(link, reporter)
         if len(seed_resp) != 6:
@@ -2095,11 +2176,15 @@ def _program_application_uds(
                 "halfway: the adapter stops sending at around the 125,000th frame. The erase has not started. "
                 "Reconnect the adapter and try again; if ISO-TP still does not work, update the D-PDU driver or "
                 "write the ECU with another adapter.",
+                "VAS 6154 / VNCI 的硬件 ISO-TP 未工作，没有它 CodeFlash 写入会中途中断："
+                "适配器大约在第 125,000 帧处停止发送。擦除尚未开始。"
+                "请重新连接适配器后重试；如果 ISO-TP 仍无法工作，请更新 D-PDU 驱动程序或使用其他适配器写入模块。",
             ))
         reporter.can_log(
             tr(
                 "Стирание прикладной области CodeFlash (31 01 FF 00 01 01: 0x0000C000..0x0017FFFF)…",
                 "Erasing Application CodeFlash block (31 01 FF 00 01 01: 0x0000C000..0x0017FFFF)…",
+                "正在擦除应用程序 CodeFlash 块 (31 01 FF 00 01 01：0x0000C000..0x0017FFFF)…",
             )
         )
         erase_resp = link.request_uds(bytes.fromhex("3101ff000101"), 0x71, timeout=120.0, allow_pending=True)
@@ -2143,6 +2228,7 @@ def _program_application_uds(
                     tr(
                         f"TransferData: передано {done:,} / {APP_SIZE:,} Б (блок {blk_idx + 1}/{total_blocks})",
                         f"TransferData: sent {done:,} / {APP_SIZE:,} B (block {blk_idx + 1}/{total_blocks})",
+                        f"TransferData：已发送 {done:,} / {APP_SIZE:,} B（块 {blk_idx + 1}/{total_blocks}）",
                     )
                 )
 
@@ -2158,7 +2244,7 @@ def _program_application_uds(
             + (128).to_bytes(2, "big")
             + sig
         )
-        reporter.can_log(tr("Проверка контрольной суммы и подписи в FBL (31 01 02 02)…", "Running FBL CheckMemory (31 01 02 02)…"))
+        reporter.can_log(tr("Проверка контрольной суммы и подписи в FBL (31 01 02 02)…", "Running FBL CheckMemory (31 01 02 02)…", "正在运行 FBL CheckMemory (31 01 02 02)…"))
         chk_resp = link.request_uds(chk_mem_req, 0x71, timeout=120.0, allow_pending=True)
         try:
             _routine_ok(chk_resp, "CheckMemory (0202)")
@@ -2171,11 +2257,13 @@ def _program_application_uds(
                     "подпись. Сначала нужен инженерный загрузчик.",
                     f"The bootloader rejected the application ({chk_resp.hex()}): the ECU has the factory "
                     "bootloader, which wants a signature. The engineering bootloader is needed first.",
+                    f"引导加载程序拒绝了应用程序 ({chk_resp.hex()})：模块具有原厂引导加载程序，需要签名。"
+                    "需要先使用工程引导加载程序。",
                 )
             ) from exc
         info["check_memory_response"] = chk_resp.hex()
 
-        reporter.can_log(tr("Проверка зависимостей и запись маркера присутствия (31 01 FF 01)…", "Running CheckProgrammingDependencies (31 01 FF 01)…"))
+        reporter.can_log(tr("Проверка зависимостей и запись маркера присутствия (31 01 FF 01)…", "Running CheckProgrammingDependencies (31 01 FF 01)…", "正在运行 CheckProgrammingDependencies (31 01 FF 01)…"))
         dep_resp = link.request_uds(bytes.fromhex("3101ff01"), 0x71, timeout=60.0, allow_pending=True)
         _routine_ok(dep_resp, "CheckProgrammingDependencies (FF01)")
         info["dependencies_response"] = dep_resp.hex()
@@ -2210,6 +2298,7 @@ def _program_cflash_blocks_in_loader(
             tr(
                 f"FACI CodeFlash блок #{blk_idx} ({pos}/{total}): 0x{start:06X}..0x{end - 1:06X} ({size_kb} КБ, пакетов: {len(payloads)})",
                 f"FACI CodeFlash block #{blk_idx} ({pos}/{total}): 0x{start:06X}..0x{end - 1:06X} ({size_kb} KB, packets: {len(payloads)})",
+                f"FACI CodeFlash 块 #{blk_idx} ({pos}/{total})：0x{start:06X}..0x{end - 1:06X} ({size_kb} KB，数据包：{len(payloads)})",
             )
         )
         pkt_logs = _execute_faci_payloads(
@@ -2252,6 +2341,9 @@ def _fbl_record_writable(image: bytes, reporter: OperationReporter) -> bool:
         f"The image's FBL programming record is marked unfinished (0x{FBL_RECORD_STATUS:04X} = "
         f"0x{image[FBL_RECORD_STATUS]:02X}) — not written, or the ECU would stay in its bootloader. The record the "
         "bootloader made during this download stays.",
+        f"镜像中的 FBL 编程记录被标记为未完成 (0x{FBL_RECORD_STATUS:04X} = "
+        f"0x{image[FBL_RECORD_STATUS]:02X})——不写入该记录，否则模块将停留在引导加载程序中。"
+        "保留此次下载中引导加载程序所做的记录。",
     ))
     return False
 
@@ -2299,6 +2391,7 @@ def can_write_cflash(
             tr(
                 f"Не совпадает App CRC-16 @ 0x0000C21C (в файле 0x{stored_crc:04X}, расчёт 0x{calc_crc:04X})! Прошивка отменена.",
                 f"Application CRC-16 mismatch @ 0x0000C21C (stored 0x{stored_crc:04X}, calculated 0x{calc_crc:04X})! Flash aborted.",
+                f"应用程序 CRC-16 不匹配 @ 0x0000C21C（存储 0x{stored_crc:04X}，计算 0x{calc_crc:04X}）！已中止刷写。",
             )
         )
 
@@ -2320,13 +2413,15 @@ def can_write_cflash(
             "заработает, — загрузочную область через RAM-Loader и сверку.",
             "The ECU is in its FBL bootloader with no running application: the application goes in over UDS "
             "first; once it runs, the boot area through the RAM-loader, then the readback.",
+            "模块处于 FBL 引导加载程序中，应用程序未运行：先通过 UDS 刷写应用程序，待其运行后再通过 RAM-Loader "
+            "写入引导区域并进行回读。",
         ))
         result["flash_commands_sent"] = True
         result["uds_first"] = _restore_app_over_uds(port, raw_cand, interface, out_dir / "uds_first", reporter)
 
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
-            reporter.step(1, total_steps, tr("Вход в RAM-Loader и проверка загрузчика (RSA Probe)", "Entering RAM-Loader & probing bootloader state"))
+            reporter.step(1, total_steps, tr("Вход в RAM-Loader и проверка загрузчика (RSA Probe)", "Entering RAM-Loader & probing bootloader state", "正在进入 RAM-Loader 并探测引导加载程序状态 (RSA Probe)"))
             enter_ram_loader(link, reporter=reporter)
             rsa_res = run_rsa_probe(link, reporter=reporter)
             result["rsa_precheck"] = rsa_res
@@ -2335,9 +2430,9 @@ def can_write_cflash(
             backup_dir.mkdir(parents=True, exist_ok=True)
             if not skip_backup or not prefix or not expected_before_cflash:
                 if skip_backup:  # the full backup is taken already; CodeFlash is still read to compare against
-                    reporter.step(2, total_steps, tr("Чтение текущего CodeFlash (1.5 МБ) для сравнения", "Reading the current CodeFlash (1.5 MB) to compare"))
+                    reporter.step(2, total_steps, tr("Чтение текущего CodeFlash (1.5 МБ) для сравнения", "Reading the current CodeFlash (1.5 MB) to compare", "正在读取当前 CodeFlash (1.5 MB) 以进行比较"))
                 else:
-                    reporter.step(2, total_steps, tr("Обязательный полный бэкап Cflash + Uflash + Dflash перед прошивкой", "Mandatory full Cflash + Uflash + Dflash backup before flashing"))
+                    reporter.step(2, total_steps, tr("Обязательный полный бэкап Cflash + Uflash + Dflash перед прошивкой", "Mandatory full Cflash + Uflash + Dflash backup before flashing", "刷写前强制进行 Cflash + Uflash + Dflash 完整备份"))
                 cf_before_path = backup_dir / "Cflash_before.bin"
                 read_memory_area(
                     link,
@@ -2370,12 +2465,13 @@ def can_write_cflash(
                         tr(
                             "Исходный файл CodeFlash не совпадает с фактическим дампом в шлюзе! Запись остановлена для защиты блока.",
                             "Input base CodeFlash differs from physical gateway CodeFlash! Write refused for safety.",
+                            "输入的基线 CodeFlash 与网关中的物理 CodeFlash 不一致！为安全起见已拒绝写入。",
                         )
                     )
                 if not prefix:
                     prefix = physical_before[:APP_BASE]
             else:
-                reporter.step(2, total_steps, tr("Проверка бэкапа текущей сессии", "Checking current session backup"))
+                reporter.step(2, total_steps, tr("Проверка бэкапа текущей сессии", "Checking current session backup", "正在检查当前会话备份"))
                 physical_before = expected_before_cflash
 
             live_selfid = physical_before[SELFID_OFFSET : SELFID_OFFSET + SELFID_SIZE]
@@ -2387,6 +2483,7 @@ def can_write_cflash(
                     tr(
                         "В образе отличался 16-байтный SELFID @ 0x0000AB00 — автоматически сохранён родной SELFID процессора.",
                         "Candidate had a different 16-byte SELFID @ 0x0000AB00 — automatically preserved target MCU's native SELFID.",
+                        "候选镜像在 0x0000AB00 处带有不同的 16 字节 SELFID——已自动保留目标 MCU 的原生 SELFID。",
                     )
                 )
                 expected_full[SELFID_OFFSET : SELFID_OFFSET + SELFID_SIZE] = live_selfid
@@ -2411,6 +2508,7 @@ def can_write_cflash(
                     tr(
                         "Подготовленный образ CodeFlash уже идентичен прошивке в шлюзе — перезапись не требуется!",
                         "Candidate CodeFlash already matches physical gateway firmware — skipping flash!",
+                        "候选 CodeFlash 已与网关物理固件完全一致——跳过刷写！",
                     )
                 )
                 result["already_matching"] = True
@@ -2421,6 +2519,7 @@ def can_write_cflash(
                     tr(
                         f"Прямая запись изменённых блоков CodeFlash через FACI ({len(changed_blocks)} бл.) — НЕ ОТКЛЮЧАЙТЕ ПИТАНИЕ!",
                         f"Direct FACI programming of changed CodeFlash blocks ({len(changed_blocks)} blocks) — DO NOT CUT POWER!",
+                        f"通过 FACI 直接编程已更改的 CodeFlash 块 ({len(changed_blocks)} 块)——切勿断电！",
                     ),
                 )
                 result["flash_commands_sent"] = True
@@ -2432,8 +2531,8 @@ def can_write_cflash(
                         flid_16b=live_selfid,
                         reporter=reporter,
                     )
-                reporter.step(4, total_steps, tr("Прямая запись FACI завершена — переход к верификации", "Direct FACI write complete — proceeding to readback"))
-                reporter.step(5, total_steps, tr("Побайтовая сверка всех 1.5 МБ CodeFlash", "Verifying full 1.5 MB CodeFlash readback"))
+                reporter.step(4, total_steps, tr("Прямая запись FACI завершена — переход к верификации", "Direct FACI write complete — proceeding to readback", "直接 FACI 写入完成——进入回读"))
+                reporter.step(5, total_steps, tr("Побайтовая сверка всех 1.5 МБ CodeFlash", "Verifying full 1.5 MB CodeFlash readback", "正在校验完整 1.5 MB CodeFlash 回读"))
                 rb_path = out_dir / "Cflash_readback.bin"
                 rb = read_memory_area(
                     link,
@@ -2460,6 +2559,8 @@ def can_write_cflash(
                             "Сначала активируйте инженерный Uflash, подпишите прошивку или укажите --raw-faci.",
                             "Stock RSA-1024 check is active in Uflash (rsa_status != 0)! "
                             "Unlock Engineering Uflash first, provide a valid signature, or use --raw-faci.",
+                            "Uflash 中原厂 RSA-1024 校验处于激活状态 (rsa_status != 0)！"
+                            "请先解锁工程 Uflash、提供有效签名，或使用 --raw-faci。",
                         )
                     )
 
@@ -2476,6 +2577,7 @@ def can_write_cflash(
                             tr(
                                 f"Запись области загрузчика CodeFlash через FACI (блоки {boot_now}) — НЕ ОТКЛЮЧАЙТЕ ПИТАНИЕ!",
                                 f"Programming CodeFlash boot blocks via FACI (blocks {boot_now}) — DO NOT CUT POWER!",
+                                f"通过 FACI 编程 CodeFlash 引导块 (块 {boot_now})——切勿断电！",
                             ),
                         )
                         result["flash_commands_sent"] = True
@@ -2487,7 +2589,7 @@ def can_write_cflash(
                             reporter=reporter,
                         )
                     else:
-                        reporter.step(3, total_steps, tr("Область загрузчика 0x000000..0x00BFFF без изменений", "Boot region 0x000000..0x00BFFF unchanged"))
+                        reporter.step(3, total_steps, tr("Область загрузчика 0x000000..0x00BFFF без изменений", "Boot region 0x000000..0x00BFFF unchanged", "引导区域 0x000000..0x00BFFF 未更改"))
 
                     if app_blocks:
                         _reset_to_application(link, reporter=reporter, allow_fbl=True)
@@ -2497,6 +2599,7 @@ def can_write_cflash(
                             tr(
                                 "Прошивка прикладной области CodeFlash (1 523 200 Б) по штатному UDS — НЕ ОТКЛЮЧАЙТЕ ПИТАНИЕ!",
                                 "Programming Application CodeFlash (1,523,200 B) via UDS — DO NOT DISCONNECT POWER!",
+                                "正在通过 UDS 编程应用程序 CodeFlash (1,523,200 B)——切勿断电！",
                             ),
                         )
                         result["flash_commands_sent"] = True
@@ -2506,17 +2609,18 @@ def can_write_cflash(
                             signature_128b=signature_128b,
                             reporter=reporter,
                         )
-                        reporter.step(5, total_steps, tr("Повторный вход в RAM-Loader и побайтовая сверка всех 1.5 МБ CodeFlash", "Re-entering RAM-Loader & verifying full 1.5 MB CodeFlash readback"))
+                        reporter.step(5, total_steps, tr("Повторный вход в RAM-Loader и побайтовая сверка всех 1.5 МБ CodeFlash", "Re-entering RAM-Loader & verifying full 1.5 MB CodeFlash readback", "重新进入 RAM-Loader 并校验完整 1.5 MB CodeFlash 回读"))
                         enter_ram_loader(link, reporter=reporter)
                         if record_after:
                             reporter.can_log(tr("Запись загрузчика о программировании (блок 4) — из образа, после UDS",
-                                                "The FBL's programming record (block 4) — from the image, after UDS"))
+                                                "The FBL's programming record (block 4) — from the image, after UDS",
+                                                "FBL 的编程记录（块 4）——来自镜像，在 UDS 之后"))
                             result["fbl_record_faci"] = _program_cflash_blocks_in_loader(
                                 link, bytes(expected_full), [FBL_RECORD_BLOCK], flid_16b=live_selfid, reporter=reporter
                             )
                     else:
-                        reporter.step(4, total_steps, tr("Прикладная область 0x00C200..0x17FFFF без изменений — UDS перезапись не требуется", "Application area 0x00C200..0x17FFFF unchanged — skipping UDS reflash"))
-                        reporter.step(5, total_steps, tr("Побайтовая сверка всех 1.5 МБ CodeFlash", "Verifying full 1.5 MB CodeFlash readback"))
+                        reporter.step(4, total_steps, tr("Прикладная область 0x00C200..0x17FFFF без изменений — UDS перезапись не требуется", "Application area 0x00C200..0x17FFFF unchanged — skipping UDS reflash", "应用程序区域 0x00C200..0x17FFFF 未更改——跳过 UDS 重新刷写"))
+                        reporter.step(5, total_steps, tr("Побайтовая сверка всех 1.5 МБ CodeFlash", "Verifying full 1.5 MB CodeFlash readback", "正在校验完整 1.5 MB CodeFlash 回读"))
 
                 rb_path = out_dir / "Cflash_readback.bin"
                 rb = read_memory_area(
@@ -2552,21 +2656,23 @@ def can_write_cflash(
                             tr(
                                 "Загрузчик сам выставил флаг действительности приложения (0xC000/0xC100) — остальное совпало побайтово",
                                 "The bootloader set its own application-valid flag (0xC000/0xC100) — everything else matches byte for byte",
+                                "引导加载程序自行设置了应用程序有效标志 (0xC000/0xC100)——其余部分逐字节一致",
                             )
                         )
 
             if return_to_app:
-                reporter.step(6, total_steps, tr("Запуск шлюза и финальная диагностика приложения (10 03 / 3E 00)", "Restarting gateway & running post-flash Application health check"))
+                reporter.step(6, total_steps, tr("Запуск шлюза и финальная диагностика приложения (10 03 / 3E 00)", "Restarting gateway & running post-flash Application health check", "正在重启网关并运行刷写后应用程序健康检查"))
                 result["post_health"] = _reset_to_application(link, reporter=reporter)
                 result["tester_present"] = link.request_uds(b"\x3e\x00", 0x7E, timeout=2.0).hex()
 
             result["complete"] = True
             reporter.progress(100, 100)
             if result.get("already_matching"):
-                reporter.success(tr("CodeFlash не менялся: в блоке уже этот образ", "CodeFlash left as is: the ECU already holds this image"))
+                reporter.success(tr("CodeFlash не менялся: в блоке уже этот образ", "CodeFlash left as is: the ECU already holds this image", "CodeFlash 保持不变：模块已具有此镜像"))
             else:
                 reporter.success(tr("CodeFlash успешно прошит и побайтово верифицирован по всем 1.5 МБ!",
-                                    "CodeFlash programmed and verified byte-for-byte across all 1.5 MB!"))
+                                    "CodeFlash programmed and verified byte-for-byte across all 1.5 MB!",
+                                    "CodeFlash 已刷写并在全部 1.5 MB 上逐字节校验！"))
             return result
         except OperationCancelledError:
             _hand_back_after_cancel(link, reporter)
@@ -2619,6 +2725,7 @@ def backup_owner_problems(ecu: dict[str, str], backup: dict[str, str | None], wr
                     tr(
                         f"{name} в бэкапе {theirs}, а в блоке {mine} — бэкап снят с другого блока",
                         f"the backup has {name} {theirs} but the ECU has {mine} — it was taken from another ECU",
+                        f"备份中的 {name} 为 {theirs}，而模块中为 {mine}——该备份取自其他模块",
                     )
                 )
         elif mine and theirs == "" and kind in writes:
@@ -2626,6 +2733,7 @@ def backup_owner_problems(ecu: dict[str, str], backup: dict[str, str | None], wr
                 tr(
                     f"в бэкапе нет {name}, а в блоке он есть ({mine}) — запись стёрла бы его",
                     f"the backup has no {name} but the ECU has one ({mine}) — writing it would erase it",
+                    f"备份中没有 {name}，而模块中有 ({mine})——写入会将其擦除",
                 )
             )
     if not matched and not problems:
@@ -2633,6 +2741,7 @@ def backup_owner_problems(ecu: dict[str, str], backup: dict[str, str | None], wr
             tr(
                 "нельзя убедиться, что бэкап снят с этого блока: ни FAZIT, ни VCRN не с чем сравнить",
                 "cannot confirm the backup was taken from this ECU: neither FAZIT nor VCRN can be compared",
+                "无法确认备份取自本模块：FAZIT 与 VCRN 均无法比较",
             )
         )
     return problems
@@ -2666,7 +2775,7 @@ def can_restore_backup(
     cf_chunk = FAZIT_OFFSET & ~(READ_CHUNK_BYTES - 1)
     df_chunk = DFLASH_SWAP_NVM_OFF & ~(READ_CHUNK_BYTES - 1)
     with J533CanLink(port, interface=interface, log_path=own_dir / "can.jsonl") as link:
-        reporter.step(1, 1, tr("Проверка, что бэкап снят с этого блока (FAZIT и VCRN)", "Checking the backup was taken from this ECU (FAZIT and VCRN)"))
+        reporter.step(1, 1, tr("Проверка, что бэкап снят с этого блока (FAZIT и VCRN)", "Checking the backup was taken from this ECU (FAZIT and VCRN)", "正在检查备份是否取自本模块 (FAZIT 与 VCRN)"))
         # FAZIT comes over UDS: `22 F17C` is in the bootloader's own DID table too, so this works on a gateway
         # stuck in FBL — without a RAM-loader entry, after which such a gateway refuses `27 11` (see _fbl_seed).
         # A gateway restored *because* it is stuck there has no application until CodeFlash is written, and
@@ -2702,10 +2811,10 @@ def can_restore_backup(
             if in_loader:  # nothing follows, so hand the gateway back rather than leave it in the RAM-loader
                 with contextlib.suppress(*LINK_ERRORS):
                     _reset_to_application(link, reporter=reporter, allow_fbl=True)
-            raise RuntimeError(tr("Бэкап не записан: ", "The backup was not written: ") + "; ".join(problems))
+            raise RuntimeError(tr("Бэкап не записан: ", "The backup was not written: ", "备份未写入：") + "; ".join(problems))
         # If the RAM-loader had to be entered, it is deliberately left running: the write that follows recognises
         # it by its beacon instead of staging another entry and its `27 11`.
-    reporter.success(tr("Бэкап снят с этого блока — записываем", "The backup belongs to this ECU — writing it"))
+    reporter.success(tr("Бэкап снят с этого блока — записываем", "The backup belongs to this ECU — writing it", "备份属于本模块——正在写入"))
 
     did_backup = False
     try:
@@ -2768,6 +2877,7 @@ def can_restore_backup(
                     "вернётся прежний загрузчик.",
                     "The engineering bootloader stays in the ECU so the restore can be repeated. A successful restore "
                     "puts the previous bootloader back.",
+                    "工程引导加载程序保留在模块中，以便重复执行恢复。恢复成功后将写回之前的引导加载程序。",
                 )
             )
         _write_json(own_dir / "owner.json", result)
@@ -2777,7 +2887,7 @@ def can_restore_backup(
     uflash = files.get("uflash") if "uflash" in writes else None
     if uflash is None and eng.get("write_performed"):
         uflash = out_dir / "uflash_eng" / "backup" / "Uflash_before.bin"
-        reporter.info(tr("Возвращаем загрузчик, который был в блоке до заливки", "Putting back the bootloader the ECU had before"))
+        reporter.info(tr("Возвращаем загрузчик, который был в блоке до заливки", "Putting back the bootloader the ECU had before", "正在写回模块在刷写前的引导加载程序"))
     if uflash is not None:
         result["uflash"] = can_write_uflash(
             port,
@@ -2817,10 +2927,12 @@ def _restore_app_over_uds(
     stored, calc = app_crc(app)
     if stored != calc:
         raise RuntimeError(tr(f"В бэкапе повреждено приложение: CRC-16 0x{stored:04X} != 0x{calc:04X}",
-                              f"The backup's application is damaged: CRC-16 0x{stored:04X} != 0x{calc:04X}"))
+                              f"The backup's application is damaged: CRC-16 0x{stored:04X} != 0x{calc:04X}",
+                              f"备份中的应用程序已损坏：CRC-16 0x{stored:04X} != 0x{calc:04X}"))
     out_dir.mkdir(parents=True, exist_ok=True)
     reporter.step(1, 1, tr("Прошивка приложения CodeFlash по UDS через загрузчик FBL — НЕ ОТКЛЮЧАЙТЕ ПИТАНИЕ!",
-                           "Programming the CodeFlash application over UDS through the FBL — DO NOT CUT POWER!"))
+                           "Programming the CodeFlash application over UDS through the FBL — DO NOT CUT POWER!",
+                           "正在通过 FBL 以 UDS 方式刷写 CodeFlash 应用程序——切勿断电！"))
     with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
         try:
             _probe_app_or_fbl(link, attempts=1, allow_fbl=True)
@@ -2847,13 +2959,13 @@ def can_cure_fbl_fingerprint(
     gateway stuck in its bootloader takes over. Bench 2026-11-09: silent with serial 01..06, answered after this."""
     out_dir = session_dir or default_session_dir(None, "fingerprint")
     out_dir.mkdir(parents=True, exist_ok=True)
-    reporter.step(1, 1, tr("Проверка, что CodeFlash снят с этого блока (FAZIT)", "Checking the CodeFlash was taken from this ECU (FAZIT)"))
+    reporter.step(1, 1, tr("Проверка, что CodeFlash снят с этого блока (FAZIT)", "Checking the CodeFlash was taken from this ECU (FAZIT)", "正在检查 CodeFlash 是否取自本模块 (FAZIT)"))
     with J533CanLink(port, interface=interface, log_path=out_dir / "owner.jsonl") as link:
         fazit, _in_fbl = _ecu_fazit_over_uds(link)
     backup = backup_identity(cflash_file.read_bytes(), None)
     problems = backup_owner_problems({"fazit": fazit, "vcrn": ""}, backup, {"cflash"})
     if problems:
-        raise RuntimeError(tr("Приложение не записано: ", "The application was not written: ") + "; ".join(problems))
+        raise RuntimeError(tr("Приложение не записано: ", "The application was not written: ", "应用程序未写入：") + "; ".join(problems))
     result: dict[str, Any] = {"session_dir": str(out_dir), "fazit": fazit}
     try:
         result["uds"] = _restore_app_over_uds(port, cflash_file, interface, out_dir / "uds", reporter)
@@ -2863,6 +2975,8 @@ def can_cure_fbl_fingerprint(
             "RAM-Loader снова работает — восстанавливаем блок через инженерный загрузчик.",
             "The ECU has the factory bootloader, which refused the unsigned application. The fingerprint is fixed "
             "already and the RAM-Loader entry works again — restoring the ECU through the engineering bootloader.",
+            "模块具有原厂引导加载程序，拒绝了未签名的应用程序。指纹已修复，RAM-Loader 入口再次可用——"
+            "正在通过工程引导加载程序恢复模块。",
         ))
         result["restore"] = can_restore_backup(port, {"cflash": cflash_file}, ["cflash"], interface=interface,
                                                session_dir=out_dir / "restore", factory_fbl=True, reporter=reporter)
@@ -2872,11 +2986,13 @@ def can_cure_fbl_fingerprint(
         _sess, in_fbl = _probe_app_or_fbl(link, attempts=5, allow_fbl=True)
         if in_fbl:
             raise RuntimeError(tr("Приложение записано, но блок остался в загрузчике FBL",
-                                  "The application is written, but the ECU stayed in its FBL bootloader"))
+                                  "The application is written, but the ECU stayed in its FBL bootloader",
+                                  "应用程序已写入，但模块仍停留在 FBL 引导加载程序中"))
         link.request_uds(b"\x10\x03", 0x50, timeout=2.0)
         result["f15b"] = link.request_uds(b"\x22\xf1\x5b", 0x62, timeout=2.0)[3:].hex(" ").upper()
     reporter.success(tr(f"Отпечаток исправлен (F15B: {result['f15b']}) — вход в RAM-Loader снова доступен",
-                        f"Fingerprint fixed (F15B: {result['f15b']}) — the RAM-Loader entry is available again"))
+                        f"Fingerprint fixed (F15B: {result['f15b']}) — the RAM-Loader entry is available again",
+                        f"指纹已修复 (F15B：{result['f15b']})——RAM-Loader 入口再次可用"))
     return result
 
 
@@ -2922,14 +3038,15 @@ def can_flash_frf(
     result: dict[str, Any] = {"session_dir": str(out_dir), "frf": frf.name, "frf_version": frf.sw_version}
     try:
         with J533CanLink(port, interface=interface, log_path=out_dir / "can.jsonl") as link:
-            reporter.step(1, 3, tr("Идентификация блока (F187 / F189 / F191 / F1A3)", "Identifying the ECU (F187 / F189 / F191 / F1A3)"))
+            reporter.step(1, 3, tr("Идентификация блока (F187 / F189 / F191 / F1A3)", "Identifying the ECU (F187 / F189 / F191 / F1A3)", "正在识别模块 (F187 / F189 / F191 / F1A3)"))
             result["before"] = ecu = _read_ident_dids(link)
             hard, soft = frf_ident_problems(frf, ecu)
             result["ident_problems"] = hard + soft
             if hard or (soft and not allow_unlisted):
-                raise RuntimeError(tr(f"{frf.kind} не для этого блока: ", f"The {frf.kind} is not for this ECU: ") + "; ".join(hard + soft))
+                raise RuntimeError(tr(f"{frf.kind} не для этого блока: ", f"The {frf.kind} is not for this ECU: ", f"{frf.kind} 不适用于本模块：") + "; ".join(hard + soft))
             reporter.step(2, 3, tr(f"Прошивка {frf.name} по UDS — НЕ ОТКЛЮЧАЙТЕ ПИТАНИЕ!",
-                                   f"Flashing {frf.name} over UDS — DO NOT CUT POWER!"))
+                                   f"Flashing {frf.name} over UDS — DO NOT CUT POWER!",
+                                   f"正在通过 UDS 刷写 {frf.name}——切勿断电！"))
             try:
                 result["uds"] = _program_application_uds(link, frf.app, signature_128b=frf.signature, reporter=reporter)
             except FblRejectedAppError as exc:
@@ -2940,18 +3057,22 @@ def can_flash_frf(
                     f"The bootloader refused the {frf.kind} application with its signature. The application is erased and "
                     "the ECU stays in its FBL bootloader — restore it with \"Write backup…\" (this ECU's CodeFlash) or "
                     "flash a matching FRF / ODX.",
+                    f"引导加载程序拒绝了带有其签名的 {frf.kind} 应用程序。应用程序已被擦除，模块停留在 FBL 引导加载"
+                    "程序中——请通过「写回备份…」（本模块的 CodeFlash）恢复，或刷写匹配的 FRF / ODX。",
                 )) from exc
         time.sleep(3.0)  # the reset that ends the programming
         with J533CanLink(port, interface=interface, log_path=out_dir / "after.jsonl") as link:
-            reporter.step(3, 3, tr("Проверка: приложение запущено, новая версия", "Checking: application running, new version"))
+            reporter.step(3, 3, tr("Проверка: приложение запущено, новая версия", "Checking: application running, new version", "正在检查：应用程序已运行、版本为新版本"))
             _s, in_fbl = _probe_app_or_fbl(link, attempts=5, allow_fbl=True)
             if in_fbl:
                 raise RuntimeError(tr(f"{frf.kind} записан, но блок остался в загрузчике FBL",
-                                      f"The {frf.kind} is written, but the ECU stayed in its FBL bootloader"))
+                                      f"The {frf.kind} is written, but the ECU stayed in its FBL bootloader",
+                                      f"{frf.kind} 已写入，但模块仍停留在 FBL 引导加载程序中"))
             result["after"] = after = _read_ident_dids(link)
         old_v, new_v = ecu.get("F189", "?"), after.get("F189", frf.sw_version)
         reporter.success(tr(f"{frf.kind} записан: ПО {old_v} → {new_v}, приложение запущено",
-                            f"{frf.kind} written: software {old_v} → {new_v}, application running"))
+                            f"{frf.kind} written: software {old_v} → {new_v}, application running",
+                            f"{frf.kind} 已写入：软件 {old_v} → {new_v}，应用程序已运行"))
         if old_v != new_v:
             reporter.warning(tr(
                 "Версия ПО сменилась: параметрия ZDC должна соответствовать новой прошивке, иначе возможна ошибка "
@@ -2960,6 +3081,8 @@ def can_flash_frf(
                 "The software version changed: the ZDC datasets must suit the new firmware, or DTC 000601 "
                 "(implausible dataset) may follow. Upload the dataset for this version (\"Import ODIS file\" → "
                 "\"Write datasets over CAN\").",
+                "软件版本已更改：ZDC 数据集必须匹配新固件，否则可能出现 DTC 000601「数据集不可信」。"
+                "请上传对应版本的数据集（「导入 ODIS 文件」→「通过 CAN 写入数据集」）。",
             ))
         result["complete"] = True
         return result
@@ -2985,7 +3108,7 @@ def _finish_restore(
     CodeFlash, or if it was running before; a gateway that was stuck in its bootloader and got no CodeFlash
     cannot, and landing in the bootloader is then the expected end, not an error."""
     must_run = "cflash" in writes or not app_was_down
-    reporter.step(1, 1, tr("Перезапуск шлюза после заливки", "Restarting the gateway after the restore"))
+    reporter.step(1, 1, tr("Перезапуск шлюза после заливки", "Restarting the gateway after the restore", "恢复后正在重启网关"))
     (out_dir / "finish").mkdir(parents=True, exist_ok=True)
     with J533CanLink(port, interface=interface, log_path=out_dir / "finish" / "can.jsonl") as link:
         info = _reset_to_application(link, reporter=reporter, allow_fbl=not must_run)
@@ -2996,6 +3119,8 @@ def _finish_restore(
                 "Чтобы блок запустился, залейте CodeFlash.",
                 "The ECU stays in its FBL bootloader: this restore did not write CodeFlash and the ECU has no "
                 "application. Restore CodeFlash for it to start.",
+                "模块停留在 FBL 引导加载程序中：本次恢复未写入 CodeFlash，且模块中没有应用程序。"
+                "请恢复 CodeFlash 以使其启动。",
             )
         )
     return info
@@ -3037,6 +3162,7 @@ def can_turnkey_read_patch_flash(
         tr(
             "═══ ШАГ A: ПОЛНЫЙ БЭКАП ШЛЮЗА (Cflash + Uflash + Dflash) ═══",
             "═══ PHASE A: FULL GATEWAY BACKUP (Cflash + Uflash + Dflash) ═══",
+            "═══ 阶段 A：网关完整备份 (Cflash + Uflash + Dflash) ═══",
         )
     )
     bkp = can_backup(
@@ -3058,6 +3184,7 @@ def can_turnkey_read_patch_flash(
             tr(
                 "═══ ШАГ B: РАЗБЛОКИРОВКА ИНЖЕНЕРНОГО ЗАГРУЗЧИКА UFLASH ═══",
                 "═══ PHASE B: UNLOCKING ENGINEERING RSA-FREE UFLASH ═══",
+                "═══ 阶段 B：解锁工程 RSA-FREE UFLASH ═══",
             )
         )
         uf_res = can_write_uflash(
@@ -3077,6 +3204,7 @@ def can_turnkey_read_patch_flash(
             tr(
                 "═══ ШАГ B2: ЗАПИСЬ КЛЮЧЕЙ IKA В DATAFLASH ЧЕРЕЗ FACI ═══",
                 "═══ PHASE B2: WRITING IKA KEYS TO DATAFLASH VIA FACI ═══",
+                "═══ 阶段 B2：通过 FACI 将 IKA 密钥写入 DATAFLASH ═══",
             )
         )
         mod_df, _ = write_dflash_slots(orig_df, cp_updates, reporter=reporter)
@@ -3100,6 +3228,7 @@ def can_turnkey_read_patch_flash(
             tr(
                 "═══ ШАГ C: ПАТЧИНГ И ПРОШИВКА CODEFLASH ПО CAN ═══",
                 "═══ PHASE C: PATCHING & FLASHING CODEFLASH OVER CAN ═══",
+                "═══ 阶段 C：通过 CAN 打补丁并刷写 CODEFLASH ═══",
             )
         )
         mod_cf = orig_cf
@@ -3136,6 +3265,7 @@ def can_turnkey_read_patch_flash(
         tr(
             "═══ ШАГ D: ФИНАЛЬНАЯ ПРОВЕРКА ШЛЮЗА И ОШИБОК DTC ═══",
             "═══ PHASE D: FINAL GATEWAY HEALTH & DTC CHECK ═══",
+            "═══ 阶段 D：网关健康与 DTC 最终检查 ═══",
         )
     )
     hlth = can_health_check(
@@ -3182,7 +3312,7 @@ def _uds_security_20103(link: J533CanLink, *, reporter: OperationReporter = NULL
     if seed != 0:
         key = (seed + ZDC_SECURITY_ACCESS_PIN) & 0xFFFFFFFF
         link.request_uds(b"\x27\x04" + key.to_bytes(4, "big"), 0x67, timeout=3.0)
-    reporter.can_log(tr("Доступ безопасности 20103 открыт (0x67)", "SecurityAccess 20103 unlocked (0x67)"))
+    reporter.can_log(tr("Доступ безопасности 20103 открыт (0x67)", "SecurityAccess 20103 unlocked (0x67)", "SecurityAccess 20103 已解锁 (0x67)"))
 
 
 def _uds_write_workshop_fingerprint(link: J533CanLink) -> None:
@@ -3227,6 +3357,7 @@ def can_upload_zdc_datasets(
                 tr(
                     f"Блок ZDC #{idx} ({spec_names.get(idx, '')}) имеет неверный CRC-32 (0x{crc_st:08X} != 0x{crc_ca:08X}).",
                     f"ZDC #{idx} ({spec_names.get(idx, '')}) has invalid CRC-32 (0x{crc_st:08X} != 0x{crc_ca:08X}).",
+                    f"ZDC 块 #{idx} ({spec_names.get(idx, '')}) 的 CRC-32 无效 (0x{crc_st:08X} != 0x{crc_ca:08X})。",
                 )
             )
         to_upload.append((idx, spec_names.get(idx, f"ZDC{idx}"), uds_addr, uds_len, payload))
@@ -3236,6 +3367,7 @@ def can_upload_zdc_datasets(
             tr(
                 "В открытом дампе нет заполненных блоков ZDC для загрузки по CAN.",
                 "No populated ZDC blocks found in the loaded DataFlash to upload over CAN.",
+                "已加载的 DataFlash 中没有可用于通过 CAN 上传的非空 ZDC 块。",
             )
         )
 
@@ -3253,7 +3385,7 @@ def can_upload_zdc_datasets(
 
     with J533CanLink(port, interface=interface, bus=bus, log_path=log_path) as link, _uds_session(link):
         _note_hw_fallback(link, result, reporter)
-        reporter.step(1, total_steps, tr("Вход в EOL-сессию (UDS 10 40) и авторизация 20103", "Entering EOLSession (UDS 10 40) & SecurityAccess 20103"))
+        reporter.step(1, total_steps, tr("Вход в EOL-сессию (UDS 10 40) и авторизация 20103", "Entering EOLSession (UDS 10 40) & SecurityAccess 20103", "正在进入 EOL 会话 (UDS 10 40) 并执行 SecurityAccess 20103"))
         link.request_uds(b"\x10\x40", 0x50, timeout=3.0)
         _uds_security_20103(link, reporter=reporter)
         _uds_write_workshop_fingerprint(link)
@@ -3267,6 +3399,7 @@ def can_upload_zdc_datasets(
                     tr(
                         f"Передача и проверка CRC-32 ZDC #{idx} ({code}, {uds_len} Б -> 0x{uds_addr:08X})",
                         f"Uploading & verifying CRC-32 for ZDC #{idx} ({code}, {uds_len} B -> 0x{uds_addr:08X})",
+                        f"正在上传并校验 ZDC #{idx} 的 CRC-32 ({code}，{uds_len} B -> 0x{uds_addr:08X})",
                     ),
                 )
                 req34 = b"\x34\x00\x44" + uds_addr.to_bytes(4, "big") + uds_len.to_bytes(4, "big")
@@ -3300,6 +3433,7 @@ def can_upload_zdc_datasets(
                                 tr(
                                     f"Шлюз отклонил CRC-32 блока ZDC #{idx} ({code}) при проверке 02EF (статус {err_hex})",
                                     f"Gateway CheckMemory 02EF rejected CRC-32 for ZDC #{idx} ({code}) (status {err_hex})",
+                                    f"网关 CheckMemory 02EF 拒绝了 ZDC #{idx} ({code}) 的 CRC-32（状态 {err_hex}）",
                                 )
                             )
                         break
@@ -3308,7 +3442,7 @@ def can_upload_zdc_datasets(
                     raise TimeoutError(f"CheckMemory routine 0x02EF timed out in status 0x01 for ZDC #{idx}")
 
                 result["uploaded_blocks"].append({"idx": idx, "code": code, "uds_addr": f"0x{uds_addr:08X}", "size": uds_len})
-                reporter.info(tr(f"ZDC #{idx} ({code}) принят, проверен 02EF (FFFF) и сохранён в DataFlash", f"ZDC #{idx} ({code}) accepted, verified by 02EF (FFFF), and committed to DataFlash"))
+                reporter.info(tr(f"ZDC #{idx} ({code}) принят, проверен 02EF (FFFF) и сохранён в DataFlash", f"ZDC #{idx} ({code}) accepted, verified by 02EF (FFFF), and committed to DataFlash", f"ZDC #{idx} ({code}) 已接受、通过 02EF (FFFF) 校验并提交至 DataFlash"))
                 reporter.progress(12 + int(76 * (pos - 1) / len(to_upload)), 100)
 
         if write_passport:
@@ -3320,7 +3454,7 @@ def can_upload_zdc_datasets(
             reporter.step(
                 len(to_upload) + 2,
                 total_steps,
-                tr(f"Фиксация паспорта датасета F1A0={pn_str} / F1A1={ver_str}", f"Sealing dataset passport F1A0={pn_str} / F1A1={ver_str}"),
+                tr(f"Фиксация паспорта датасета F1A0={pn_str} / F1A1={ver_str}", f"Sealing dataset passport F1A0={pn_str} / F1A1={ver_str}", f"正在密封数据集护照 F1A0={pn_str} / F1A1={ver_str}"),
             )
             link.request_uds(b"\x2E\xF1\xA0" + pn_str.encode("ascii").ljust(11, b" "), 0x6E, timeout=5.0, allow_pending=True)
             link.request_uds(b"\x2E\xF1\xA1" + ver_str.encode("ascii"), 0x6E, timeout=5.0, allow_pending=True)
@@ -3332,7 +3466,7 @@ def can_upload_zdc_datasets(
         # Each uploaded block is used only with its enable bit in 0x0600 set; a coding change restarts the gateway.
         result["auto_coding"] = _sync_coding_for_zdc(link, dflash_bytes, [u[0] for u in to_upload], reporter)
         if reset_after and "after" not in result["auto_coding"]:
-            reporter.step(total_steps, total_steps, tr("Перезагрузка шлюза для применения датасета (UDS 11 02)", "Resetting gateway to reload dataset tables (UDS 11 02)"))
+            reporter.step(total_steps, total_steps, tr("Перезагрузка шлюза для применения датасета (UDS 11 02)", "Resetting gateway to reload dataset tables (UDS 11 02)", "正在重启网关以重新加载数据集表 (UDS 11 02)"))
             try:
                 link.request_uds(b"\x11\x02", 0x51, timeout=2.0, allow_pending=True, resend=False)
             except LINK_ERRORS:
@@ -3349,6 +3483,7 @@ def can_upload_zdc_datasets(
             tr(
                 f"Параметрия ZDC успешно загружена по CAN (блоков: {len(to_upload)})!",
                 f"ZDC parameterization uploaded over CAN ({len(to_upload)} block(s))!",
+                f"ZDC 参数化已通过 CAN 成功上传（{len(to_upload)} 个块）！",
             )
         )
     if out_dir is not None:
@@ -3372,7 +3507,7 @@ def can_learn_mfl_button(
     reporter: OperationReporter = NULL_REPORTER,
 ) -> dict[str, Any]:
     """Poll live steering-wheel LIN frames (`DID 0x1F07` `MFL_01` & `DID 0x1F19` `GRA_Neu`) to capture a button press."""
-    preset_labels = {code: (ru, en) for code, ru, en in MFL_KEYCODE_PRESETS}
+    preset_labels = {code: (ru, en, zh) for code, ru, en, zh in MFL_KEYCODE_PRESETS}
     with J533CanLink(port, interface=interface, bus=bus) as link:
         reporter.step(
             1,
@@ -3380,6 +3515,7 @@ def can_learn_mfl_button(
             tr(
                 "Опрос шины LIN рулевого колеса (DID 0x1F07 / 0x1F19)…",
                 "Connecting to steering-wheel LIN monitor (DID 0x1F07 / 0x1F19)…",
+                "正在连接方向盘 LIN 监视器 (DID 0x1F07 / 0x1F19)…",
             ),
         )
         link.request_uds(b"\x10\x03", 0x50, timeout=2.0)
@@ -3402,6 +3538,7 @@ def can_learn_mfl_button(
             tr(
                 "Нажмите желаемую кнопку на руле в течение 12 секунд…",
                 "Press the desired steering-wheel button within 12 seconds…",
+                "请在 12 秒内按下所需的方向盘按钮…",
             ),
         )
 
@@ -3420,11 +3557,12 @@ def can_learn_mfl_button(
                     released = True
             elif kc1 != 0 or kc2 != 0:
                 code = kc1 if kc1 != 0 else kc2
-                ru, en = preset_labels.get(code, (f"Кнопка MFL 0x{code:02X}", f"MFL key 0x{code:02X}"))
+                ru, en, zh = preset_labels.get(code, (f"Кнопка MFL 0x{code:02X}", f"MFL key 0x{code:02X}", f"MFL 按钮 0x{code:02X}"))
                 reporter.success(
                     tr(
                         f"Поймана кнопка руля: 0x{code:02X} ({ru})",
                         f"Captured steering-wheel button: 0x{code:02X} ({en})",
+                        f"已捕获方向盘按钮：0x{code:02X} ({zh})",
                     )
                 )
                 return {
@@ -3433,6 +3571,7 @@ def can_learn_mfl_button(
                     "event_byte": ev,
                     "label_ru": ru,
                     "label_en": en,
+                    "label_zh": zh,
                     "raw_1f07": mfl.hex().upper(),
                     "gra_button_detected": False,
                     "timed_out": False,
@@ -3448,6 +3587,8 @@ def can_learn_mfl_button(
                                 "Эта линия не передаёт MFL_Tastencode в координатор профилей FPA — выберите мультимедийную/функциональную кнопку (Голос, VIEW, Ассистенты, Обогрев).",
                                 "Detected a cruise-control / Travel Assist button press (GRA_Neu LIN 0x0F). "
                                 "This line does not send an MFL_Tastencode to the FPA profile coordinator — choose a media/function key (Voice, VIEW, Assistants, Heater).",
+                                "检测到定速巡航 / Travel Assist 按钮按下 (GRA_Neu LIN 0x0F)。"
+                                "该线路不会向 FPA 配置协调器发送 MFL_Tastencode——请选择多媒体/功能按键（语音、VIEW、辅助、加热）。",
                             )
                         )
                         return {
@@ -3463,7 +3604,7 @@ def can_learn_mfl_button(
             if bus is None:
                 time.sleep(0.06)
 
-    reporter.warning(tr("Время ожидания нажатия кнопки на руле истекло.", "Timed out waiting for a steering-wheel button press."))
+    reporter.warning(tr("Время ожидания нажатия кнопки на руле истекло.", "Timed out waiting for a steering-wheel button press.", "等待方向盘按钮按下超时。"))
     return {
         "captured": False,
         "keycode": None,
@@ -3503,7 +3644,7 @@ def can_read_gateway_coding(
 ) -> dict[str, Any]:
     """Read 30-byte Gateway Long Coding (`UDS 22 06 00`)."""
     with J533CanLink(port, interface=interface, bus=bus) as link:
-        reporter.step(1, 1, tr("Чтение кодировки шлюза (UDS 22 06 00)", "Reading gateway coding (UDS 22 06 00)"))
+        reporter.step(1, 1, tr("Чтение кодировки шлюза (UDS 22 06 00)", "Reading gateway coding (UDS 22 06 00)", "正在读取网关编码 (UDS 22 06 00)"))
         link.request_uds(b"\x10\x03", 0x50, timeout=2.0)
         raw = link.request_uds(b"\x22\x06\x00", 0x62, timeout=2.0)[3:]
         if len(raw) != 30:
@@ -3522,20 +3663,21 @@ def can_write_gateway_coding(
 ) -> dict[str, Any]:
     """Write and verify 30-byte Gateway Long Coding (`UDS 2E 06 00`) with workshop fingerprint (`F198`/`F199`)."""
     if len(coding30) != 30:
-        raise ValueError(tr(f"Кодировка 0x0600 должна содержать 30 байт, получено {len(coding30)} Б", f"Gateway coding 0x0600 must be 30 bytes, got {len(coding30)} B"))
+        raise ValueError(tr(f"Кодировка 0x0600 должна содержать 30 байт, получено {len(coding30)} Б", f"Gateway coding 0x0600 must be 30 bytes, got {len(coding30)} B", f"网关编码 0x0600 必须为 30 字节，实际收到 {len(coding30)} B"))
     with J533CanLink(port, interface=interface, bus=bus) as link:
-        reporter.step(1, 2, tr("Запись кодировки шлюза (UDS 2E 06 00)", "Writing gateway coding (UDS 2E 06 00)"))
+        reporter.step(1, 2, tr("Запись кодировки шлюза (UDS 2E 06 00)", "Writing gateway coding (UDS 2E 06 00)", "正在写入网关编码 (UDS 2E 06 00)"))
         link.request_uds(b"\x10\x03", 0x50, timeout=2.0)
         _uds_write_workshop_fingerprint(link)
         link.request_uds(b"\x2E\x06\x00" + bytes(coding30), 0x6E, timeout=5.0, allow_pending=True)
-        reporter.step(2, 2, tr("Контрольное чтение кодировки (UDS 22 06 00)", "Verifying gateway coding (UDS 22 06 00)"))
+        reporter.step(2, 2, tr("Контрольное чтение кодировки (UDS 22 06 00)", "Verifying gateway coding (UDS 22 06 00)", "正在校验网关编码 (UDS 22 06 00)"))
         verify = link.request_uds(b"\x22\x06\x00", 0x62, timeout=2.0)[3:]
         if verify != bytes(coding30):
             raise RuntimeError(
                 tr(
                     f"Проверка кодировки 0x0600 не совпала: {verify.hex().upper()}",
                     f"Coding 0x0600 readback mismatch: {verify.hex().upper()}",
+                    f"编码 0x0600 回读不匹配：{verify.hex().upper()}",
                 )
             )
-        reporter.success(tr("Кодировка шлюза 0x0600 записана и проверена!", "Gateway coding 0x0600 written and verified!"))
+        reporter.success(tr("Кодировка шлюза 0x0600 записана и проверена!", "Gateway coding 0x0600 written and verified!", "网关编码 0x0600 已写入并校验！"))
         return {"coding": verify, "coding_hex": verify.hex().upper()}

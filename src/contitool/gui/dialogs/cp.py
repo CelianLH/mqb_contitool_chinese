@@ -31,11 +31,11 @@ _ROW_H = 30
 def slot_state_text(st: SlotState | None) -> tuple[str, str]:
     """(label, colour) for a CP bank state."""
     if st is None or st.empty:
-        return tr("свободен", "empty"), theme.TEXT_MUTED
+        return tr("свободен", "empty", "空闲"), theme.TEXT_MUTED
     if st.kind == "PLAIN":
-        return tr("ключ IKA", "IKA key"), theme.OK
+        return tr("ключ IKA", "IKA key", "IKA 密钥"), theme.OK
     if st.kind == "SHE":
-        return tr("заводской SHE", "factory SHE"), theme.INFO
+        return tr("заводской SHE", "factory SHE", "原厂 SHE"), theme.INFO
     return st.kind, theme.WARN
 
 
@@ -45,12 +45,14 @@ class CpBindDialog(Dialog):
     def __init__(self, slots: list[SlotState], parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Адаптация модулей", "Module adaptation"),
+            tr("Адаптация модулей", "Module adaptation", "模块适配"),
             tr(
                 "Отметьте модули, которые нужно адаптировать к этому шлюзу, и укажите ключ IKA каждого — его нужно "
                 "знать заранее (из дампа модуля) или сгенерировать и записать в модуль. Заводские модули не меняются.",
                 "Tick the modules to adapt to this gateway and enter each one's IKA key — known in advance (from the "
                 "module's dump) or generated and written into the module. The factory modules do not change.",
+                "勾选要适配到该网关的模块，并输入每个模块的 IKA 密钥——可提前获知（从模块转储中读取），"
+                "或生成后写入模块。原厂模块不会被改动。",
             ),
             width=760,
         )
@@ -60,9 +62,9 @@ class CpBindDialog(Dialog):
         states = {st.spec.slot: st for st in slots}
 
         # 1. ECUs
-        self.body.addWidget(group_label(tr("1. МОДУЛИ", "1. ECUs")))
+        self.body.addWidget(group_label(tr("1. МОДУЛИ", "1. ECUs", "1. 模块")))
         self.tbl = QTableWidget(len(SLAVE_SLOTS), 3)
-        self.tbl.setHorizontalHeaderLabels([tr("Адрес", "Addr"), tr("Блок", "ECU"), tr("Сейчас в банке", "Bank now")])
+        self.tbl.setHorizontalHeaderLabels([tr("Адрес", "Addr", "地址"), tr("Блок", "ECU", "模块"), tr("Сейчас в банке", "Bank now", "当前存储区")])
         self.tbl.verticalHeader().setVisible(False)
         self.tbl.verticalHeader().setDefaultSectionSize(_ROW_H)
         self.tbl.setShowGrid(False)
@@ -98,19 +100,20 @@ class CpBindDialog(Dialog):
         self.body.addWidget(self.tbl)
 
         # 2. Key
-        self.body.addWidget(group_label(tr("2. КЛЮЧ IKA", "2. IKA KEY")))
+        self.body.addWidget(group_label(tr("2. КЛЮЧ IKA", "2. IKA KEY", "2. IKA 密钥")))
         self.ed_key = QLineEdit()
         self.ed_key.setFont(mono_font(14))
         self.ed_key.setPlaceholderText("A1B2C3D4E5F60718293A4B5C6D7E8F90")
         self.ed_key.textChanged.connect(lambda _t: self._sync())
-        btn_gen = button(tr("Сгенерировать", "Generate"), slot=self._generate)
+        btn_gen = button(tr("Сгенерировать", "Generate", "生成"), slot=self._generate)
         btn_gen.setToolTip(
             tr(
                 "Случайный ключ: тот же ключ нужно записать в слот IKA адаптируемого модуля.",
                 "Random key: the same key must be written into the IKA slot of the bound ECU.",
+                "随机密钥：需将同一密钥写入被适配模块的 IKA 槽位。",
             )
         )
-        btn_copy = button(tr("Копировать", "Copy"), "GhostBtn", slot=self._copy)
+        btn_copy = button(tr("Копировать", "Copy", "复制"), "GhostBtn", slot=self._copy)
         key_row = QHBoxLayout()
         key_row.setSpacing(6)
         key_row.addWidget(self.ed_key, 1)
@@ -127,12 +130,14 @@ class CpBindDialog(Dialog):
                     "из его дампа или сгенерированный и записанный в оба блока.",
                     "16 bytes (32 hex characters). The plaintext key from the bound ECU's IKA slot — "
                     "read from its dump, or generated and written into both ECUs.",
+                    "16 字节（32 个十六进制字符）。这是被适配模块 IKA 槽位中的明文密钥——"
+                    "可从其转储中读取，或生成后写入两个模块。",
                 )
             )
         )
 
         # Advanced (collapsed)
-        self.btn_more = button(tr("Дополнительно ▸", "Advanced ▸"), "GhostBtn")
+        self.btn_more = button(tr("Дополнительно ▸", "Advanced ▸", "高级 ▸"), "GhostBtn")
         self.btn_more.setCheckable(True)
         self.adv = QWidget()
         adv_lay = QVBoxLayout(self.adv)
@@ -142,10 +147,15 @@ class CpBindDialog(Dialog):
             tr(
                 "Всегда обходить маску EEPROM 95640 (для пустых банков включается автоматически)",
                 "Always bypass the 95640 EEPROM mask (automatic for empty banks)",
+                "始终绕过 95640 EEPROM 掩码（空存储区会自动启用）",
             )
         )
         self.chk_allow_suspicious = QCheckBox(
-            tr("Разрешить нестандартный ключ (00..00 / заголовок M1)", "Allow a non-standard key (00..00 / M1 header)")
+            tr(
+                "Разрешить нестандартный ключ (00..00 / заголовок M1)",
+                "Allow a non-standard key (00..00 / M1 header)",
+                "允许非标准密钥（00..00 / M1 头）",
+            )
         )
         self.chk_allow_suspicious.toggled.connect(lambda _c: self._sync())
         adv_lay.addWidget(self.chk_force_mask)
@@ -155,11 +165,15 @@ class CpBindDialog(Dialog):
         self.body.addLayout(row(self.btn_more))
         self.body.addWidget(self.adv)
 
-        self.btn_clear = button(tr("Очистить банки…", "Erase banks…"), "DangerBtn", slot=self._clear)
+        self.btn_clear = button(tr("Очистить банки…", "Erase banks…", "擦除存储区…"), "DangerBtn", slot=self._clear)
         self.btn_clear.setToolTip(
-            tr("Вернуть отмеченные банки в заводское состояние FF..FF", "Return the ticked banks to factory FF..FF")
+            tr(
+                "Вернуть отмеченные банки в заводское состояние FF..FF",
+                "Return the ticked banks to factory FF..FF",
+                "将勾选的存储区恢复为出厂状态 FF..FF",
+            )
         )
-        self.btn_ok = button(tr("Адаптировать", "Adapt"), "PrimaryBtn", slot=self._bind)
+        self.btn_ok = button(tr("Адаптировать", "Adapt", "适配"), "PrimaryBtn", slot=self._bind)
         self.finish(self.btn_clear, ok=self.btn_ok)
         self._sync()
 
@@ -170,7 +184,7 @@ class CpBindDialog(Dialog):
 
     def _toggle_adv(self, on: bool) -> None:
         self.adv.setVisible(on)
-        self.btn_more.setText(tr("Дополнительно ▾", "Advanced ▾") if on else tr("Дополнительно ▸", "Advanced ▸"))
+        self.btn_more.setText(tr("Дополнительно ▾", "Advanced ▾", "高级 ▾") if on else tr("Дополнительно ▸", "Advanced ▸", "高级 ▸"))
 
     def _checked(self) -> list[SlotSpec]:
         return [
@@ -198,7 +212,7 @@ class CpBindDialog(Dialog):
             stop = any(s == "STOP" for s, _ in warns)
             return k, (not stop) or self.chk_allow_suspicious.isChecked()
         set_tone(self.lbl_guard, "ok")
-        self.lbl_guard.setText(tr("✓  Ключ корректен", "✓  Valid key"))
+        self.lbl_guard.setText(tr("✓  Ключ корректен", "✓  Valid key", "✓  密钥有效"))
         return k, True
 
     def _sync(self) -> None:
@@ -206,7 +220,9 @@ class CpBindDialog(Dialog):
         key, allowed = self._parsed_key()
         self.btn_ok.setEnabled(bool(banks) and key is not None and allowed)
         self.btn_ok.setText(
-            tr(f"Адаптировать ({len(banks)})", f"Adapt ({len(banks)})") if banks else tr("Адаптировать", "Adapt")
+            tr(f"Адаптировать ({len(banks)})", f"Adapt ({len(banks)})", f"适配 ({len(banks)})")
+            if banks
+            else tr("Адаптировать", "Adapt", "适配")
         )
         self.btn_clear.setEnabled(bool(banks))
 
@@ -233,10 +249,11 @@ class CpBindDialog(Dialog):
         addrs = ", ".join(s.ecu_addr for s in banks)
         ans = QMessageBox.question(
             self,
-            tr("Очистка банков", "Erase banks"),
+            tr("Очистка банков", "Erase banks", "擦除存储区"),
             tr(
                 f"Вернуть банки {addrs} в заводское пустое состояние FF..FF?\nИзменение попадёт в копию DataFlash.",
                 f"Return banks {addrs} to factory empty FF..FF?\nThe change goes into the DataFlash copy.",
+                f"将存储区 {addrs} 恢复为出厂空白状态 FF..FF？\n改动将写入 DataFlash 副本。",
             ),
         )
         if ans == QMessageBox.StandardButton.Yes:

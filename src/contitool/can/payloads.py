@@ -443,6 +443,9 @@ def build_uflash_faci_payloads(
                 f"The Uflash image uses {pages} pages — more than 122, so it cannot be written in one packet. "
                 "A two-packet write can leave the ECU without a bootloader and is refused. "
                 "Check that this is this ECU's own bootloader (usually 99 pages).",
+                f"Uflash 镜像占用 {pages} 页——超过 122 页，无法用一个数据包写入。"
+                "分两个数据包写入可能使模块失去引导加载程序，因此被拒绝。"
+                "请确认这是该模块自身的引导加载程序（通常为 99 页）。",
             )
         )
     one_shot, count = build_uflash_one_shot_payload(uflash_32k)

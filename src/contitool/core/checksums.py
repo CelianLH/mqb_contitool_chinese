@@ -39,6 +39,7 @@ def app_crc(app: bytes | bytearray) -> tuple[int, int]:
             tr(
                 f"Неожиданное число диапазонов CRC ({count}) в заголовке @ 0xC21E",
                 f"Unexpected CRC range count ({count}) in block header @ 0xC21E",
+                f"块头 @ 0xC21E 中的 CRC 范围数量异常（{count}）",
             )
         )
     mv = memoryview(app)
@@ -49,6 +50,7 @@ def app_crc(app: bytes | bytearray) -> tuple[int, int]:
                 tr(
                     f"Диапазон CRC #{i} 0x{start:06X}..0x{end:06X} выходит за пределы приложения",
                     f"CRC range #{i} 0x{start:06X}..0x{end:06X} is out of application bounds",
+                    f"CRC 范围 #{i} 0x{start:06X}..0x{end:06X} 超出应用程序边界",
                 )
             )
         crc = crc16_reflected(mv[start - APP_BASE : end - APP_BASE + 1], crc)

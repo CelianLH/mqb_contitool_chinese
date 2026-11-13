@@ -223,6 +223,13 @@ def build_report_zip(
         "Review the archive before publishing it.\n"
         + ("\ndumps/ — the memory dumps loaded in the program; sessions/ also holds this operation's dumps. They carry "
            "VIN, FAZIT, VCRN and SWaP data.\n" if dumps is not None else ""),
+        "ContiTool 问题报告。\n\n"
+        "issue.md — GitHub Issues 的正文；contitool_log.txt — 程序日志；traceback.txt — 技术细节；\n"
+        "sessions/ — 本次操作的文件（不含内存转储 *.bin；can.jsonl — 开头与结尾）；driver_logs/ — D-PDU 驱动程序日志。\n\n"
+        "注意：原始日志（can.jsonl、driver_logs）可能包含模块和车辆的标识信息。\n"
+        "发布前请先检查本归档。\n"
+        + ("\ndumps/ — 程序加载的内存转储；sessions/ 中还包含本次操作的转储，其中带有 VIN、FAZIT、VCRN 和 SWaP 数据。\n"
+           if dumps is not None else ""),
     )
     with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         z.writestr("README.txt", readme)
@@ -262,5 +269,5 @@ def build_report_zip(
 def failure_from_exception(exc_type: type[BaseException], exc: BaseException, tb: object, started: float) -> Failure:
     """`started` picks the session and driver logs: with 0 every file ever written to the output folder went in."""
     text = "".join(tb_mod.format_exception(exc_type, exc, tb))  # type: ignore[arg-type]
-    return Failure(tr("Внутренняя ошибка ContiTool", "ContiTool internal error"), f"{exc_type.__name__}: {exc}", text,
+    return Failure(tr("Внутренняя ошибка ContiTool", "ContiTool internal error", "ContiTool 内部错误"), f"{exc_type.__name__}: {exc}", text,
                    started=started)

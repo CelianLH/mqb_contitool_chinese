@@ -55,7 +55,7 @@ class OperationWorker(QThread):
     def run(self) -> None:
         try:
             self.reporter.info(
-                tr(f"Запуск операции: {self.title}", f"Starting operation: {self.title}")
+                tr(f"Запуск операции: {self.title}", f"Starting operation: {self.title}", f"正在启动操作：{self.title}")
             )
             result = self._task_fn(self.reporter)
             self.succeeded.emit(result)

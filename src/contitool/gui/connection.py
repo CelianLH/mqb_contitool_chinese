@@ -36,6 +36,18 @@ from contitool.storage import runs_root
 
 BUILTIN_TERMINATION = ("dpdu", "j2534")  # VAS 6154 / VNCI and J2534 pass-thru adapters terminate CAN themselves
 
+# Chinese names for the SUPPORTED_CAN_INTERFACES entries (keyed by interface code; the tuple itself stays (code, en, ru)).
+_CAN_IFACE_ZH: dict[str, str] = {
+    "slcan": "CANable / Cantact / USB-TIN (SLCAN 串口, 500 kbit/s)",
+    "gs_usb": "CANable candlelight / Geschwister Schneider (gs_usb 原生 USB)",
+    "socketcan": "Linux SocketCAN (can0 / slcan0)",
+    "pcan": "PEAK-System PCAN-USB (PCAN_USBBUS1)",
+    "kvaser": "Kvaser Leaf / Memorator (通道 0)",
+    "vector": "Vector VN16xx (通道 0)",
+    "j2534": "J2534 PassThru (VAS 6154A、Tactrix、Mongoose…; Windows)",
+    "dpdu": "VAS 6154 / VNCI 6154A (D-PDU，来自 ODIS；Windows)",
+}
+
 
 class CanConnection(QObject):
     """Where and how to talk to the bench gateway. `ready` gates every CAN operation."""
@@ -55,7 +67,7 @@ class CanConnection(QObject):
     def busy_reason(self) -> str:
         """Why no new CAN link may open now (an operation, the terminal, a link check still running), or ""."""
         if any(w.isRunning() for w in _ORPHANS if w.objectName() == "link-check"):
-            return tr("Ещё идёт проверка связи — подождите несколько секунд.", "A link check is still running — wait a few seconds.")
+            return tr("Ещё идёт проверка связи — подождите несколько секунд.", "A link check is still running — wait a few seconds.", "链路检查仍在进行 — 请稍候几秒。")
         return self.in_use()
 
     @property
@@ -78,7 +90,7 @@ class CanConnection(QObject):
     def adapter_name(self) -> str:
         for code, en_name, ru_name in SUPPORTED_CAN_INTERFACES:
             if code == self.interface:
-                return tr(ru_name, en_name).split(" (")[0]
+                return tr(ru_name, en_name, _CAN_IFACE_ZH.get(code, en_name)).split(" (")[0]
         return self.interface
 
     def display(self) -> str:
@@ -183,10 +195,11 @@ class ConnectionDialog(Dialog):
     def __init__(self, conn: CanConnection, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Подключение к блоку", "ECU connection"),
+            tr("Подключение к блоку", "ECU connection", "模块连接"),
             tr(
                 "Шлюз на стенде подключается к адаптеру по шине Diagnosis CAN (500 кбит/с) через разъём T20.",
                 "The bench gateway talks to the adapter over Diagnosis CAN (500 kbit/s) via the T20 connector.",
+                "台架上的网关通过 T20 连接器，经诊断 CAN (500 kbit/s) 总线连接适配器。",
             ),
             width=DIALOG_SIZE[0],
         )
@@ -195,8 +208,8 @@ class ConnectionDialog(Dialog):
         self._scan: OperationWorker | None = None
         self._first_scan = True
 
-        self.body.addLayout(row(group_label(tr("Адаптер", "Adapter")), 1,
-                                button(tr("Обновить", "Refresh"), "GhostBtn", slot=self.refresh)))
+        self.body.addLayout(row(group_label(tr("Адаптер", "Adapter", "适配器")), 1,
+                                button(tr("Обновить", "Refresh", "刷新"), "GhostBtn", slot=self.refresh)))
         self.list = QListWidget()
         self.list.setObjectName("Adapters")
         self.list.currentItemChanged.connect(lambda *_a: self._picked())
@@ -210,9 +223,9 @@ class ConnectionDialog(Dialog):
         lay.setContentsMargins(0, 0, 0, 0)
         self.cmb_iface = QComboBox()
         for code, en_name, ru_name in SUPPORTED_CAN_INTERFACES:
-            self.cmb_iface.addItem(tr(ru_name, en_name), code)
+            self.cmb_iface.addItem(tr(ru_name, en_name, _CAN_IFACE_ZH.get(code, en_name)), code)
         self.ed_port = QLineEdit()
-        self.ed_port.setPlaceholderText(tr("Порт: COM4, /dev/cu.usbmodem…, can0", "Port: COM4, /dev/cu.usbmodem…, can0"))
+        self.ed_port.setPlaceholderText(tr("Порт: COM4, /dev/cu.usbmodem…, can0", "Port: COM4, /dev/cu.usbmodem…, can0", "端口：COM4、/dev/cu.usbmodem…、can0"))
         self.ed_port.textChanged.connect(lambda *_a: self._picked())
         lay.addLayout(row(self.cmb_iface, self.ed_port, 0))
         self.manual.setVisible(False)
@@ -220,10 +233,10 @@ class ConnectionDialog(Dialog):
         self.body.addLayout(row(self.btn_manual))
         self.body.addWidget(self.manual)
 
-        self.btn_check = button(tr("Проверить связь", "Check link"), slot=self._check_link)
+        self.btn_check = button(tr("Проверить связь", "Check link", "检查链路"), slot=self._check_link)
         self.lbl_check = hint()
         self.lbl_check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self.btn_report = _link(tr("Сообщить о проблеме…", "Report a problem…"), self._report_check)
+        self.btn_report = _link(tr("Сообщить о проблеме…", "Report a problem…", "报告问题…"), self._report_check)
         self.btn_report.hide()
         self._check_failure: Failure | None = None
         self.body.addLayout(row(self.btn_check, self.lbl_check, 0, self.btn_report))
@@ -242,6 +255,7 @@ class ConnectionDialog(Dialog):
             "lost. On the bench the bus is just the gateway and the adapter, so switch on the adapter's "
             "terminator (usually a jumper or a switch) or fit a 120 Ω resistor between CAN-H and "
             "CAN-L.<br><b>The checkbox is only a reminder: ContiTool measures nothing.</b>",
+            "CAN 总线两端各需一个 120 Ω 电阻：没有它信号会反射，帧会丢失。在台架上总线仅由网关和适配器组成，因此请打开适配器内的终端电阻（通常是跳线或开关），或在 CAN-H 与 CAN-L 之间接入一个 120 Ω 电阻。<br><b>该复选框仅为提醒：ContiTool 不会测量任何东西。</b>",
         ))
         self.body.addWidget(self.lbl_term_help)
         self.chk_driver = WrapCheckBox()  # a D-PDU driver version ContiTool was not checked with
@@ -256,6 +270,7 @@ class ConnectionDialog(Dialog):
             "firmware of its version into the VAS 6154 / VNCI (about 30 seconds); do not unplug the adapter until it "
             "finishes. This is safe: ODIS writes its own version back into the adapter the next time it connects.<br>"
             "<b>Close ODIS and VCTool.</b> They must stay closed while ContiTool is working.",
+            "<b>驱动程序会将适配器刷写为其自身版本。</b>连接时，D-PDU 驱动程序会自行将自身版本的固件写入 VAS 6154 / VNCI（约 30 秒）；请勿在完成前拔下适配器。这是安全的：ODIS 下次连接时同样会将自身版本写回适配器。<br><b>请关闭 ODIS 和 VCTool。</b>在 ContiTool 运行期间必须保持关闭。",
         ))
         self.body.addWidget(self.lbl_vnci)
         self.btn_pinout = _link("", self._toggle_pinout)
@@ -267,14 +282,14 @@ class ConnectionDialog(Dialog):
         self.out_dir = conn.out_dir
         self.lbl_outdir = PathLabel()
         self.lbl_outdir.setObjectName("Hint")
-        self.body.addWidget(group_label(tr("Папка с дампами и сессиями", "Dumps and sessions folder")))
-        out_row = row(self.lbl_outdir, button(tr("Открыть", "Open"), "GhostBtn", slot=self._open_outdir), 0)
+        self.body.addWidget(group_label(tr("Папка с дампами и сессиями", "Dumps and sessions folder", "转储与会话文件夹")))
+        out_row = row(self.lbl_outdir, button(tr("Открыть", "Open", "打开"), "GhostBtn", slot=self._open_outdir), 0)
         out_row.setStretchFactor(self.lbl_outdir, 1)
         self.body.addLayout(out_row)
         self.body.addStretch(1)  # the dialog keeps its size: spare room goes below, not between the rows
         self._show_outdir()
 
-        self.btn_ok = button(tr("Готово", "Done"), "PrimaryBtn", slot=self._save)
+        self.btn_ok = button(tr("Готово", "Done", "完成"), "PrimaryBtn", slot=self._save)
         self.finish(ok=self.btn_ok)
         # One size that holds the opened wiring diagram: what is taller scrolls, nothing is ever wider.
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -291,11 +306,11 @@ class ConnectionDialog(Dialog):
         if self._scan is not None:
             return
         self.list.clear()
-        item = QListWidgetItem(tr("Поиск адаптеров…", "Looking for adapters…"))
+        item = QListWidgetItem(tr("Поиск адаптеров…", "Looking for adapters…", "正在搜索适配器…"))
         item.setFlags(Qt.ItemFlag.NoItemFlags)
         self.list.addItem(item)
         self.list.setFixedHeight(52)
-        self._scan = OperationWorker(tr("Поиск адаптеров", "Adapter search"), lambda _rep: discover_adapters(), self)
+        self._scan = OperationWorker(tr("Поиск адаптеров", "Adapter search", "搜索适配器"), lambda _rep: discover_adapters(), self)
         self._scan.succeeded.connect(self._show_found)
         self._scan.failed.connect(lambda _msg, _tb: self._show_found([]))
         self._scan.start()
@@ -328,7 +343,8 @@ class ConnectionDialog(Dialog):
             self.list.setItemWidget(item, card)
         if not found:
             item = QListWidgetItem(tr("Адаптеры не найдены — подключите адаптер и нажмите «Обновить»",
-                                      "No adapters found — plug one in and press Refresh"))
+                                      "No adapters found — plug one in and press Refresh",
+                                      "未找到适配器 — 请插入适配器并点击「刷新」"))
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list.addItem(item)
         usable = [i for i in range(self.list.count()) if self.list.item(i).flags() & Qt.ItemFlag.ItemIsEnabled]
@@ -361,13 +377,13 @@ class ConnectionDialog(Dialog):
         show = not self._manual_open if show is None else show
         self._manual_open = show
         self.manual.setVisible(show)
-        self.btn_manual.setText(tr("Нет в списке? Указать вручную ", "Not listed? Enter manually ") + ("▾" if show else "▸"))
+        self.btn_manual.setText(tr("Нет в списке? Указать вручную ", "Not listed? Enter manually ", "不在列表中？手动输入 ") + ("▾" if show else "▸"))
         self._sync()
 
     def _toggle_pinout(self, show: bool | None = None) -> None:
         show = self.pinout_card.isHidden() if show is None else show
         self.pinout_card.setVisible(show)
-        self.btn_pinout.setText(tr("Схема подключения T20 ", "T20 wiring diagram ") + ("▾" if show else "▸"))
+        self.btn_pinout.setText(tr("Схема подключения T20 ", "T20 wiring diagram ", "T20 接线图 ") + ("▾" if show else "▸"))
 
     def _unverified_driver(self) -> str | None:
         """Version of the picked D-PDU driver when it needs the user's go-ahead, else None."""
@@ -400,6 +416,7 @@ class ConnectionDialog(Dialog):
             "питание +12 В стабильное",
             "CAN termination is on (in the adapter or a 120 Ω resistor between Pin 19 CAN-H and Pin 9 CAN-L),"
             " +12 V supply is stable",
+            "CAN 终端电阻已开启（适配器内置，或 Pin 19 CAN-H 与 Pin 9 CAN-L 之间接入 120 Ω 电阻），+12 V 供电稳定",
         ))
         self.chk_120ohm.setVisible(not builtin)
         self.lbl_term_help.setVisible(not builtin)
@@ -417,6 +434,7 @@ class ConnectionDialog(Dialog):
                 f"Use D-PDU driver {drv} anyway. On versions 30 and newer work is unstable at the moment: the "
                 "adapter hangs partway through a UDS flash. The reliable choice is driver 27.2 in the list — it "
                 "comes with ContiTool",
+                f"仍使用 D-PDU 驱动程序 {drv}。版本 30 及更新版本当前运行不稳定：适配器会在 UDS 刷写过程中卡住。更可靠的选择是列表中的 27.2 驱动程序 — 它随 ContiTool 一起提供",
             ))
         else:
             self.chk_driver.setText(tr(
@@ -424,9 +442,11 @@ class ConnectionDialog(Dialog):
                 "версию",
                 f"Allow the unverified D-PDU driver {drv or '?'}: on connect it reflashes the VCI to its own "
                 "version",
+                f"允许未经验证的 D-PDU 驱动程序 {drv or '?'}：连接时会将 VCI 刷写为其自身版本",
             ))
         self.chk_driver.setToolTip(tr(f"Проверены: {', '.join(dpdu.SUPPORTED_DRIVERS)}",
-                                      f"Verified: {', '.join(dpdu.SUPPORTED_DRIVERS)}"))
+                                      f"Verified: {', '.join(dpdu.SUPPORTED_DRIVERS)}",
+                                      f"已验证：{', '.join(dpdu.SUPPORTED_DRIVERS)}"))
         driver_ok = drv is None or self.chk_driver.isChecked()
         picked = bool(iface) and (bool(port) or iface in ("j2534", "dpdu")) and driver_ok
         busy = self._check is not None
@@ -437,7 +457,8 @@ class ConnectionDialog(Dialog):
         self.btn_ok.setEnabled(ok)
         self.btn_ok.setToolTip(
             "" if ok else tr("Выберите адаптер и подтвердите, что CAN-терминатор включён (и драйвер D-PDU, если спрошено)",
-                             "Pick an adapter and confirm the CAN terminator is on (and the D-PDU driver, if asked)")
+                             "Pick an adapter and confirm the CAN terminator is on (and the D-PDU driver, if asked)",
+                             "请选择适配器并确认 CAN 终端电阻已开启（以及 D-PDU 驱动程序，如被询问）")
         )
 
     # ---------------------------------------------------------------- link check
@@ -449,16 +470,16 @@ class ConnectionDialog(Dialog):
             return
         self._accept_driver()
         set_tone(self.lbl_check, "")
-        self.lbl_check.setText(tr("Проверяю связь с блоком…", "Checking the link to the ECU…"))
+        self.lbl_check.setText(tr("Проверяю связь с блоком…", "Checking the link to the ECU…", "正在检查与模块的连接…"))
         self._check = OperationWorker(
-            tr("Проверка связи", "Link check"), lambda rep: can_identify(port, interface=iface, reporter=rep), self
+            tr("Проверка связи", "Link check", "链路检查"), lambda rep: can_identify(port, interface=iface, reporter=rep), self
         )
         self._check.setObjectName("link-check")
         self._check.succeeded.connect(self._check_ok)
         started = time.time()
 
         def failed(msg: str, tb: str) -> None:
-            self._check_failure = Failure(tr("Проверка связи", "Link check"), msg, tb, started)
+            self._check_failure = Failure(tr("Проверка связи", "Link check", "链路检查"), msg, tb, started)
             self._check_done(msg, "err")
 
         self._check.failed.connect(failed)
@@ -470,18 +491,18 @@ class ConnectionDialog(Dialog):
         found = ", ".join(filter(None, (values.get("F187"), values.get("F197"), values.get("F189") and f"SW {values['F189']}")))
         unsupported = res.get("unsupported") or unsupported_ecu_reason(res.get("ident", []))
         if unsupported:
-            msg = "⚠ " + tr("Блок отвечает, но не поддерживается", "ECU answers, but is not supported")
+            msg = "⚠ " + tr("Блок отвечает, но не поддерживается", "ECU answers, but is not supported", "模块有应答，但不支持")
             self._check_done(msg + (f": {found}" if found else "") + f" — {unsupported}", "warn")
             return
         if res.get("adapter_warning"):
-            msg = "⚠ " + tr("Блок отвечает", "ECU answers") + (f": {found}" if found else "")
+            msg = "⚠ " + tr("Блок отвечает", "ECU answers", "模块有应答") + (f": {found}" if found else "")
             self._check_done(f"{msg}\n{res['adapter_warning']}", "warn")
             return
         if res.get("in_fbl"):
-            msg = "✓ " + tr("Блок отвечает (в режиме загрузчика FBL)", "ECU answers (in FBL bootloader mode)")
+            msg = "✓ " + tr("Блок отвечает (в режиме загрузчика FBL)", "ECU answers (in FBL bootloader mode)", "模块有应答（处于 FBL 引导加载程序模式）")
             self._check_done(msg + (f": {found}" if found else ""), "warn")
             return
-        self._check_done("✓ " + tr("Блок отвечает", "ECU answers") + (f": {found}" if found else ""), "ok")
+        self._check_done("✓ " + tr("Блок отвечает", "ECU answers", "模块有应答") + (f": {found}" if found else ""), "ok")
 
     def _check_done(self, text: str, tone: str) -> None:
         if self._check is not None:
@@ -523,7 +544,7 @@ def ensure_ready(conn: CanConnection, parent: QWidget) -> bool:
     """Open the connection dialog if the adapter is not set up yet. True when CAN work may start."""
     taken = conn.busy_reason()
     if taken:
-        QMessageBox.information(parent, tr("Адаптер занят", "Adapter busy"), taken)
+        QMessageBox.information(parent, tr("Адаптер занят", "Adapter busy", "适配器忙"), taken)
         return False
     if not conn.ready:
         run_dialog(ConnectionDialog(conn, parent))

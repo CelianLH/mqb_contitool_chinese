@@ -97,9 +97,10 @@ class OperationReporter:
                 self.warning(tr("Идёт запись — прервать её на середине нельзя. Операция остановится, как только "
                                 "запись закончится.",
                                 "A write is in progress and cannot be stopped halfway. The operation stops as soon "
-                                "as the write is done."))
+                                "as the write is done.",
+                                "正在写入，无法中途中断。写入完成后操作才会停止。"))
             return
-        raise OperationCancelledError("Операция остановлена пользователем / Operation cancelled by user")
+        raise OperationCancelledError(tr("Операция остановлена пользователем", "Operation cancelled by user", "操作已被用户取消"))
 
     @contextlib.contextmanager
     def uninterruptible(self) -> Iterator[None]:

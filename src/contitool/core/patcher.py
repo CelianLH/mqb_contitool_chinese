@@ -61,8 +61,9 @@ from contitool.core.constants import (
     UFLASH_RSA_CMP_OFFSET,
     UNSUPPORTED_DATASET_RU,
     UNSUPPORTED_DATASET_WARNING,
+    UNSUPPORTED_DATASET_ZH,
 )
-from contitool.i18n import get_lang, tr
+from contitool.i18n import tr
 from contitool.progress import NULL_REPORTER, OperationReporter
 
 
@@ -74,7 +75,7 @@ def apply_engineering_patch(
     reporter: OperationReporter = NULL_REPORTER,
 ) -> tuple[bytes, str, int]:
     """Enable (or restore stock) Engineering Mode in CodeFlash.bin / FD_0DATA and update CRC-16 @ 0xC21C."""
-    reporter.step(1, 3, tr("Проверка входного образа CodeFlash и CRC-16", "Validating input CodeFlash & CRC-16"))
+    reporter.step(1, 3, tr("Проверка входного образа CodeFlash и CRC-16", "Validating input CodeFlash & CRC-16", "校验输入 CodeFlash 映像与 CRC-16"))
     prefix, app = split_cflash_or_app(raw)
     prefix_mut = bytearray(prefix)
 
@@ -88,11 +89,12 @@ def apply_engineering_patch(
                 tr(
                     f"Не совпадает входной CRC-16 @ 0x0000C21C (в файле 0x{stored_crc:04X}, расчёт 0x{calc_crc:04X}).",
                     f"Input Application CRC-16 mismatch @ 0x0000C21C (stored 0x{stored_crc:04X}, calculated 0x{calc_crc:04X}).",
+                    f"输入 Application CRC-16 不匹配 @ 0x0000C21C（文件中 0x{stored_crc:04X}，计算值 0x{calc_crc:04X}）。",
                 )
             )
     reporter.progress(33, 100)
 
-    reporter.step(2, 3, tr("Поиск сигнатур Feature Gate, CCP и 0xA167 RAM-Loader", "Locating Feature Gate, CCP & 0xA167 sites"))
+    reporter.step(2, 3, tr("Поиск сигнатур Feature Gate, CCP и 0xA167 RAM-Loader", "Locating Feature Gate, CCP & 0xA167 sites", "定位 Feature Gate、CCP 与 0xA167 RAM-Loader 位置"))
     app_ro = bytes(app)
     eng_hits = find_eng_feature_gate_sites(app_ro)
     ccp_bl_hits = find_ccp_blacklist_sites(app_ro)
@@ -102,6 +104,7 @@ def apply_engineering_patch(
             tr(
                 f"Ожидалась ровно 1 точка Feature 0x80/0x81/0x83 gate, найдено: {len(eng_hits)}",
                 f"Expected exactly 1 Feature 0x80/0x81/0x83 gate site, found: {len(eng_hits)}",
+                f"预期恰好 1 处 Feature 0x80/0x81/0x83 gate 位置，找到：{len(eng_hits)}",
             )
         )
     if len(ccp_bl_hits) != 1:
@@ -109,6 +112,7 @@ def apply_engineering_patch(
             tr(
                 f"Ожидалась ровно 1 точка фильтра адресов CCP_CheckAddr, найдено: {len(ccp_bl_hits)}",
                 f"Expected exactly 1 CCP_CheckAddr blacklist site, found: {len(ccp_bl_hits)}",
+                f"预期恰好 1 处 CCP_CheckAddr 地址过滤位置，找到：{len(ccp_bl_hits)}",
             )
         )
     if len(a167_hits) != 1:
@@ -116,6 +120,7 @@ def apply_engineering_patch(
             tr(
                 f"Ожидалась ровно 1 точка проверки 0xA167 CAN RAM-Loader, найдено: {len(a167_hits)}",
                 f"Expected exactly 1 0xA167 CAN RAM-Loader check site, found: {len(a167_hits)}",
+                f"预期恰好 1 处 0xA167 CAN RAM-Loader 校验位置，找到：{len(a167_hits)}",
             )
         )
 
@@ -135,6 +140,7 @@ def apply_engineering_patch(
         desc = tr(
             f"возврат заводской защиты Feature 0x80/0x81/0x83 @ 0x{evaddr:06X} + фильтра CCP @ 0x{bvaddr:06X} + закрытие 0xA167 @ 0x{avaddr:06X}",
             f"restored stock Feature 0x80/0x81/0x83 gate @ 0x{evaddr:06X} + CCP filter @ 0x{bvaddr:06X} + locked 0xA167 @ 0x{avaddr:06X}",
+            f"恢复原厂 Feature 0x80/0x81/0x83 防护 @ 0x{evaddr:06X} + CCP 过滤 @ 0x{bvaddr:06X} + 关闭 0xA167 @ 0x{avaddr:06X}",
         )
     else:
         app[eoff : eoff + 4] = PATCH_ENG_GATE_HEAD
@@ -142,16 +148,18 @@ def apply_engineering_patch(
         app[aoff : aoff + 2] = PATCH_A167_NOP
         if prefix_mut:
             prefix_mut[OTP_ENG_FLAG_OFFSET] = 0x00
-        otp_note = tr(" + OTP [0x0000A167]=0x00", " + OTP [0x0000A167]=0x00") if prefix_mut else ""
+        otp_note = tr(" + OTP [0x0000A167]=0x00", " + OTP [0x0000A167]=0x00", " + OTP [0x0000A167]=0x00") if prefix_mut else ""
         desc = tr(
             f"инженерный режим ВКЛЮЧЕН: Feature 0x80/0x81/0x83 @ 0x{evaddr:06X} + полный CCP Flash/RAM @ 0x{bvaddr:06X} "
             f"+ 0x07FC80FE RAM-Loader @ 0x{avaddr:06X}{otp_note}",
             f"Engineering Mode ENABLED: Feature 0x80/0x81/0x83 @ 0x{evaddr:06X} + full CCP Flash/RAM @ 0x{bvaddr:06X} "
             f"+ 0x07FC80FE RAM-Loader @ 0x{avaddr:06X}{otp_note}",
+            f"工程模式已启用：Feature 0x80/0x81/0x83 @ 0x{evaddr:06X} + 完整 CCP Flash/RAM @ 0x{bvaddr:06X} "
+            f"+ 0x07FC80FE RAM-Loader @ 0x{avaddr:06X}{otp_note}",
         )
     reporter.progress(70, 100)
 
-    reporter.step(3, 3, tr("Пересчёт Application CRC-16/MODBUS @ 0x0000C21C", "Recalculating Application CRC-16/MODBUS @ 0x0000C21C"))
+    reporter.step(3, 3, tr("Пересчёт Application CRC-16/MODBUS @ 0x0000C21C", "Recalculating Application CRC-16/MODBUS @ 0x0000C21C", "重新计算 Application CRC-16/MODBUS @ 0x0000C21C"))
     _, new_crc = app_crc(app)
     struct.pack_into("<H", app, 0x001C, new_crc)
     reporter.progress(100, 100)
@@ -166,22 +174,24 @@ def apply_uflash_rsa_patch(
     reporter: OperationReporter = NULL_REPORTER,
 ) -> tuple[bytes, str]:
     """Patch (or restore) Uflash.bin (+0x342A) so FBL CheckMemory (31 01 02 02) accepts unsigned .odx."""
-    reporter.step(1, 2, tr("Проверка сигнатуры бутлодера Uflash @ +0x342A", "Validating Uflash FBL signature @ +0x342A"))
+    reporter.step(1, 2, tr("Проверка сигнатуры бутлодера Uflash @ +0x342A", "Validating Uflash FBL signature @ +0x342A", "校验 Uflash FBL 签名 @ +0x342A"))
     validate_uflash_bytes(uf_raw)
     reporter.progress(50, 100)
-    reporter.step(2, 2, tr("Модификация инструкции проверки RSA @ 0x0100342A", "Updating RSA verification instruction @ 0x0100342A"))
+    reporter.step(2, 2, tr("Модификация инструкции проверки RSA @ 0x0100342A", "Updating RSA verification instruction @ 0x0100342A", "更新 RSA 校验指令 @ 0x0100342A"))
     uf = bytearray(uf_raw)
     if restore_stock:
         uf[UFLASH_RSA_CMP_OFFSET : UFLASH_RSA_CMP_OFFSET + 4] = STOCK_UFLASH_RSA_CMOV
         desc = tr(
             "возврат штатной проверки RSA-1024 в Uflash.bin @ 0x0100342A (e2 57 14 eb)",
             "restored stock RSA-1024 verification in Uflash.bin @ 0x0100342A (e2 57 14 eb)",
+            "恢复 Uflash.bin 中原厂 RSA-1024 校验 @ 0x0100342A（e2 57 14 eb）",
         )
     else:
         uf[UFLASH_RSA_CMP_OFFSET : UFLASH_RSA_CMP_OFFSET + 4] = PATCH_UFLASH_RSA_OK
         desc = tr(
             "инженерный RSA-Free загрузчик в Uflash.bin @ 0x0100342A (00 ea 00 00: приём любых .odx по UDS без RSA)",
             "Engineering RSA-Free FBL in Uflash.bin @ 0x0100342A (00 ea 00 00: accepts any .odx over UDS without RSA)",
+            "Uflash.bin 中的工程 RSA-Free FBL @ 0x0100342A（00 ea 00 00：通过 UDS 接收任意 .odx，无需 RSA）",
         )
     reporter.progress(100, 100)
     reporter.success(desc)
@@ -203,9 +213,10 @@ def apply_cflash_rsa_modulus(
             tr(
                 "Модуль RSA-1024 должен быть 128 байт со старшим битом 1.",
                 "RSA-1024 modulus must be 128 bytes with MSB=1.",
+                "RSA-1024 模数必须为 128 字节且最高位为 1。",
             )
         )
-    reporter.step(1, 2, tr("Замена модуля RSA-1024 в CodeFlash", "Updating RSA-1024 modulus in CodeFlash"))
+    reporter.step(1, 2, tr("Замена модуля RSA-1024 в CodeFlash", "Updating RSA-1024 modulus in CodeFlash", "更新 CodeFlash 中的 RSA-1024 模数"))
     prefix, app = split_cflash_or_app(raw)
     prefix_mut = bytearray(prefix)
 
@@ -218,6 +229,7 @@ def apply_cflash_rsa_modulus(
                 tr(
                     "Поле [0x0000C21E] == 0 (счётчик диапазонов CRC-16 занулён). Включите автоисправление CRC.",
                     "Header field [0x0000C21E] == 0 (CRC-16 range count zeroed). Enable ignore/repair input CRC.",
+                    "头字段 [0x0000C21E] == 0（CRC-16 范围计数已清零）。请启用输入 CRC 的忽略/修复。",
                 )
             )
     else:
@@ -227,6 +239,7 @@ def apply_cflash_rsa_modulus(
                 tr(
                     f"Не совпадает входной CRC-16 @ 0x0000C21C (в файле 0x{stored_crc:04X}, расчёт 0x{calc_crc:04X}).",
                     f"Input Application CRC-16 mismatch @ 0x0000C21C (stored 0x{stored_crc:04X}, calculated 0x{calc_crc:04X}).",
+                    f"输入 Application CRC-16 不匹配 @ 0x0000C21C（文件中 0x{stored_crc:04X}，计算值 0x{calc_crc:04X}）。",
                 )
             )
 
@@ -238,6 +251,7 @@ def apply_cflash_rsa_modulus(
                 tr(
                     f"Не найден уникальный ключ SWaP RSA-1024 в CodeFlash (совпадений: {len(swap_hits)})",
                     f"Unique SWaP RSA-1024 key not found in CodeFlash (matches: {len(swap_hits)})",
+                    f"在 CodeFlash 中未找到唯一的 SWaP RSA-1024 密钥（匹配数：{len(swap_hits)}）",
                 )
             )
         soff = swap_hits[0]
@@ -246,6 +260,7 @@ def apply_cflash_rsa_modulus(
             tr(
                 f"SWaP RSA-1024 N в CodeFlash @ 0x{APP_BASE + soff:06X} ({modulus_128b[:8].hex()}…)",
                 f"SWaP RSA-1024 N in CodeFlash @ 0x{APP_BASE + soff:06X} ({modulus_128b[:8].hex()}…)",
+                f"CodeFlash 中的 SWaP RSA-1024 N @ 0x{APP_BASE + soff:06X}（{modulus_128b[:8].hex()}…）",
             )
         )
 
@@ -255,6 +270,7 @@ def apply_cflash_rsa_modulus(
                 tr(
                     "Ключ FBL RSA-1024 лежит в Sector 5 @ 0x0000A2F7 — нужен полный 1.5 МБ CodeFlash.bin (не FD_0DATA)!",
                     "FBL RSA-1024 key resides in Sector 5 @ 0x0000A2F7 — full 1.5 MB CodeFlash.bin is required (not FD_0DATA)!",
+                    "FBL RSA-1024 密钥位于 Sector 5 @ 0x0000A2F7 —— 需要完整的 1.5 MB CodeFlash.bin（而非 FD_0DATA）！",
                 )
             )
         prefix_mut[FBL_EXP_OFFSET : FBL_EXP_OFFSET + 128] = (b"\x00" * 127) + b"\x03"
@@ -263,11 +279,12 @@ def apply_cflash_rsa_modulus(
             tr(
                 f"FBL (ODX) RSA-1024 N в Sector 5 @ 0x{FBL_MOD_OFFSET:06X} ({modulus_128b[:8].hex()}…)",
                 f"FBL (ODX) RSA-1024 N in Sector 5 @ 0x{FBL_MOD_OFFSET:06X} ({modulus_128b[:8].hex()}…)",
+                f"Sector 5 中的 FBL (ODX) RSA-1024 N @ 0x{FBL_MOD_OFFSET:06X}（{modulus_128b[:8].hex()}…）",
             )
         )
 
     reporter.progress(60, 100)
-    reporter.step(2, 2, tr("Пересчёт Application CRC-16 @ 0x0000C21C", "Recalculating Application CRC-16 @ 0x0000C21C"))
+    reporter.step(2, 2, tr("Пересчёт Application CRC-16 @ 0x0000C21C", "Recalculating Application CRC-16 @ 0x0000C21C", "重新计算 Application CRC-16 @ 0x0000C21C"))
     _, new_crc = app_crc(app)
     struct.pack_into("<H", app, 0x001C, new_crc)
     reporter.progress(100, 100)
@@ -289,6 +306,7 @@ def apply_dflash_swap_rsa_modulus(
             tr(
                 "Модуль RSA-1024 должен быть 128 байт со старшим битом 1.",
                 "RSA-1024 modulus must be 128 bytes with MSB=1.",
+                "RSA-1024 模数必须为 128 字节且最高位为 1。",
             )
         )
     df = bytearray(df_raw)
@@ -298,6 +316,7 @@ def apply_dflash_swap_rsa_modulus(
             tr(
                 "Блок NvM 0x7C @ 0xDB00 пуст (Virgin) — шлюз сам скопирует ключ из CodeFlash при первом старте.",
                 "NvM 0x7C @ 0xDB00 is uninitialized (Virgin) — gateway will populate it from CodeFlash on first boot.",
+                "NvM 0x7C @ 0xDB00 未初始化（Virgin）—— 网关将在首次启动时从 CodeFlash 自动填充该密钥。",
             )
         )
         return bytes(df), 0, b""
@@ -314,6 +333,7 @@ def apply_dflash_swap_rsa_modulus(
         tr(
             f"Кэш SWaP RSA в DataFlash NvM 0x7C @ 0xDB04 обновлён (CRC-32=0x{new_crc32:08X}, VCRN={vcrn_5b.hex().upper()})",
             f"Updated SWaP RSA cache in DataFlash NvM 0x7C @ 0xDB04 (CRC-32=0x{new_crc32:08X}, VCRN={vcrn_5b.hex().upper()})",
+            f"已更新 DataFlash NvM 0x7C @ 0xDB04 中的 SWaP RSA 缓存（CRC-32=0x{new_crc32:08X}，VCRN={vcrn_5b.hex().upper()}）",
         )
     )
     return bytes(df), new_crc32, vcrn_5b
@@ -332,11 +352,12 @@ def parse_fec_code(raw: str | int) -> int:
                 tr(
                     f"Неверный формат кода FeC '{raw}' — ожидается 8 hex-символов (напр. 10000100)",
                     f"Invalid FeC code '{raw}' — expected up to 8 hex characters (e.g. 10000100)",
+                    f"FeC 代码 '{raw}' 格式无效 —— 预期最多 8 个十六进制字符（如 10000100）",
                 )
             )
         val = int(tok, 16)
     if not (0 < val <= 0xFFFFFFFF):
-        raise ValueError(tr(f"Код FeC вне диапазона: 0x{val:X}", f"FeC code out of range: 0x{val:X}"))
+        raise ValueError(tr(f"Код FeC вне диапазона: 0x{val:X}", f"FeC code out of range: 0x{val:X}", f"FeC 代码超出范围：0x{val:X}"))
     return val
 
 
@@ -372,13 +393,13 @@ def build_factory_multi_fsc_slot(
     """
     if len(vcrn_5b) != 5:
         raise ValueError(
-            tr("VCRN должен иметь длину ровно 5 байт (10 hex-символов)", "VCRN must be exactly 5 bytes (10 hex chars)")
+            tr("VCRN должен иметь длину ровно 5 байт (10 hex-символов)", "VCRN must be exactly 5 bytes (10 hex chars)", "VCRN 必须恰好为 5 字节（10 个十六进制字符）")
         )
     vin_clean = vin_str.strip().upper()
     if vin_clean:
         if len(vin_clean) != 17 or not all(0x20 <= ord(ch) <= 0x7E for ch in vin_clean):
             raise ValueError(
-                tr("VIN должен содержать ровно 17 ASCII-символов", "VIN must be exactly 17 ASCII characters")
+                tr("VIN должен содержать ровно 17 ASCII-символов", "VIN must be exactly 17 ASCII characters", "VIN 必须恰好包含 17 个 ASCII 字符")
             )
         vin_field = vin_clean.encode("ascii") + b"\x00"
     else:
@@ -387,7 +408,7 @@ def build_factory_multi_fsc_slot(
     fec_u32 = parse_fec_code(fec_code)
     ts = int(time.time()) if timestamp_unix is None else int(timestamp_unix)
     if not 0 <= ts <= 0xFFFFFFFF:  # the slot holds it in 32 bits: refuse, never cut to fit
-        raise ValueError(tr(f"Время вне диапазона 0..0xFFFFFFFF: {ts}", f"Timestamp out of range 0..0xFFFFFFFF: {ts}"))
+        raise ValueError(tr(f"Время вне диапазона 0..0xFFFFFFFF: {ts}", f"Timestamp out of range 0..0xFFFFFFFF: {ts}", f"时间戳超出范围 0..0xFFFFFFFF：{ts}"))
     ts_u32 = max(1, ts & 0xFFFFFFFF)
 
     spay = (
@@ -437,6 +458,7 @@ def apply_dflash_swap_fecs(
         tr(
             "Проверка кэша SWaP (NvM 0x7C) и текущих датасетов ZDC в DataFlash",
             "Validating SWaP cache (NvM 0x7C) & current ZDC datasets in DataFlash",
+            "校验 DataFlash 中的 SWaP 缓存（NvM 0x7C）与当前 ZDC 数据集",
         ),
     )
     validate_dflash_bytes(df_raw)
@@ -448,6 +470,8 @@ def apply_dflash_swap_fecs(
                 "Один раз запустите шлюз на столе и вычитайте инициализированный DataFlash.",
                 "SWaP NvM 0x7C (0xDB00) is empty or uninitialized (missing hardware VCRN). "
                 "Boot the gateway once on bench and read back the initialized DataFlash.",
+                "SWaP NvM 0x7C（0xDB00）区域为空或未初始化（缺少硬件 VCRN）。"
+                "请先在台架上启动一次网关，再读回已初始化的 DataFlash。",
             )
         )
 
@@ -464,7 +488,7 @@ def apply_dflash_swap_fecs(
     effective_vin = sw_before.vin if vin is None else vin.strip().upper()
     if effective_vin and (len(effective_vin) != 17 or not all(0x20 <= ord(ch) <= 0x7E for ch in effective_vin)):
         raise ValueError(
-            tr("VIN должен содержать ровно 17 ASCII-символов", "VIN must be exactly 17 ASCII characters")
+            tr("VIN должен содержать ровно 17 ASCII-символов", "VIN must be exactly 17 ASCII characters", "VIN 必须恰好包含 17 个 ASCII 字符")
         )
 
     ds_summary = analyze_dflash_datasets(df_raw)
@@ -474,7 +498,7 @@ def apply_dflash_swap_fecs(
         sup = check_fec_dataset_support(ds_summary, fec, raw_df=df_raw)
         if not sup.supported:
             unsupported_fecs.append(fec)
-            msg = f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING)} (0x{fec:08X} — {sup.reason})"
+            msg = f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING, UNSUPPORTED_DATASET_ZH)} (0x{fec:08X} — {sup.reason})"
             warnings.append(msg)
             reporter.warning(msg)
 
@@ -485,6 +509,7 @@ def apply_dflash_swap_fecs(
         tr(
             "Запись слотов Multi-FSC (0xDD00..0xE83F) без модификации RSA-ключей",
             "Writing Multi-FSC slots (0xDD00..0xE83F) without modifying RSA keys",
+            "写入 Multi-FSC 槽位（0xDD00..0xE83F），不修改 RSA 密钥",
         ),
     )
 
@@ -530,6 +555,7 @@ def apply_dflash_swap_fecs(
             tr(
                 f"Нет свободных слотов FSC (все 15 слотов заняты) для FeC 0x{fec_val:08X}",
                 f"No free FSC slots available (all 15 slots occupied) for FeC 0x{fec_val:08X}",
+                f"FeC 0x{fec_val:08X} 没有可用的空闲 FSC 槽位（15 个槽位均已占用）",
             )
         )
 
@@ -555,6 +581,7 @@ def apply_dflash_swap_fecs(
             tr(
                 f"Деактивирован FeC 0x{fec:08X} (слот #{slot:02d} @ 0x{off:04X} -> FF..FF)",
                 f"Deactivated FeC 0x{fec:08X} (slot #{slot:02d} @ 0x{off:04X} -> FF..FF)",
+                f"已停用 FeC 0x{fec:08X}（槽位 #{slot:02d} @ 0x{off:04X} -> FF..FF）",
             )
         )
 
@@ -585,6 +612,8 @@ def apply_dflash_swap_fecs(
                     "подпись VAG останется только в исходном бэкапе",
                     f"The signed certificate 0x{fec:08X} is replaced by an unsigned record (other VIN or time) — "
                     "the VAG signature stays only in the original backup",
+                    f"已签名的证书 0x{fec:08X} 将被无签名记录替换（VIN 或时间不同）—— "
+                    "VAG 签名仅保留在原始备份中",
                 )
             )
 
@@ -600,11 +629,12 @@ def apply_dflash_swap_fecs(
         pay[ent_slice] = ent_hdr
         enabled_applied.append(fec)
         fec_names = KNOWN_GATEWAY_FECS.get(fec)
-        desc = (fec_names[1] if get_lang() == "en" else fec_names[0]) if fec_names else f"0x{fec:08X}"
+        desc = tr(fec_names[0], fec_names[1], fec_names[2]) if fec_names else f"0x{fec:08X}"
         reporter.success(
             tr(
                 f"Активирован Multi-FSC слот #{slot:02d} @ 0x{off:04X}: {desc} (CRC-32=0x{slot_crc:08X})",
                 f"Activated Multi-FSC slot #{slot:02d} @ 0x{off:04X}: {desc} (CRC-32=0x{slot_crc:08X})",
+                f"已激活 Multi-FSC 槽位 #{slot:02d} @ 0x{off:04X}：{desc}（CRC-32=0x{slot_crc:08X}）",
             )
         )
 
@@ -615,6 +645,7 @@ def apply_dflash_swap_fecs(
         tr(
             "Пересчёт контрольной суммы NvM 0x7C CRC-32 @ 0xDCE4",
             "Recalculating NvM 0x7C CRC-32 @ 0xDCE4",
+            "重新计算 NvM 0x7C CRC-32 校验和 @ 0xDCE4",
         ),
     )
     df[pay_start : pay_start + DFLASH_SWAP_PAY_SIZE] = pay
@@ -628,6 +659,7 @@ def apply_dflash_swap_fecs(
         tr(
             f"DataFlash SWaP обновлён: активных функций {len(sw_after.active_fscs)}, NvM 0x7C CRC-32=0x{nvm7c_crc:08X}",
             f"DataFlash SWaP updated: {len(sw_after.active_fscs)} active feature(s), NvM 0x7C CRC-32=0x{nvm7c_crc:08X}",
+            f"DataFlash SWaP 已更新：激活功能 {len(sw_after.active_fscs)} 项，NvM 0x7C CRC-32=0x{nvm7c_crc:08X}",
         )
     )
     summary: dict[str, Any] = {
@@ -654,7 +686,7 @@ def apply_cflash_patch(
     reporter: OperationReporter = NULL_REPORTER,
 ) -> tuple[bytes, str, int]:
     """Patch or restore KSCHUTZ CP callback in Cflash/FD_0DATA and return (out_bytes, description, new_crc16)."""
-    reporter.step(1, 3, tr("Проверка входного CodeFlash и заголовка @ 0x0000C200", "Checking input CodeFlash & header @ 0x0000C200"))
+    reporter.step(1, 3, tr("Проверка входного CodeFlash и заголовка @ 0x0000C200", "Checking input CodeFlash & header @ 0x0000C200", "检查输入 CodeFlash 与头 @ 0x0000C200"))
     prefix, app = split_cflash_or_app(raw)
     _, range_cnt = struct.unpack_from("<HH", app, 0x1C)
     if range_cnt == 0:
@@ -667,6 +699,8 @@ def apply_cflash_patch(
                     "Включите игнорирование/ремонт входного CRC-16.",
                     "Header field [0x0000C21E] == 0 (CRC-16 range count zeroed — rejected by FBL FF 01). "
                     "Enable ignore/repair input CRC-16.",
+                    "头字段 [0x0000C21E] == 0（CRC-16 范围计数已清零 —— FBL FF 01 会拒绝此类映像）。"
+                    "请启用输入 CRC-16 的忽略/修复。",
                 )
             )
     else:
@@ -678,17 +712,20 @@ def apply_cflash_patch(
                     f"(в файле 0x{stored_crc:04X}, расчёт 0x{calc_crc:04X}).",
                     f"Input Application CRC-16 mismatch @ 0x0000C21C "
                     f"(stored 0x{stored_crc:04X}, calculated 0x{calc_crc:04X}).",
+                    f"输入 Application CRC-16 不匹配 @ 0x0000C21C "
+                    f"（文件中 0x{stored_crc:04X}，计算值 0x{calc_crc:04X}）。",
                 )
             )
     reporter.progress(30, 100)
 
-    reporter.step(2, 3, tr("Установка патча KSCHUTZ и проверка области трамплина", "Applying KSCHUTZ patch & verifying trampoline cave"))
+    reporter.step(2, 3, tr("Установка патча KSCHUTZ и проверка области трамплина", "Applying KSCHUTZ patch & verifying trampoline cave", "应用 KSCHUTZ 补丁并校验跳板区域"))
     hits = find_kschutz_hook_sites(bytes(app))
     if len(hits) != 1:
         raise RuntimeError(
             tr(
                 f"Ожидалась ровно 1 точка KSCHUTZ callback, найдено: {len(hits)}",
                 f"Expected exactly 1 KSCHUTZ callback site, found: {len(hits)}",
+                f"预期恰好 1 处 KSCHUTZ 回调位置，找到：{len(hits)}",
             )
         )
     hook_off = hits[0]
@@ -702,6 +739,7 @@ def apply_cflash_patch(
             tr(
                 f"Некорректный адрес трамплина cave_vaddr: 0x{cave_vaddr:06X}",
                 f"Invalid trampoline address cave_vaddr: 0x{cave_vaddr:06X}",
+                f"跳板地址 cave_vaddr 无效：0x{cave_vaddr:06X}",
             )
         )
 
@@ -720,12 +758,14 @@ def apply_cflash_patch(
         desc = tr(
             f"возврат заводского кода movea 0x40 @ 0x{hook_vaddr:06X} + восстановление проверки 95640",
             f"restored stock movea 0x40 @ 0x{hook_vaddr:06X} + restored 95640 mask check",
+            f"恢复原厂 movea 0x40 代码 @ 0x{hook_vaddr:06X} + 恢复 95640 掩码校验",
         )
     elif mode == "global_plain":
         app[hook_off : hook_off + 4] = PATCH_MOVEA_0X10
         desc = tr(
             f"глобальный стендовый режим movea 0x10 @ 0x{hook_vaddr:06X}",
             f"global bench mode movea 0x10 @ 0x{hook_vaddr:06X}",
+            f"全局台架模式 movea 0x10 @ 0x{hook_vaddr:06X}",
         )
     elif mode == "hybrid":
         cave_slice = bytes(app[cave_off : cave_off + CAVE_SIZE])
@@ -735,6 +775,7 @@ def apply_cflash_patch(
                 tr(
                     f"Область под трамплин @ 0x{cave_vaddr:06X} не пуста (не 0xFF): {cave_slice.hex()}",
                     f"Trampoline cave region @ 0x{cave_vaddr:06X} is not empty (not 0xFF): {cave_slice.hex()}",
+                    f"跳板区域 @ 0x{cave_vaddr:06X} 非空（不是 0xFF）：{cave_slice.hex()}",
                 )
             )
         app[cave_off : cave_off + CAVE_SIZE] = expected_cave
@@ -744,9 +785,11 @@ def apply_cflash_patch(
             f"({CAVE_SIZE} Б -> возврат 0x{hook_vaddr + 4:06X})",
             f"hybrid trampoline jr 0x{cave_vaddr:06X} @ 0x{hook_vaddr:06X} "
             f"({CAVE_SIZE} B -> return 0x{hook_vaddr + 4:06X})",
+            f"混合跳板 jr 0x{cave_vaddr:06X} @ 0x{hook_vaddr:06X} "
+            f"（{CAVE_SIZE} B -> 返回 0x{hook_vaddr + 4:06X}）",
         )
     else:
-        raise ValueError(tr(f"Неизвестный режим патча: {mode}", f"Unknown patch mode: {mode}"))
+        raise ValueError(tr(f"Неизвестный режим патча: {mode}", f"Unknown patch mode: {mode}", f"未知的补丁模式：{mode}"))
 
     if mode != "restore_stock":
         if bypass_eeprom_mask:
@@ -755,18 +798,20 @@ def apply_cflash_patch(
                     tr(
                         f"Ожидалась ровно 1 точка проверки маски 95640, найдено: {len(mask_hits)}",
                         f"Expected exactly 1 95640 EEPROM mask check site, found: {len(mask_hits)}",
+                        f"预期恰好 1 处 95640 EEPROM 掩码校验位置，找到：{len(mask_hits)}",
                     )
                 )
             app[mask_hits[0] : mask_hits[0] + 2] = b"\x00\x00"
             desc += tr(
                 f" + обход маски 95640 @ 0x{APP_BASE + mask_hits[0]:06X}",
                 f" + 95640 mask bypass @ 0x{APP_BASE + mask_hits[0]:06X}",
+                f" + 95640 掩码旁路 @ 0x{APP_BASE + mask_hits[0]:06X}",
             )
         elif not preserve_existing_mask_bypass and len(mask_hits) == 1:
             app[mask_hits[0] : mask_hits[0] + 2] = b"\x82\x3d"
 
     reporter.progress(70, 100)
-    reporter.step(3, 3, tr("Пересчёт Application CRC-16 @ 0x0000C21C", "Recalculating Application CRC-16 @ 0x0000C21C"))
+    reporter.step(3, 3, tr("Пересчёт Application CRC-16 @ 0x0000C21C", "Recalculating Application CRC-16 @ 0x0000C21C", "重新计算 Application CRC-16 @ 0x0000C21C"))
     _, new_crc = app_crc(app)
     struct.pack_into("<H", app, 0x001C, new_crc)
     reporter.progress(100, 100)
@@ -781,6 +826,7 @@ def build_plaintext_dflash_record(spec: SlotSpec, key_bytes: bytes) -> tuple[byt
             tr(
                 f"Ключ CP должен быть ровно 16 байт (32 hex-символа), получено {len(key_bytes)} Б",
                 f"CP key must be exactly 16 bytes (32 hex chars), got {len(key_bytes)} B",
+                f"CP 密钥必须恰好为 16 字节（32 个十六进制字符），实际为 {len(key_bytes)} B",
             )
         )
     payload = bytearray(spec.rec_size)
@@ -821,6 +867,7 @@ def write_dflash_slots(
             tr(
                 f"Записан Банк #{spec.slot} (ЭБУ {spec.ecu_addr} — {spec.short}) @ 0x{spec.off1:04X}/0x{spec.off2:04X}, CRC-32=0x{crc:08X}",
                 f"Wrote Bank #{spec.slot} (ECU {spec.ecu_addr} — {spec.short}) @ 0x{spec.off1:04X}/0x{spec.off2:04X}, CRC-32=0x{crc:08X}",
+                f"已写入存储区 #{spec.slot}（模块 {spec.ecu_addr} — {spec.short}）@ 0x{spec.off1:04X}/0x{spec.off2:04X}，CRC-32=0x{crc:08X}",
             )
         )
     return bytes(df), written
@@ -845,6 +892,7 @@ def clear_dflash_slots(
             tr(
                 f"Очищен Банк #{spec.slot} (ЭБУ {spec.ecu_addr}) @ 0x{spec.off1:04X}/0x{spec.off2:04X} -> FF..FF",
                 f"Cleared Bank #{spec.slot} (ECU {spec.ecu_addr}) @ 0x{spec.off1:04X}/0x{spec.off2:04X} -> FF..FF",
+                f"已清除存储区 #{spec.slot}（模块 {spec.ecu_addr}）@ 0x{spec.off1:04X}/0x{spec.off2:04X} -> FF..FF",
             )
         )
     return bytes(df)
@@ -861,7 +909,7 @@ def bind_cp_turnkey(
     reporter: OperationReporter = NULL_REPORTER,
 ) -> tuple[bytes, bytes, dict]:
     """Turnkey offline CP binding: analyzes empty banks, patches Cflash (hybrid + auto 95640 mask), writes Dflash."""
-    reporter.step(1, 3, tr("Анализ существующих банков CP в DataFlash (64 КБ)", "Analyzing existing CP banks in DataFlash (64 KB)"))
+    reporter.step(1, 3, tr("Анализ существующих банков CP в DataFlash (64 КБ)", "Analyzing existing CP banks in DataFlash (64 KB)", "分析 DataFlash 中现有的 CP 存储区（64 KB）"))
     before_states = {st.spec.slot: st for st in analyze_dflash(dflash_raw)}
     empty_retrofits = [
         spec for spec, _ in updates if spec.slot > 0 and before_states[spec.slot].empty
@@ -873,11 +921,12 @@ def bind_cp_turnkey(
             tr(
                 f"Обнаружено дооснащение в ранее пустые банки [{names}] — автоматически включён обход маски 95640 SPI EEPROM.",
                 f"Detected retrofit into previously empty banks [{names}] — automatically enabling 95640 SPI EEPROM mask bypass.",
+                f"检测到向先前为空的存储区 [{names}] 加装 —— 已自动启用 95640 SPI EEPROM 掩码旁路。",
             )
         )
     reporter.progress(30, 100)
 
-    reporter.step(2, 3, tr("Установка гибридного патча KSCHUTZ в CodeFlash", "Installing hybrid KSCHUTZ patch in CodeFlash"))
+    reporter.step(2, 3, tr("Установка гибридного патча KSCHUTZ в CodeFlash", "Installing hybrid KSCHUTZ patch in CodeFlash", "在 CodeFlash 中安装混合 KSCHUTZ 补丁"))
     patched_cf, cf_desc, new_crc = apply_cflash_patch(
         cflash_raw,
         mode="hybrid",
@@ -888,7 +937,7 @@ def bind_cp_turnkey(
     reporter.info(f"{cf_desc} (CRC-16: 0x{new_crc:04X})")
     reporter.progress(65, 100)
 
-    reporter.step(3, 3, tr("Запись 16-байтных ключей IKA и пересчёт CRC-32 в DataFlash", "Writing 16-byte IKA keys & CRC-32 into DataFlash"))
+    reporter.step(3, 3, tr("Запись 16-байтных ключей IKA и пересчёт CRC-32 в DataFlash", "Writing 16-byte IKA keys & CRC-32 into DataFlash", "写入 16 字节 IKA 密钥并在 DataFlash 中重新计算 CRC-32"))
     patched_df, written_crcs = write_dflash_slots(dflash_raw, updates, reporter=reporter)
     reporter.progress(100, 100)
     summary = {
@@ -905,7 +954,7 @@ def parse_slot_selector(token: str, *, allow_master: bool = False) -> SlotSpec:
     """Resolve bank number ('1'..'12', 'bank7', 'slot5') OR VAG ECU code ('17', '09', '5F', '47', 'A5', ...)."""
     t = token.strip().lower()
     if not t:
-        raise ValueError(tr("Пустой идентификатор банка/блока", "Empty bank/ECU selector"))
+        raise ValueError(tr("Пустой идентификатор банка/блока", "Empty bank/ECU selector", "空的存储区/模块选择器"))
 
     for pfx in ("bank", "slot", "банк", "слот", "b"):
         if t.startswith(pfx) and t[len(pfx):].strip().isdigit():
@@ -917,6 +966,7 @@ def parse_slot_selector(token: str, *, allow_master: bool = False) -> SlotSpec:
                             tr(
                                 "Банк 0 (мастер-ключ самого шлюза 19) защищён от случайной перезаписи.",
                                 "Bank 0 (Gateway 19 own master key) is protected from accidental overwrite.",
+                                "存储区 0（网关 19 自身的应用主密钥）受到保护，防止误覆盖。",
                             )
                         )
                     return s
@@ -924,6 +974,7 @@ def parse_slot_selector(token: str, *, allow_master: bool = False) -> SlotSpec:
                 tr(
                     f"Неизвестный номер банка: {num} (доступны банки 1..12)",
                     f"Unknown bank number: {num} (valid slave banks are 1..12)",
+                    f"未知的存储区编号：{num}（有效的从属存储区为 1..12）",
                 )
             )
 
@@ -942,6 +993,8 @@ def parse_slot_selector(token: str, *, allow_master: bool = False) -> SlotSpec:
                         "Для привязки ведомых блоков выбирайте банки 1..12 (либо флаг --force-master).",
                         "Bank 0 is Gateway 19's own master key (NvM 0x7B). "
                         "Select slave banks 1..12 when binding ECUs (or pass --force-master).",
+                        "存储区 0 是网关 19 自身的应用主密钥（NvM 0x7B）。"
+                        "绑定模块时请选择从属存储区 1..12（或传入 --force-master）。",
                     )
                 )
             return MASTER_SLOT
@@ -958,11 +1011,12 @@ def parse_slot_selector(token: str, *, allow_master: bool = False) -> SlotSpec:
                     tr(
                         "Блок 19 (мастер-ключ самого шлюза) трогать при привязке блоков не нужно!",
                         "Module 19 (Gateway own master key) must not be modified when binding slave ECUs!",
+                        "绑定模块时不得改动模块 19（网关自身的应用主密钥）！",
                     )
                 )
             return s
 
-    bank_word = tr("банк", "bank")
+    bank_word = tr("банк", "bank", "存储区")
     valid_ecus = ", ".join(f"{s.ecu_addr} ({bank_word} {s.slot})" for s in SLAVE_SLOTS)
     raise ValueError(
         tr(
@@ -970,6 +1024,8 @@ def parse_slot_selector(token: str, *, allow_master: bool = False) -> SlotSpec:
             f"Укажите номер банка 1..12 или адрес блока VAG: {valid_ecus}",
             f"Could not recognize bank or VAG ECU address '{token}'. "
             f"Specify bank number 1..12 or VAG ECU code: {valid_ecus}",
+            f"无法识别存储区或 VAG 模块地址 '{token}'。"
+            f"请指定存储区编号 1..12 或 VAG 模块代码：{valid_ecus}",
         )
     )
 
@@ -977,7 +1033,7 @@ def parse_slot_selector(token: str, *, allow_master: bool = False) -> SlotSpec:
 def parse_slot_list(raw: str, *, allow_master: bool = False) -> list[SlotSpec]:
     parts = [p for p in re.split(r"[,;\s]+", raw.strip()) if p]
     if not parts:
-        raise ValueError(tr("Не указан ни один банк", "No bank specified"))
+        raise ValueError(tr("Не указан ни один банк", "No bank specified", "未指定任何存储区"))
     seen: set[int] = set()
     result: list[SlotSpec] = []
     for p in parts:
@@ -997,6 +1053,7 @@ def parse_hex_key(raw: str) -> bytes:
             tr(
                 "Ключ должен состоять только из шестнадцатеричных символов (0-9, A-F).",
                 "Key must contain hexadecimal characters only (0-9, A-F).",
+                "密钥只能包含十六进制字符（0-9、A-F）。",
             )
         )
     if len(cleaned) != 32:
@@ -1004,6 +1061,7 @@ def parse_hex_key(raw: str) -> bytes:
             tr(
                 f"Ключ CP должен иметь длину ровно 16 байт (32 hex-символа), вы ввели {len(cleaned)} симв.",
                 f"CP key must be exactly 16 bytes (32 hex characters); you entered {len(cleaned)} chars.",
+                f"CP 密钥必须恰好为 16 字节（32 个十六进制字符）；您输入了 {len(cleaned)} 个字符。",
             )
         )
     return bytes.fromhex(cleaned)
@@ -1022,6 +1080,9 @@ def check_key_warnings(key_bytes: bytes) -> list[tuple[str, str]]:
                 "You entered '000000000000000000000000000000E5' — that is NOT an ECU key, it is the SHE M1 "
                 "container header from the gateway itself! Read the real 16-byte active IKA key from the "
                 "target slave ECU (or program the same custom key into both sides).",
+                "您输入了 '000000000000000000000000000000E5' —— 这不是模块密钥，而是来自网关自身的 SHE M1 "
+                "加密容器头部！请从目标从属模块读出真正的 16 字节活动 IKA 密钥"
+                "（或在两侧写入相同的自定义密钥）。",
             ),
         ))
     elif key_bytes == b"\x00" * 16:
@@ -1034,6 +1095,9 @@ def check_key_warnings(key_bytes: bytes) -> list[tuple[str, str]]:
                 "You entered 16 zero bytes (00..00). Writing zeros in the gateway NEVER bypasses CP: functional "
                 "locks are enforced INSIDE the slave ECU against its own IKA (00 BE)! "
                 "00..00 works ONLY if 00..00 is also written into the slave ECU's own IKA slot.",
+                "您输入了 16 个零字节（00..00）。在网关中写入零绝不会绕过 CP：功能锁定是由从属模块自身 "
+                "在其内部依据自己的 IKA（00 BE）强制执行的！只有当 00..00 也被写入从属模块自己的 IKA 槽位时，"
+                "00..00 才会生效。",
             ),
         ))
     elif key_bytes == b"\xff" * 16:
@@ -1044,6 +1108,8 @@ def check_key_warnings(key_bytes: bytes) -> list[tuple[str, str]]:
                 "если в самом привязываемом блоке рабочий слот IKA содержит 16x0xFF.",
                 "You entered 16 bytes of FF..FF (Virgin transport key). This works ONLY if the slave ECU's "
                 "active IKA slot actually holds 16x0xFF.",
+                "您输入了 16 个 FF..FF 字节（全新 Virgin 模块的传输密钥）。只有当从属模块的活动 IKA 槽位 "
+                "实际存有 16x0xFF 时，这才会生效。",
             ),
         ))
     elif len(set(key_bytes)) == 1:
@@ -1052,6 +1118,7 @@ def check_key_warnings(key_bytes: bytes) -> list[tuple[str, str]]:
             tr(
                 f"Все 16 байт ключа одинаковы (0x{key_bytes[0]:02X}). Убедитесь, что это действительно рабочий ключ IKA вашего блока.",
                 f"All 16 bytes of the key are identical (0x{key_bytes[0]:02X}). Make sure this is really your ECU's active IKA key.",
+                f"密钥的 16 个字节完全相同（0x{key_bytes[0]:02X}）。请确认这确实是你模块当前的活动 IKA 密钥。",
             ),
         ))
     return warnings

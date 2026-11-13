@@ -159,6 +159,7 @@ def _gen_prime_512_for_e3(reporter: OperationReporter, label: str, base_pct: int
                 tr(
                     f"Найдено простое 512-бит число {label} за {attempts} попыток",
                     f"Found 512-bit prime {label} in {attempts} attempts",
+                    f"经过 {attempts} 次尝试，找到 512 位质数 {label}",
                 )
             )
             return cand
@@ -244,11 +245,11 @@ def rsassa_pkcs1_v15_verify(msg: bytes, sig: bytes, n_bytes: bytes, e_int: int, 
 
 def generate_rsa1024_e3_keypair(*, reporter: OperationReporter = NULL_REPORTER) -> dict:
     """Generate a cryptographic 1024-bit RSA keypair with public exponent e = 3."""
-    reporter.step(1, 3, tr("Поиск 512-битного простого числа p (e = 3)", "Searching 512-bit prime p (e = 3)"))
+    reporter.step(1, 3, tr("Поиск 512-битного простого числа p (e = 3)", "Searching 512-bit prime p (e = 3)", "正在搜索 512 位质数 p（e = 3）"))
     reporter.progress(5, 100)
     while True:
         p = _gen_prime_512_for_e3(reporter, "p", 5)
-        reporter.step(2, 3, tr("Поиск 512-битного простого числа q (e = 3)", "Searching 512-bit prime q (e = 3)"))
+        reporter.step(2, 3, tr("Поиск 512-битного простого числа q (e = 3)", "Searching 512-bit prime q (e = 3)", "正在搜索 512 位质数 q（e = 3）"))
         reporter.progress(45, 100)
         q = _gen_prime_512_for_e3(reporter, "q", 45)
         if p == q or abs(p - q).bit_length() < 496:
@@ -264,6 +265,7 @@ def generate_rsa1024_e3_keypair(*, reporter: OperationReporter = NULL_REPORTER) 
             tr(
                 "Вычисление приватной экспоненты d и самопроверка подписи PKCS#1 v1.5",
                 "Computing private exponent d & verifying PKCS#1 v1.5 self-test",
+                "正在计算私钥指数 d 并进行 PKCS#1 v1.5 自检",
             ),
         )
         phi = (p - 1) * (q - 1)
@@ -277,6 +279,7 @@ def generate_rsa1024_e3_keypair(*, reporter: OperationReporter = NULL_REPORTER) 
             tr(
                 f"Ключевая пара RSA-1024 (e=3) успешно сгенерирована: N={n_bytes[:8].hex()}…",
                 f"RSA-1024 (e=3) keypair generated: N={n_bytes[:8].hex()}…",
+                f"RSA-1024（e=3）密钥对生成成功：N={n_bytes[:8].hex()}…",
             )
         )
         return {
@@ -353,6 +356,7 @@ def load_rsa1024_key_material(raw_spec: str | Path) -> tuple[bytes, int | None]:
                     tr(
                         "Старший бит 128-байтного модуля RSA должен быть 1 (1024 бита).",
                         "Top bit of the 128-byte RSA modulus must be 1 (full 1024-bit modulus).",
+                        "128 字节 RSA 模数的最高位必须为 1（完整的 1024 位模数）。",
                     )
                 )
             return data, None
@@ -365,6 +369,7 @@ def load_rsa1024_key_material(raw_spec: str | Path) -> tuple[bytes, int | None]:
                     tr(
                         "Поле n_hex в JSON должно быть 256 hex-символов (128 Б)",
                         "JSON n_hex must be 256 hex chars (128 B)",
+                        "JSON 中的 n_hex 字段必须为 256 个十六进制字符（128 字节）",
                     )
                 )
             if int(obj.get("e", 3)) != 3:
@@ -372,6 +377,7 @@ def load_rsa1024_key_material(raw_spec: str | Path) -> tuple[bytes, int | None]:
                     tr(
                         "Экспонента e в прошивке Continental J533 должна быть равна 3!",
                         "Public exponent e for Continental J533 must be 3!",
+                        "Continental J533 固件的公钥指数 e 必须为 3！",
                     )
                 )
             n_bytes = bytes.fromhex(n_hex)
@@ -389,6 +395,7 @@ def load_rsa1024_key_material(raw_spec: str | Path) -> tuple[bytes, int | None]:
                     tr(
                         "В PEM-файле не найден 1024-битный модуль RSA!",
                         "No 1024-bit RSA modulus found in PEM file!",
+                        "在 PEM 文件中未找到 1024 位 RSA 模数！",
                     )
                 )
             if 3 not in ints:
@@ -396,6 +403,7 @@ def load_rsa1024_key_material(raw_spec: str | Path) -> tuple[bytes, int | None]:
                     tr(
                         "Экспонента e в PEM-файле не равна 3 (J533 требует e=3)!",
                         "PEM public exponent e is not 3 (J533 requires e=3)!",
+                        "PEM 文件中的公钥指数 e 不为 3（J533 要求 e=3）！",
                     )
                 )
             n_val = mods[0]
@@ -410,6 +418,7 @@ def load_rsa1024_key_material(raw_spec: str | Path) -> tuple[bytes, int | None]:
             tr(
                 "Укажите путь к файлу ключей (.json / .pem / 128B .bin) или 256 hex-символов модуля RSA-1024.",
                 "Provide a path to a key file (.json / .pem / 128B .bin) or a 256-hex-char RSA-1024 modulus.",
+                "请提供密钥文件路径（.json / .pem / 128 字节 .bin）或 256 个十六进制字符的 RSA-1024 模数。",
             )
         )
     mod = bytes.fromhex(cleaned)
@@ -418,6 +427,7 @@ def load_rsa1024_key_material(raw_spec: str | Path) -> tuple[bytes, int | None]:
             tr(
                 "Старший бит модуля RSA-1024 должен быть равен 1 (первый байт >= 0x80).",
                 "Top bit of RSA-1024 modulus must be 1 (first byte >= 0x80).",
+                "RSA-1024 模数的最高位必须为 1（第一个字节 >= 0x80）。",
             )
         )
     return mod, None
@@ -434,22 +444,22 @@ def build_signed_fsc(
     reporter: OperationReporter = NULL_REPORTER,
 ) -> bytes:
     """Build & sign a 171-byte (0xAB) VAG SWaP FSC v2 certificate for Continental FSAG."""
-    reporter.step(1, 2, tr("Формирование 43-байтного контейнера VAG SWaP FSC v2", "Building 43-byte VAG SWaP FSC v2 body"))
+    reporter.step(1, 2, tr("Формирование 43-байтного контейнера VAG SWaP FSC v2", "Building 43-byte VAG SWaP FSC v2 body", "正在构建 43 字节的 VAG SWaP FSC v2 证书体"))
     if len(vcrn_5b) != 5:
         raise ValueError(
-            tr("VCRN должен иметь длину ровно 5 байт (10 hex-символов)", "VCRN must be 5 bytes (10 hex chars)")
+            tr("VCRN должен иметь длину ровно 5 байт (10 hex-символов)", "VCRN must be 5 bytes (10 hex chars)", "VCRN 必须恰好为 5 字节（10 个十六进制字符）")
         )
     vin_clean = vin_str.strip().upper()
     if vin_clean and len(vin_clean) != 17:
         raise ValueError(
-            tr("VIN должен содержать ровно 17 ASCII-символов", "VIN must be exactly 17 ASCII characters")
+            tr("VIN должен содержать ровно 17 ASCII-символов", "VIN must be exactly 17 ASCII characters", "VIN 必须恰好为 17 个 ASCII 字符")
         )
     vin_field = (vin_clean.encode("ascii") + b"\x00") if vin_clean else (b"\x00" * 18)
     ts = int(time.time()) if timestamp_unix is None else int(timestamp_unix)
     if not 0 <= fec_code <= 0xFFFFFFFF:  # the certificate holds both in 32 bits: refuse, never cut to fit
-        raise ValueError(tr(f"Код FeC вне диапазона 0..0xFFFFFFFF: {fec_code:#x}", f"FeC code out of range 0..0xFFFFFFFF: {fec_code:#x}"))
+        raise ValueError(tr(f"Код FeC вне диапазона 0..0xFFFFFFFF: {fec_code:#x}", f"FeC code out of range 0..0xFFFFFFFF: {fec_code:#x}", f"FeC 代码超出 0..0xFFFFFFFF 范围：{fec_code:#x}"))
     if not 0 <= ts <= 0xFFFFFFFF:
-        raise ValueError(tr(f"Время вне диапазона 0..0xFFFFFFFF: {ts}", f"Timestamp out of range 0..0xFFFFFFFF: {ts}"))
+        raise ValueError(tr(f"Время вне диапазона 0..0xFFFFFFFF: {ts}", f"Timestamp out of range 0..0xFFFFFFFF: {ts}", f"时间戳超出 0..0xFFFFFFFF 范围：{ts}"))
     validity_9b = b"\x00" * 9
     body = (
         b"\x11\x02"
@@ -468,6 +478,7 @@ def build_signed_fsc(
         tr(
             "Подпись RIPEMD-160 + RSA-1024 (e=3) и самопроверка сертификата",
             "Signing RIPEMD-160 + RSA-1024 (e=3) & verifying certificate",
+            "正在使用 RIPEMD-160 + RSA-1024（e=3）签名并校验证书",
         ),
     )
     n_int = int.from_bytes(n_bytes, "big")
@@ -481,6 +492,7 @@ def build_signed_fsc(
         tr(
             f"Сертификат FSC v2 для FeC 0x{fec_code:08X} подписан (171 байт)",
             f"Signed FSC v2 certificate for FeC 0x{fec_code:08X} (171 bytes)",
+            f"已为 FeC 0x{fec_code:08X} 签名 FSC v2 证书（171 字节）",
         )
     )
     return fsc
@@ -496,12 +508,14 @@ def _extract_app_slice(raw_cflash_or_app: bytes) -> bytes:
             tr(
                 f"Ожидался CodeFlash ({CFLASH_SIZE:,} Б) или FD_0DATA ({APP_SIZE:,} Б), получен {len(raw_cflash_or_app):,} Б",
                 f"Expected CodeFlash ({CFLASH_SIZE:,} B) or FD_0DATA ({APP_SIZE:,} B), got {len(raw_cflash_or_app):,} B",
+                f"预期为 CodeFlash（{CFLASH_SIZE:,} 字节）或 FD_0DATA（{APP_SIZE:,} 字节），实际得到 {len(raw_cflash_or_app):,} 字节",
             )
         )
     raise ValueError(
         tr(
             f"Неверный размер прошивки: {len(raw_cflash_or_app):,} Б",
             f"Invalid firmware size: {len(raw_cflash_or_app):,} B",
+            f"固件大小无效：{len(raw_cflash_or_app):,} 字节",
         )
     )
 
@@ -515,7 +529,7 @@ def sign_fbl_odx_application(
     reporter: OperationReporter = NULL_REPORTER,
 ) -> bytes:
     """Sign FD_0DATA (0x0000C200..0x0017FFFF) for Continental FBL CheckMemory (0x31 01 02 02)."""
-    reporter.step(1, 2, tr("Проверка App CRC-16 @ 0x0000C21C перед подписью ODX", "Validating App CRC-16 @ 0x0000C21C"))
+    reporter.step(1, 2, tr("Проверка App CRC-16 @ 0x0000C21C перед подписью ODX", "Validating App CRC-16 @ 0x0000C21C", "签名 ODX 前正在校验 App CRC-16 @ 0x0000C21C"))
     app = _extract_app_slice(raw_cflash_or_app)
     _, range_cnt = struct.unpack_from("<HH", app, 0x1C)
     if range_cnt == 0 and not ignore_input_crc:
@@ -525,6 +539,8 @@ def sign_fbl_odx_application(
                 "отвергнет такую прошивку даже с верной подписью RSA. Сначала исправьте образ через патчинг.",
                 "Header field [0x0000C21E] == 0! FBL CheckProgrammingDependencies (31 01 FF 01) "
                 "rejects [0xC21E]==0 even with a valid RSA signature. Repair the image first.",
+                "头字段 [0x0000C21E] == 0！即使 RSA 签名有效，FBL 的 CheckProgrammingDependencies（31 01 FF 01）"
+                "也会拒绝 [0xC21E]==0 的固件。请先通过打补丁修复镜像。",
             )
         )
     if range_cnt != 0:
@@ -536,10 +552,12 @@ def sign_fbl_odx_application(
                     "Сначала обновите CRC-16 утилитой.",
                     f"Application CRC-16 mismatch @ 0x0000C21C (stored 0x{stored_crc:04X}, calculated 0x{calc_crc:04X})! "
                     "Update CRC-16 with this tool before signing.",
+                    f"App CRC-16 @ 0x0000C21C 不匹配（文件中的值 0x{stored_crc:04X}，计算结果 0x{calc_crc:04X}）！"
+                    "请先用本工具更新 CRC-16。",
                 )
             )
     reporter.progress(45, 100)
-    reporter.step(2, 2, tr("Вычисление SHA-1 и подписи RSA-1024 (e=3) блока FD_0DATA", "Computing SHA-1 & RSA-1024 signature"))
+    reporter.step(2, 2, tr("Вычисление SHA-1 и подписи RSA-1024 (e=3) блока FD_0DATA", "Computing SHA-1 & RSA-1024 signature", "正在计算 FD_0DATA 块的 SHA-1 与 RSA-1024 签名"))
     msg = struct.pack(">II", APP_BASE, APP_SIZE) + bytes(app)
     n_int = int.from_bytes(n_bytes, "big")
     sig = rsassa_pkcs1_v15_sign(msg, n_int, d_int, "sha1")
@@ -550,6 +568,7 @@ def sign_fbl_odx_application(
         tr(
             f"Подпись ODX <FW-SIGNATURE> успешно создана ({sig[:8].hex()}…)",
             f"ODX <FW-SIGNATURE> created ({sig[:8].hex()}…)",
+            f"ODX <FW-SIGNATURE> 签名创建成功（{sig[:8].hex()}…）",
         )
     )
     return sig

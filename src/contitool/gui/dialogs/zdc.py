@@ -67,32 +67,32 @@ from contitool.gui.connection import CanConnection, ensure_ready
 from contitool.gui.theme import mono_font
 from contitool.gui.widgets.page import Callout, Dialog, Section, button, divider, group_label, hint, row
 from contitool.gui.worker import OperationRunner
-from contitool.i18n import get_lang, tr
+from contitool.i18n import tr
 
 # Human-readable descriptions for standard driving profile slots 1..9
-_SLOT_DESCRIPTIONS: dict[int, tuple[str, str, str, str]] = {
-    1: ("Comfort", "Comfort", "Комфортные настройки систем; с DCC — мягкая подвеска",
-        "Comfort settings of the systems; with DCC, soft damping"),
-    2: ("Normal", "Normal", "Заводской режим по умолчанию", "The factory default mode"),
-    3: ("Sport", "Sport", "Спортивные настройки газа, руля, подвески и коробки (S)",
-        "Sport settings for throttle, steering, suspension and gearbox (S)"),
-    4: ("Offroad", "Offroad", "Для полного привода: режим Offroad у ESC, муфты и помощника спуска",
-        "For AWD: the Offroad mode of ESC, the clutch and hill descent"),
-    5: ("Eco", "Eco", "Экономичные настройки двигателя и климата, движение накатом",
-        "Economical engine and climate settings, coasting"),
-    6: ("Race / Cupra", "Race / Cupra", "Race у Golf R и Cupra. Без своих настроек Race системы получают режим Sport",
-        "Race on the Golf R and Cupra. Without its own Race settings the systems get Sport"),
-    7: ("Individual", "Individual", "Водитель выбирает режим каждой системы на магнитоле",
-        "The driver picks each system's mode on the head unit"),
-    8: ("Snow", "Snow", "Для полного привода (как в Tiguan): режим для снега", "For AWD (as in the Tiguan): the snow mode"),
-    9: ("Offroad Individual", "Offroad Individual", "Для полного привода (как в Tiguan): Offroad с настройками водителя",
-        "For AWD (as in the Tiguan): Offroad with the driver's own settings"),
+_SLOT_DESCRIPTIONS: dict[int, tuple[str, str, str, str, str, str]] = {
+    1: ("Comfort", "Comfort", "舒适", "Комфортные настройки систем; с DCC — мягкая подвеска",
+        "Comfort settings of the systems; with DCC, soft damping", "系统的舒适设置；带 DCC 时为软悬挂"),
+    2: ("Normal", "Normal", "标准", "Заводской режим по умолчанию", "The factory default mode", "出厂默认模式"),
+    3: ("Sport", "Sport", "运动", "Спортивные настройки газа, руля, подвески и коробки (S)",
+        "Sport settings for throttle, steering, suspension and gearbox (S)", "油门、转向、悬挂和变速箱的运动设置 (S)"),
+    4: ("Offroad", "Offroad", "越野", "Для полного привода: режим Offroad у ESC, муфты и помощника спуска",
+        "For AWD: the Offroad mode of ESC, the clutch and hill descent", "用于四驱：ESC、离合器和陡坡缓降的越野模式"),
+    5: ("Eco", "Eco", "经济", "Экономичные настройки двигателя и климата, движение накатом",
+        "Economical engine and climate settings, coasting", "发动机与空调的经济设置，惯性滑行"),
+    6: ("Race / Cupra", "Race / Cupra", "赛道 / Cupra", "Race у Golf R и Cupra. Без своих настроек Race системы получают режим Sport",
+        "Race on the Golf R and Cupra. Without its own Race settings the systems get Sport", "Golf R 与 Cupra 的赛道模式；无独立赛道设置时系统采用运动模式"),
+    7: ("Individual", "Individual", "自定义", "Водитель выбирает режим каждой системы на магнитоле",
+        "The driver picks each system's mode on the head unit", "驾驶员在主机上为各系统选择模式"),
+    8: ("Snow", "Snow", "雪地", "Для полного привода (как в Tiguan): режим для снега", "For AWD (as in the Tiguan): the snow mode", "用于四驱（如 Tiguan）：雪地模式"),
+    9: ("Offroad Individual", "Offroad Individual", "越野自定义", "Для полного привода (как в Tiguan): Offroad с настройками водителя",
+        "For AWD (as in the Tiguan): Offroad with the driver's own settings", "用于四驱（如 Tiguan）：带驾驶员自定义设置的越野模式"),
 }
 
-_WHEEL_QUICK_PAIRS: tuple[tuple[str, tuple[int, int], str, str], ...] = (
-    ("2_3", (2, 3), "Быстрое переключение 2 режимов: Normal ↔ Sport", "Quick 2-mode toggle: Normal ↔ Sport"),
-    ("2_7", (2, 7), "Быстрое переключение 2 режимов: Normal ↔ Individual", "Quick 2-mode toggle: Normal ↔ Individual"),
-    ("2_6", (2, 6), "Быстрое переключение 2 режимов: Normal ↔ Race / Cupra", "Quick 2-mode toggle: Normal ↔ Race / Cupra"),
+_WHEEL_QUICK_PAIRS: tuple[tuple[str, tuple[int, int], str, str, str], ...] = (
+    ("2_3", (2, 3), "Быстрое переключение 2 режимов: Normal ↔ Sport", "Quick 2-mode toggle: Normal ↔ Sport", "快速切换 2 个模式：Normal ↔ Sport"),
+    ("2_7", (2, 7), "Быстрое переключение 2 режимов: Normal ↔ Individual", "Quick 2-mode toggle: Normal ↔ Individual", "快速切换 2 个模式：Normal ↔ Individual"),
+    ("2_6", (2, 6), "Быстрое переключение 2 режимов: Normal ↔ Race / Cupra", "Quick 2-mode toggle: Normal ↔ Race / Cupra", "快速切换 2 个模式：Normal ↔ Race / Cupra"),
 )
 
 
@@ -110,7 +110,7 @@ def _scroll_tab(content: QWidget) -> QScrollArea:
 def _slot_short_name(slot: int) -> str:
     meta = _SLOT_DESCRIPTIONS.get(slot)
     if meta:
-        return meta[1] if get_lang() == "en" else meta[0]
+        return tr(meta[0], meta[1], meta[2])
     return f"#{slot}"
 
 
@@ -135,12 +135,13 @@ class FpaEditorDialog(Dialog):
     ) -> None:
         super().__init__(
             parent,
-            tr("Профили вождения и кнопки переключения", "Driving Profiles & Mode Buttons"),
+            tr("Профили вождения и кнопки переключения", "Driving Profiles & Mode Buttons", "驾驶模式与模式按钮"),
             tr(
                 "Доступные режимы движения, память режима после выключения зажигания, переключение кнопкой MODE и"
                 " кнопкой на руле.",
                 "Available driving modes, keeping the mode after the ignition is switched off, switching with the"
                 " MODE button and a wheel button.",
+                "可用的驾驶模式、熄火后记忆所选模式，以及通过 MODE 按钮和方向盘按钮切换。",
             ),
             width=920,
         )
@@ -165,24 +166,25 @@ class FpaEditorDialog(Dialog):
                 tr(
                     "— Не выбрано (сейчас в дампе профилей нет) —",
                     "— Not selected (no profiles in dump right now) —",
+                    "— 未选择（当前转储中没有模式）—",
                 ),
                 "",
             )
-        for key, ru, en in FPA_PRESET_CATALOG:
-            self.cmb_preset.addItem(en if get_lang() == "en" else ru, key)
+        for key, ru, en, zh in FPA_PRESET_CATALOG:
+            self.cmb_preset.addItem(tr(ru, en, zh), key)
         if not self._needs_onboarding:
             det_idx = self.cmb_preset.findData(self.fpa.detected_preset())
             if det_idx >= 0:
                 self.cmb_preset.setCurrentIndex(det_idx)
 
         self.cmb_schema = QComboBox()
-        self.cmb_schema.addItem(tr("Автоматически (под версию прошивки)", "Automatic (match ECU firmware)"), "")
+        self.cmb_schema.addItem(tr("Автоматически (под версию прошивки)", "Automatic (match ECU firmware)", "自动（匹配控制单元固件）"), "")
         for tag, desc in (("PC00", "PC00 (2WD)"), ("NC00", "NC00 (4Motion)"), ("JC00", "JC00 (SW 5366)")):
             self.cmb_schema.addItem(desc, tag)
         self.cmb_schema.setVisible(False)
         self.lbl_schema_info = hint()
         self.lbl_schema_info.setVisible(False)
-        self.btn_load_preset = button(tr("Перезаполнить по шаблону", "Overwrite with template"), slot=self._on_load_preset)
+        self.btn_load_preset = button(tr("Перезаполнить по шаблону", "Overwrite with template", "按模板覆盖填充"), slot=self._on_load_preset)
 
         if self._needs_onboarding:
             self.onboard_frame = QFrame()
@@ -195,7 +197,7 @@ class FpaEditorDialog(Dialog):
             ob_lay.addWidget(self.lbl_onboard)
             pick_lay = QHBoxLayout()
             pick_lay.setSpacing(10)
-            pick_lay.addWidget(QLabel(tr("Комплектация автомобиля:", "Vehicle configuration:")))
+            pick_lay.addWidget(QLabel(tr("Комплектация автомобиля:", "Vehicle configuration:", "车辆配置：")))
             pick_lay.addWidget(self.cmb_preset, 1)
             ob_lay.addLayout(pick_lay)
             self.cmb_preset.currentIndexChanged.connect(lambda _i: self._on_load_preset())
@@ -212,7 +214,7 @@ class FpaEditorDialog(Dialog):
             status_bar.setSpacing(8)
             self.lbl_detected_base = hint()
             self.btn_toggle_reset = button(
-                tr("Сбросить по шаблону авто ▸", "Reset from car template ▸"),
+                tr("Сбросить по шаблону авто ▸", "Reset from car template ▸", "按车辆模板重置 ▸"),
                 "GhostBtn",
             )
             self.btn_toggle_reset.setCheckable(True)
@@ -235,6 +237,8 @@ class FpaEditorDialog(Dialog):
                         "A template is another car's dataset: it replaces the profile tables and the list of "
                         "participating systems as a whole. Use it only if the ECU came from another car (from AWD to FWD,"
                         " say):",
+                        "模板是另一辆车的参数数据集：它会整体替换模式表和参与系统列表。仅当控制单元来自另一辆车时使用"
+                        "（例如从四驱车换到前驱车）：",
                     )
                 )
             )
@@ -247,15 +251,15 @@ class FpaEditorDialog(Dialog):
             self.body.addWidget(self.pnl_reset_preset)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_tab_profiles(), tr("Профили и память", "Profiles & Memory"))
-        self.tabs.addTab(self._build_tab_buttons(), tr("Кнопки MODE и руль", "MODE & Wheel Buttons"))
-        self.tabs.addTab(self._build_tab_matrix(), tr("Режимы агрегатов", "Subsystem Modes"))
-        self.tabs.addTab(self._build_tab_individual(), tr("Меню Individual", "Individual Menu"))
-        self.tabs.addTab(self._build_tab_coding(), tr("Кодировка блока", "ECU Coding"))
+        self.tabs.addTab(self._build_tab_profiles(), tr("Профили и память", "Profiles & Memory", "模式与记忆"))
+        self.tabs.addTab(self._build_tab_buttons(), tr("Кнопки MODE и руль", "MODE & Wheel Buttons", "MODE 按钮与方向盘"))
+        self.tabs.addTab(self._build_tab_matrix(), tr("Режимы агрегатов", "Subsystem Modes", "子系统模式"))
+        self.tabs.addTab(self._build_tab_individual(), tr("Меню Individual", "Individual Menu", "自定义菜单"))
+        self.tabs.addTab(self._build_tab_coding(), tr("Кодировка блока", "ECU Coding", "控制单元编码"))
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.body.addWidget(self.tabs, 1)
 
-        self.btn_ok = button(tr("Сохранить настройки", "Save settings"), "PrimaryBtn", slot=self._on_accept)
+        self.btn_ok = button(tr("Сохранить настройки", "Save settings", "保存设置"), "PrimaryBtn", slot=self._on_accept)
         self.finish(ok=self.btn_ok)
         if runner is not None:
             runner.busy_changed.connect(self._on_runner_busy)
@@ -272,7 +276,7 @@ class FpaEditorDialog(Dialog):
 
         sec_mem = Section()
         sec_mem.set_text(
-            tr("Профиль после выключения зажигания и режимы систем", "Profile after ignition off, and system modes"),
+            tr("Профиль после выключения зажигания и режимы систем", "Profile after ignition off, and system modes", "熄火后的模式与系统模式"),
             tr(
                 "Первая галочка: после включения зажигания остаётся выбранный профиль, а не Normal (S029). Вторая: "
                 "силовой агрегат и Старт-Стоп получают и режимы Comfort, Sport и Offroad. С завода шлюз передаёт им "
@@ -282,18 +286,23 @@ class FpaEditorDialog(Dialog):
                 "Second: the powertrain and Start-Stop also get the Comfort, Sport and Offroad modes. From the factory "
                 "the gateway passes them only the modes these ECUs accept (S075) and replaces the rest with “no "
                 "request”. Whether the ECUs accept the other modes is not verified.",
+                "第一项：接通点火后保持所选模式，而非 Normal (S029)。第二项：动力总成和起停系统也获得 Comfort、Sport "
+                "和 Offroad 模式。出厂时网关只把这些控制单元能接受的模式传给它们 (S075)，其余替换为“无请求”。这些"
+                "控制单元是否接受其他模式尚未验证。",
             ),
         )
         self.chk_kl15_profiles = QCheckBox(
             tr(
                 "Оставлять выбранный профиль после выключения зажигания",
                 "Keep the selected profile after the ignition is switched off",
+                "熄火后保持所选模式",
             )
         )
         self.chk_kl15_powertrain = QCheckBox(
             tr(
                 "Передавать Comfort, Sport и Offroad силовому агрегату и Старт-Стоп",
                 "Pass Comfort, Sport and Offroad to the powertrain and Start-Stop",
+                "将 Comfort、Sport 和 Offroad 传给动力总成和起停系统",
             )
         )
         self.chk_kl15_profiles.toggled.connect(self._on_kl15_profiles_toggled)
@@ -304,18 +313,19 @@ class FpaEditorDialog(Dialog):
 
         sec_profs = Section()
         sec_profs.set_text(
-            tr("Доступные профили на экране магнитолы", "Profiles shown on the head-unit screen"),
+            tr("Доступные профили на экране магнитолы", "Profiles shown on the head-unit screen", "主机屏幕上显示的模式"),
             tr(
                 "Режимы в меню выбора на магнитоле. Профиль появляется, только если для его слота активен FEC (страница «Активация SWaP/FEC»).",
                 "The modes in the head unit's selection menu. A profile appears only if its slot's FEC is active (SWaP/FEC activation page).",
+                "主机选择菜单中的模式。只有当其槽位的 FEC 激活时，模式才会出现（SWaP/FEC 激活页面）。",
             ),
         )
         self.tbl_slots = QTableWidget(9, 3)
         self.tbl_slots.setHorizontalHeaderLabels(
             [
-                tr("Профиль", "Profile"),
-                tr("Описание режима", "What it does"),
-                tr("Состояние", "State"),
+                tr("Профиль", "Profile", "模式"),
+                tr("Описание режима", "What it does", "功能说明"),
+                tr("Состояние", "State", "状态"),
             ]
         )
         self.tbl_slots.verticalHeader().setVisible(False)
@@ -349,20 +359,21 @@ class FpaEditorDialog(Dialog):
         # 1. Where physical buttons live
         sec_mode = Section()
         sec_mode.set_text(
-            tr("Чем переключать профили вождения", "Which physical buttons switch profiles"),
+            tr("Чем переключать профили вождения", "Which physical buttons switch profiles", "用哪些实体按钮切换驾驶模式"),
             tr(
                 "Кнопка MODE у селектора КПП, кнопка на руле или обе сразу.",
                 "The MODE button by the gear selector, a wheel button, or both.",
+                "变速箱选挡杆旁的 MODE 按钮、方向盘按钮，或两者同时。",
             ),
         )
         self.cmb_btn_mode = QComboBox()
-        for val, ru, en in (
-            ("both", "Кнопка MODE на консоли и кнопка на руле", "Console MODE button and a wheel button"),
-            ("console", "Только кнопка MODE на консоли", "Console MODE button only"),
-            ("mfl", "Только кнопка на руле (если кнопки MODE нет)", "Wheel button only (no MODE button)"),
-            ("none", "Без кнопок, только экран магнитолы", "No buttons, head-unit screen only"),
+        for val, ru, en, zh in (
+            ("both", "Кнопка MODE на консоли и кнопка на руле", "Console MODE button and a wheel button", "控制台 MODE 按钮和方向盘按钮"),
+            ("console", "Только кнопка MODE на консоли", "Console MODE button only", "仅控制台 MODE 按钮"),
+            ("mfl", "Только кнопка на руле (если кнопки MODE нет)", "Wheel button only (no MODE button)", "仅方向盘按钮（无 MODE 按钮）"),
+            ("none", "Без кнопок, только экран магнитолы", "No buttons, head-unit screen only", "无按钮，仅主机屏幕"),
         ):
-            self.cmb_btn_mode.addItem(en if get_lang() == "en" else ru, val)
+            self.cmb_btn_mode.addItem(tr(ru, en, zh), val)
         self.cmb_btn_mode.currentIndexChanged.connect(lambda _i: self._sync_button_controls())
         sec_mode.body.addWidget(self.cmb_btn_mode)
         lay.addWidget(sec_mode)
@@ -370,7 +381,7 @@ class FpaEditorDialog(Dialog):
         # 1a. The 4MOTION Active Control knob, as the factory dataset of a 2019 Tiguan (OZ00) has it
         sec_knob = Section()
         sec_knob.set_text(
-            tr("Шайба 4MOTION Active Control", "4MOTION Active Control knob"),
+            tr("Шайба 4MOTION Active Control", "4MOTION Active Control knob", "4MOTION Active Control 旋钮"),
             tr(
                 "Как в заводском датасете Tiguan 2019 (OZ00): положения шайбы Snow, On-road, Offroad и Offroad "
                 "Individual; профиль On-road выбирается в меню магнитолы. Шайба заменяет кнопку MODE на консоли, "
@@ -380,9 +391,12 @@ class FpaEditorDialog(Dialog):
                 "Individual; the on-road profile is picked in the head-unit menu. The knob replaces the console MODE "
                 "button; a wheel button stays. It needs the knob itself (the console module sending LIN frame 0x0B) "
                 "and FECs 10001400, 10001800 and 10001900.",
+                "与 2019 Tiguan (OZ00) 出厂数据集一致：旋钮位置包括 Snow、On-road、Offroad 和 Offroad Individual；"
+                "On-road 模式在主机菜单中选择。旋钮取代控制台 MODE 按钮，方向盘按钮保留。需要旋钮本身（发送 LIN 帧 "
+                "0x0B 的控制台模块）以及 FEC 10001400、10001800 和 10001900。",
             ),
         )
-        self.chk_knob = QCheckBox(tr("Добавить шайбу в датасет", "Add the knob to the dataset"))
+        self.chk_knob = QCheckBox(tr("Добавить шайбу в датасет", "Add the knob to the dataset", "将旋钮添加到数据集"))
         sec_knob.body.addWidget(self.chk_knob)
         lay.addWidget(sec_knob)
 
@@ -390,10 +404,11 @@ class FpaEditorDialog(Dialog):
         # 2. Steering-wheel button picker (ONLY visible when 'mfl' or 'both' is selected!)
         self.sec_wheel = Section()
         self.sec_wheel.set_text(
-            tr("Какую кнопку на руле использовать", "Steering-wheel button setup"),
+            tr("Какую кнопку на руле использовать", "Steering-wheel button setup", "方向盘按钮设置"),
             tr(
                 "Выберите кнопку из списка или нажмите «Определить нажатием по CAN…» и нажмите её в машине.",
                 "Pick the button from the list, or press “Detect over CAN…” and press it in the car.",
+                "从列表中选择按钮，或点击“通过 CAN 检测按压…”，然后在车内按下该按钮。",
             ),
         )
         grid_mfl = QGridLayout()
@@ -401,13 +416,13 @@ class FpaEditorDialog(Dialog):
         grid_mfl.setVerticalSpacing(10)
 
         self.cmb_mfl_preset = QComboBox()
-        for code, ru, en in MFL_KEYCODE_PRESETS:
-            self.cmb_mfl_preset.addItem(en if get_lang() == "en" else ru, code)
-        self.cmb_mfl_preset.addItem(tr("Другая кнопка (ввести код вручную)…", "Other button (enter code manually)…"), -1)
+        for code, ru, en, zh in MFL_KEYCODE_PRESETS:
+            self.cmb_mfl_preset.addItem(tr(ru, en, zh), code)
+        self.cmb_mfl_preset.addItem(tr("Другая кнопка (ввести код вручную)…", "Other button (enter code manually)…", "其他按钮（手动输入代码）…"), -1)
         self.cmb_mfl_preset.currentIndexChanged.connect(self._on_mfl_preset_changed)
 
         self.btn_learn_mfl = button(
-            tr("Определить нажатием по CAN…", "Detect press over CAN…"),
+            tr("Определить нажатием по CAN…", "Detect press over CAN…", "通过 CAN 检测按压…"),
             slot=self._learn_mfl_live,
         )
 
@@ -419,26 +434,26 @@ class FpaEditorDialog(Dialog):
         self.ed_mfl_hex.setFont(mono_font(13))
         self.ed_mfl_hex.setMaximumWidth(90)
         self.ed_mfl_hex.textChanged.connect(self._on_mfl_hex_changed)
-        hex_lay.addWidget(QLabel(tr("Код кнопки (Hex):", "Button code (Hex):")))
+        hex_lay.addWidget(QLabel(tr("Код кнопки (Hex):", "Button code (Hex):", "按钮代码（十六进制）：")))
         hex_lay.addWidget(self.ed_mfl_hex)
-        hex_lay.addWidget(hint(tr("Например: 19 (Голос), 23 (VIEW), 74 (Ассистенты)", "Example: 19 (Voice), 23 (VIEW), 74 (Assistants)")), 1)
+        hex_lay.addWidget(hint(tr("Например: 19 (Голос), 23 (VIEW), 74 (Ассистенты)", "Example: 19 (Voice), 23 (VIEW), 74 (Assistants)", "例如：19（语音）、23（VIEW）、74（驾驶辅助）")), 1)
         self.row_custom_hex.setVisible(False)
 
         self.cmb_mfl_press = QComboBox()
         self.cmb_mfl_press.addItem(
-            tr("По длинному удержанию (короткое нажатие остаётся штатным)", "Long press / hold (short press keeps normal function)"),
+            tr("По длинному удержанию (короткое нажатие остаётся штатным)", "Long press / hold (short press keeps normal function)", "长按触发（短按保持原功能）"),
             True,
         )
         self.cmb_mfl_press.addItem(
-            tr("По короткому одиночному нажатию", "Short single press"),
+            tr("По короткому одиночному нажатию", "Short single press", "短按单次触发"),
             False,
         )
 
-        grid_mfl.addWidget(QLabel(tr("Кнопка на руле:", "Wheel button:")), 0, 0)
+        grid_mfl.addWidget(QLabel(tr("Кнопка на руле:", "Wheel button:", "方向盘按钮：")), 0, 0)
         grid_mfl.addWidget(self.cmb_mfl_preset, 0, 1)
         grid_mfl.addWidget(self.btn_learn_mfl, 0, 2)
         grid_mfl.addWidget(self.row_custom_hex, 1, 1, 1, 2)
-        grid_mfl.addWidget(QLabel(tr("Как срабатывает:", "Trigger:")), 2, 0)
+        grid_mfl.addWidget(QLabel(tr("Как срабатывает:", "Trigger:", "触发方式：")), 2, 0)
         grid_mfl.addWidget(self.cmb_mfl_press, 2, 1, 1, 2)
         grid_mfl.setColumnStretch(1, 1)
         self.sec_wheel.body.addLayout(grid_mfl)
@@ -449,6 +464,8 @@ class FpaEditorDialog(Dialog):
                     " могут. Подходят кнопки голосового управления, VIEW, ассистентов или обогрева руля.",
                     "The cruise-control buttons (SET, RES, Travel Assist) use a separate line and cannot switch "
                     "profiles. The voice, VIEW, assistants or wheel-heating buttons work.",
+                    "定速巡航按钮（SET、RES、Travel Assist）走独立线路，无法切换模式。语音控制、VIEW、驾驶辅助或方向盘"
+                    "加热按钮可用。",
                 )
             )
         )
@@ -457,12 +474,13 @@ class FpaEditorDialog(Dialog):
         # 3. Which profiles each button cycles through — NO RAW NUMBERS!
         self.sec_rings = Section()
         self.sec_rings.set_text(
-            tr("Какие профили листают кнопки при нажатии", "Which profiles each button cycles through"),
+            tr("Какие профили листают кнопки при нажатии", "Which profiles each button cycles through", "各按钮按下时循环切换哪些模式"),
             tr(
                 "Например, MODE листает все режимы, а кнопка на руле переключает только два (Normal ↔ Sport, как "
                 "M1/M2).",
                 "For example, MODE steps through every mode while the wheel button toggles just two (Normal ↔ "
                 "Sport, like M1/M2).",
+                "例如，MODE 逐一遍历所有模式，而方向盘按钮只在两个模式间切换（Normal ↔ Sport，如同 M1/M2）。",
             ),
         )
 
@@ -476,17 +494,18 @@ class FpaEditorDialog(Dialog):
             tr(
                 "Все включённые профили по кругу",
                 "All enabled profiles in turn",
+                "按顺序循环所有已启用的模式",
             ),
             "all",
         )
         self.cmb_console_ring_mode.addItem(
-            tr("Выбрать вручную галочками…", "Choose profiles manually…"),
+            tr("Выбрать вручную галочками…", "Choose profiles manually…", "手动勾选模式…"),
             "custom",
         )
         self.cmb_console_ring_mode.currentIndexChanged.connect(lambda _i: self._on_ring_mode_changed())
         con_head = QGridLayout()
         con_head.setHorizontalSpacing(12)
-        con_head.addWidget(QLabel(tr("Кнопка MODE на консоли:", "Console MODE button:")), 0, 0)
+        con_head.addWidget(QLabel(tr("Кнопка MODE на консоли:", "Console MODE button:", "控制台 MODE 按钮：")), 0, 0)
         con_head.addWidget(self.cmb_console_ring_mode, 0, 1)
         con_head.setColumnStretch(1, 1)
         con_lay.addLayout(con_head)
@@ -507,19 +526,19 @@ class FpaEditorDialog(Dialog):
         mfl_lay.setSpacing(8)
         self.cmb_mfl_ring_mode = QComboBox()
         self.cmb_mfl_ring_mode.addItem(
-            tr("Все включённые профили по кругу (как на кнопке MODE)", "All enabled profiles (same as MODE button)"),
+            tr("Все включённые профили по кругу (как на кнопке MODE)", "All enabled profiles (same as MODE button)", "按顺序循环所有已启用的模式（与 MODE 按钮相同）"),
             "all",
         )
-        for key, _pair, ru, en in _WHEEL_QUICK_PAIRS:
-            self.cmb_mfl_ring_mode.addItem(en if get_lang() == "en" else ru, key)
+        for key, _pair, ru, en, zh in _WHEEL_QUICK_PAIRS:
+            self.cmb_mfl_ring_mode.addItem(tr(ru, en, zh), key)
         self.cmb_mfl_ring_mode.addItem(
-            tr("Выбрать свой набор профилей галочками…", "Choose custom profiles…"),
+            tr("Выбрать свой набор профилей галочками…", "Choose custom profiles…", "选择自定义模式组合…"),
             "custom",
         )
         self.cmb_mfl_ring_mode.currentIndexChanged.connect(lambda _i: self._on_ring_mode_changed())
         mfl_head = QGridLayout()
         mfl_head.setHorizontalSpacing(12)
-        mfl_head.addWidget(QLabel(tr("Кнопка на руле:", "Steering-wheel button:")), 0, 0)
+        mfl_head.addWidget(QLabel(tr("Кнопка на руле:", "Steering-wheel button:", "方向盘按钮：")), 0, 0)
         mfl_head.addWidget(self.cmb_mfl_ring_mode, 0, 1)
         mfl_head.setColumnStretch(1, 1)
         mfl_lay.addLayout(mfl_head)
@@ -534,37 +553,41 @@ class FpaEditorDialog(Dialog):
         # 4. Cabin comfort & indication
         sec_comfort = Section()
         sec_comfort.set_text(
-            tr("Подсветка и удобства в салоне", "Cabin behaviour & lighting"),
+            tr("Подсветка и удобства в салоне", "Cabin behaviour & lighting", "车内行为与照明"),
         )
         self.chk_led_off_normal = QCheckBox(
             tr(
                 "Гасить жёлтую подсветку кнопки MODE, когда выбран обычный режим Normal",
                 "Turn off the amber MODE button light when Normal mode is active",
+                "当 Normal 模式激活时，关闭 MODE 按钮的琥珀色背光",
             )
         )
         self.chk_mib_popup = QCheckBox(
             tr(
                 "Показывать всплывающее окно выбора профиля на экране магнитолы при нажатии кнопки",
                 "Show the profile selection popup on the head unit when pressing the button",
+                "按下按钮时在主机屏幕上显示模式选择弹窗",
             )
         )
         self.chk_decouple_dsg = QCheckBox(
             tr(
                 "Селектор D↔S меняет только режим коробки, профиль остаётся прежним",
                 "The D↔S selector changes only the gearbox mode; the profile stays",
+                "D↔S 选挡杆只改变变速箱模式，模式保持不变",
             )
         )
         self.chk_pso = QCheckBox(
             tr(
                 "Запоминать профиль для каждого ключа (персонализация)",
                 "Keep the profile per key (personalisation)",
+                "为每把钥匙记忆模式（个性化）",
             )
         )
         for chk in (self.chk_led_off_normal, self.chk_mib_popup, self.chk_decouple_dsg, self.chk_pso):
             sec_comfort.body.addWidget(chk)
 
         # Collapsible fine-tuning (LED brightness & popup timeout)
-        self.btn_more_comfort = button(tr("Яркость подсветки MODE ▸", "MODE light brightness ▸"), "GhostBtn")
+        self.btn_more_comfort = button(tr("Яркость подсветки MODE ▸", "MODE light brightness ▸", "MODE 背光亮度 ▸"), "GhostBtn")
         self.btn_more_comfort.setCheckable(True)
         self.pnl_more_comfort = QWidget()
         more_lay = QHBoxLayout(self.pnl_more_comfort)
@@ -572,7 +595,7 @@ class FpaEditorDialog(Dialog):
         more_lay.setSpacing(12)
         self.spn_led_pwm = QSpinBox()
         self.spn_led_pwm.setRange(0, 15)
-        more_lay.addWidget(QLabel(tr("Яркость подсветки кнопки MODE (0–15):", "MODE LED brightness (0–15):")))
+        more_lay.addWidget(QLabel(tr("Яркость подсветки кнопки MODE (0–15):", "MODE LED brightness (0–15):", "MODE 按钮背光亮度（0–15）：")))
         more_lay.addWidget(self.spn_led_pwm)
         more_lay.addStretch(1)
         self.pnl_more_comfort.setVisible(False)
@@ -605,9 +628,9 @@ class FpaEditorDialog(Dialog):
     def _toggle_more_comfort(self, on: bool) -> None:
         self.pnl_more_comfort.setVisible(on)
         self.btn_more_comfort.setText(
-            tr("Яркость подсветки MODE ▾", "MODE light brightness ▾")
+            tr("Яркость подсветки MODE ▾", "MODE light brightness ▾", "MODE 背光亮度 ▾")
             if on
-            else tr("Яркость подсветки MODE ▸", "MODE light brightness ▸")
+            else tr("Яркость подсветки MODE ▸", "MODE light brightness ▸", "MODE 背光亮度 ▸")
         )
 
     # ── Tab 3: Subsystem Target Matrix ──
@@ -622,6 +645,7 @@ class FpaEditorDialog(Dialog):
                 tr(
                     "Какой режим шлюз запрашивает у каждой системы автомобиля при выборе профиля.",
                     "The mode the gateway requests from each system of the car when a profile is selected.",
+                    "选择模式时，网关向汽车各系统请求的模式。",
                 )
             )
         )
@@ -643,6 +667,7 @@ class FpaEditorDialog(Dialog):
                 tr(
                     "Отметьте варианты, которые водитель сможет выбирать вручную внутри настроек режима Individual на экране магнитолы.",
                     "Tick the modes selectable by the driver inside the Individual setup screen on the head unit.",
+                    "勾选驾驶员可在主机 Individual 设置界面中手动选择的模式。",
                 )
             )
         )
@@ -670,17 +695,18 @@ class FpaEditorDialog(Dialog):
                     "блока по CAN», затем «Подобрать биты автоматически».",
                     "The systems taking part in the profiles must be enabled in the gateway coding. Press “Read from "
                     "ECU over CAN”, then “Auto-match coding bits”.",
+                    "参与模式的系统必须在网关编码中启用。点击“通过 CAN 从控制单元读取”，然后点击“自动匹配编码位”。",
                 )
             )
         )
         self.ed_coding = QLineEdit()
         self.ed_coding.setFont(mono_font(12))
-        self.ed_coding.setPlaceholderText(tr("Длинная кодировка блока (30 байт / 60 hex-символов)…", "30-byte gateway coding (60 hex characters)…"))
+        self.ed_coding.setPlaceholderText(tr("Длинная кодировка блока (30 байт / 60 hex-символов)…", "30-byte gateway coding (60 hex characters)…", "网关长编码（30 字节 / 60 个十六进制字符）…"))
         self.ed_coding.textChanged.connect(lambda _t: self._refresh_coding_tab())
 
-        btn_read = button(tr("Прочитать из блока по CAN", "Read from ECU over CAN"), slot=self._read_coding_live)
-        btn_sync = button(tr("Подобрать биты автоматически", "Auto-match coding bits"), slot=self._sync_coding_bits)
-        btn_write = button(tr("Записать кодировку по CAN", "Write coding over CAN"), "PrimaryBtn", slot=self._write_coding_live)
+        btn_read = button(tr("Прочитать из блока по CAN", "Read from ECU over CAN", "通过 CAN 从控制单元读取"), slot=self._read_coding_live)
+        btn_sync = button(tr("Подобрать биты автоматически", "Auto-match coding bits", "自动匹配编码位"), slot=self._sync_coding_bits)
+        btn_write = button(tr("Записать кодировку по CAN", "Write coding over CAN", "通过 CAN 写入编码"), "PrimaryBtn", slot=self._write_coding_live)
         lay.addWidget(self.ed_coding)
         lay.addLayout(row(btn_read, btn_sync, btn_write))
 
@@ -692,9 +718,9 @@ class FpaEditorDialog(Dialog):
         self.tbl_coding = QTableWidget(0, 3)
         self.tbl_coding.setHorizontalHeaderLabels(
             [
-                tr("Подсистема / Блок", "Subsystem / ECU"),
-                tr("Байт и бит кодировки", "Coding Byte & Bit"),
-                tr("Состояние", "State"),
+                tr("Подсистема / Блок", "Subsystem / ECU", "子系统 / 控制单元"),
+                tr("Байт и бит кодировки", "Coding Byte & Bit", "编码字节与位"),
+                tr("Состояние", "State", "状态"),
             ]
         )
         self.tbl_coding.verticalHeader().setVisible(False)
@@ -712,9 +738,9 @@ class FpaEditorDialog(Dialog):
     def _on_toggle_reset_preset(self, on: bool) -> None:
         self.pnl_reset_preset.setVisible(on)
         self.btn_toggle_reset.setText(
-            tr("Сбросить по шаблону авто ▾", "Reset from car template ▾")
+            tr("Сбросить по шаблону авто ▾", "Reset from car template ▾", "按车辆模板重置 ▾")
             if on
-            else tr("Сбросить по шаблону авто ▸", "Reset from car template ▸")
+            else tr("Сбросить по шаблону авто ▸", "Reset from car template ▸", "按车辆模板重置 ▸")
         )
 
     def _sync_onboarding_banner(self) -> None:
@@ -730,6 +756,7 @@ class FpaEditorDialog(Dialog):
                 tr(
                     "Профилей движения в дампе нет. Выберите комплектацию автомобиля ниже или отметьте нужные режимы:",
                     "The dump has no driving profiles. Pick the car's equipment below or tick the modes you need:",
+                    "转储中没有驾驶模式。请在下方选择车辆配置，或勾选所需模式：",
                 )
                 if self._was_empty
                 else tr(
@@ -737,6 +764,7 @@ class FpaEditorDialog(Dialog):
                     " отметьте нужные режимы:",
                     "The dump holds a base dataset without driving profiles. Pick the car's equipment below or tick "
                     "the modes you need:",
+                    "转储中是未含驾驶模式的基础数据集。请在下方选择车辆配置，或勾选所需模式：",
                 )
             )
         else:
@@ -747,6 +775,7 @@ class FpaEditorDialog(Dialog):
                     "настройки».",
                     "The profiles are prepared. Check the ticks and the “MODE & wheel buttons” tab, then press “Save "
                     "settings”.",
+                    "模式已准备好。请检查勾选和“MODE 按钮与方向盘”选项卡，然后点击“保存设置”。",
                 )
             )
 
@@ -772,17 +801,17 @@ class FpaEditorDialog(Dialog):
         has_knob = self.fpa.has_knob
         self.chk_knob.setChecked(has_knob)
         self.chk_knob.setEnabled(not has_knob and not self._unconfigured)  # the knob needs profiles to point at
-        self.chk_knob.setText(tr("Шайба уже есть в датасете", "The knob is already in the dataset") if has_knob
-                              else tr("Добавить шайбу в датасет", "Add the knob to the dataset"))
-        rotary_txt = (tr(", заводские кнопки 4Motion сохранены", ", factory 4Motion buttons kept")
+        self.chk_knob.setText(tr("Шайба уже есть в датасете", "The knob is already in the dataset", "旋钮已在数据集中") if has_knob
+                              else tr("Добавить шайбу в датасет", "Add the knob to the dataset", "将旋钮添加到数据集"))
+        rotary_txt = (tr(", заводские кнопки 4Motion сохранены", ", factory 4Motion buttons kept", "，出厂 4Motion 按钮已保留")
                       if self.fpa.button_config().has_4motion_rotary else "")
         self.lbl_schema_info.setText(
-            f"{tr('Формат блока:', 'ECU format:')} {self.fpa.schema_tag or '—'}{rotary_txt}"
+            f"{tr('Формат блока:', 'ECU format:', '控制单元格式：')} {self.fpa.schema_tag or '—'}{rotary_txt}"
         )
-        ch_ru, ch_en = self.fpa.chassis_summary()
-        ch_txt = ch_en if get_lang() == "en" else ch_ru
+        ch_ru, ch_en, ch_zh = self.fpa.chassis_summary()
+        ch_txt = tr(ch_ru, ch_en, ch_zh)
         self.lbl_detected_base.setText(
-            f"{tr('Ближайший шаблон:', 'Closest template:')} {ch_txt}"
+            f"{tr('Ближайший шаблон:', 'Closest template:', '最接近的模板：')} {ch_txt}"
         )
         if not self._needs_onboarding:
             det_idx = self.cmb_preset.findData(self.fpa.detected_preset())
@@ -828,9 +857,9 @@ class FpaEditorDialog(Dialog):
                 slot_num = r + 1
                 st = by_slot.get(slot_num)
                 is_on = False if (self._unconfigured or st is None) else bool(st.selectable)
-                name_ru, name_en, desc_ru, desc_en = _SLOT_DESCRIPTIONS[slot_num]
-                title = name_en if get_lang() == "en" else name_ru
-                desc = desc_en if get_lang() == "en" else desc_ru
+                name_ru, name_en, name_zh, desc_ru, desc_en, desc_zh = _SLOT_DESCRIPTIONS[slot_num]
+                title = tr(name_ru, name_en, name_zh)
+                desc = tr(desc_ru, desc_en, desc_zh)
 
                 it_en = QTableWidgetItem(f"  {title}")
                 it_en.setData(Qt.ItemDataRole.UserRole, slot_num)
@@ -841,16 +870,16 @@ class FpaEditorDialog(Dialog):
                 it_desc.setFlags(Qt.ItemFlag.ItemIsEnabled)
 
                 if self._unconfigured:
-                    state_txt = tr("Не в датасете", "Not in dataset")
+                    state_txt = tr("Не в датасете", "Not in dataset", "不在数据集中")
                     state_col = theme.TEXT_MUTED
                 elif is_on and FPA_SLOT_DEFAULTS[slot_num][1] not in self._active_fecs:
-                    state_txt = tr("Нет FEC", "No FEC")  # the gateway does not offer a slot without its licence
+                    state_txt = tr("Нет FEC", "No FEC", "无 FEC")  # the gateway does not offer a slot without its licence
                     state_col = theme.WARN
                 elif is_on:
-                    state_txt = tr("В меню", "In the menu")
+                    state_txt = tr("В меню", "In the menu", "在菜单中")
                     state_col = theme.OK
                 else:
-                    state_txt = tr("Выключен", "Off")
+                    state_txt = tr("Выключен", "Off", "关闭")
                     state_col = theme.TEXT_MUTED
                 it_state = QTableWidgetItem(state_txt)
                 it_state.setFlags(Qt.ItemFlag.ItemIsEnabled)
@@ -885,9 +914,9 @@ class FpaEditorDialog(Dialog):
             self._bootstrap_if_needed(base_preset, custom_slots=(2, slot_i))
             return
         self.fpa.set_slot_enabled(slot_i, en)  # switching a slot back on brings back what it had
-        ch_ru, ch_en = self.fpa.chassis_summary()
+        ch_ru, ch_en, ch_zh = self.fpa.chassis_summary()
         self.lbl_detected_base.setText(
-            f"{tr('Ближайший шаблон:', 'Closest template:')} {ch_en if get_lang() == 'en' else ch_ru}"
+            f"{tr('Ближайший шаблон:', 'Closest template:', '最接近的模板：')} {tr(ch_ru, ch_en, ch_zh)}"
         )
         self._populate_slots_table()
         self._update_ring_previews(from_checks=False, is_mfl=False)
@@ -934,7 +963,7 @@ class FpaEditorDialog(Dialog):
         if list(slots) == self._current_console_ring():  # "all" on the wheel is the MODE button's ring
             matched_key = "all"
         else:
-            for key, pair, _ru, _en in _WHEEL_QUICK_PAIRS:
+            for key, pair, _ru, _en, _zh in _WHEEL_QUICK_PAIRS:
                 if list(slots) == list(pair) or set(slots) == set(pair) and len(slots) == 2:
                     matched_key = key
                     break
@@ -957,7 +986,7 @@ class FpaEditorDialog(Dialog):
         mode = str(self.cmb_mfl_ring_mode.currentData() or "all")
         if mode == "all":
             return c_ring
-        for key, pair, _ru, _en in _WHEEL_QUICK_PAIRS:
+        for key, pair, _ru, _en, _zh in _WHEEL_QUICK_PAIRS:
             if mode == key:
                 return list(pair)
         return self._read_ring_checks(self._mfl_ring_checks, c_ring)
@@ -1048,10 +1077,10 @@ class FpaEditorDialog(Dialog):
         c_slots = self._current_console_ring()
         m_slots = self._current_mfl_ring()
         self.lbl_console_preview.setText(
-            f"{tr('Порядок переключения кнопкой MODE:', 'MODE button cycle:')}  {_format_ring_preview(c_slots)}"
+            f"{tr('Порядок переключения кнопкой MODE:', 'MODE button cycle:', 'MODE 按钮切换顺序：')}  {_format_ring_preview(c_slots)}"
         )
         self.lbl_mfl_preview.setText(
-            f"{tr('Порядок переключения кнопкой на руле:', 'Wheel button cycle:')}  {_format_ring_preview(m_slots)}"
+            f"{tr('Порядок переключения кнопкой на руле:', 'Wheel button cycle:', '方向盘按钮切换顺序：')}  {_format_ring_preview(m_slots)}"
         )
 
     def _commit_buttons_to_fpa(self) -> None:
@@ -1109,31 +1138,33 @@ class FpaEditorDialog(Dialog):
                     self.cmb_btn_mode.setCurrentIndex(self.cmb_btn_mode.findData("both"))
                 QMessageBox.information(
                     self,
-                    tr("Кнопка руля определена", "Steering-wheel button detected"),
+                    tr("Кнопка руля определена", "Steering-wheel button detected", "已检测到方向盘按钮"),
                     tr(
                         f"Распознана кнопка руля: {res.get('label_ru', '')} (код 0x{kc:02X}).\nОна сразу выбрана в настройках.",
                         f"Detected wheel button: {res.get('label_en', '')} (code 0x{kc:02X}).\nIt has been selected automatically.",
+                        f"已识别方向盘按钮：{res.get('label_zh', '')}（代码 0x{kc:02X}）。\n该按钮已自动选中。",
                     ),
                 )
             elif res.get("gra_button_detected"):
                 QMessageBox.warning(
                     self,
-                    tr("Это кнопка круиз-контроля", "Cruise-control button pressed"),
+                    tr("Это кнопка круиз-контроля", "Cruise-control button pressed", "按下了定速巡航按钮"),
                     tr(
                         "Эта кнопка (Travel Assist, SET или RES) относится к круиз-контролю и переключать профили не "
                         "может.",
                         "This button (Travel Assist, SET or RES) belongs to cruise control and cannot switch profiles.",
+                        "该按钮（Travel Assist、SET 或 RES）属于定速巡航，无法切换模式。",
                     ),
                 )
             else:
                 QMessageBox.information(
                     self,
-                    tr("Нажатие не обнаружено", "No button press detected"),
-                    tr("За время ожидания нажатие кнопки на руле не зафиксировано.", "No steering-wheel button press was detected within the timeout."),
+                    tr("Нажатие не обнаружено", "No button press detected", "未检测到按压"),
+                    tr("За время ожидания нажатие кнопки на руле не зафиксировано.", "No steering-wheel button press was detected within the timeout.", "在等待时间内未检测到方向盘按钮按压。"),
                 )
 
         self._run_live(
-            tr("Определение кнопки руля по CAN", "Detecting steering-wheel button over CAN"),
+            tr("Определение кнопки руля по CAN", "Detecting steering-wheel button over CAN", "通过 CAN 检测方向盘按钮"),
             lambda rep: can_learn_mfl_button(port, interface=iface, reporter=rep),
             apply_res,
         )
@@ -1148,8 +1179,8 @@ class FpaEditorDialog(Dialog):
         if self._runner is None or not self._runner.run_task(title, fn, on_success=to_dialog):
             QMessageBox.information(
                 self,
-                tr("Адаптер занят", "Adapter busy"),
-                tr("Дождитесь окончания текущей операции с блоком.", "Wait until the current ECU operation finishes."),
+                tr("Адаптер занят", "Adapter busy", "适配器忙"),
+                tr("Дождитесь окончания текущей операции с блоком.", "Wait until the current ECU operation finishes.", "请等待当前控制单元操作完成。"),
             )
 
     def _on_runner_busy(self, _busy: bool) -> None:
@@ -1173,8 +1204,8 @@ class FpaEditorDialog(Dialog):
             for c, st in enumerate(act_slots):
                 cmb = QComboBox()
                 cur_m = self.fpa.get_target_mode(st.slot, lidx)
-                for mval, (mru, men) in FPA_TARGET_MODE_NAMES.items():
-                    cmb.addItem(men if get_lang() == "en" else mru, mval)
+                for mval, (mru, men, mzh) in FPA_TARGET_MODE_NAMES.items():
+                    cmb.addItem(tr(mru, men, mzh), mval)
                 if cmb.findData(cur_m) < 0:
                     cmb.addItem(f"{cur_m}", cur_m)
                 cmb.setCurrentIndex(max(0, cmb.findData(cur_m)))
@@ -1230,23 +1261,23 @@ class FpaEditorDialog(Dialog):
         rows_data: list[tuple[str, str, str, str]] = []
         for g in rep.master_gates:
             st_txt = (
-                tr("Согласовано", "Matched")
+                tr("Согласовано", "Matched", "已匹配")
                 if g.consistent and g.coding_enabled is not None
                 else (
-                    tr("Нужно поправить кодировку", "Coding mismatch")
+                    tr("Нужно поправить кодировку", "Coding mismatch", "编码不匹配")
                     if not g.consistent
-                    else (tr("Включено в параметрии", "Present in dataset") if g.dataset_present else tr("Не используется", "Empty"))
+                    else (tr("Включено в параметрии", "Present in dataset", "存在于数据集中") if g.dataset_present else tr("Не используется", "Empty", "空"))
                 )
             )
             tone = theme.OK if (g.consistent and g.coding_enabled is not None) else (theme.WARN if not g.consistent else theme.TEXT_MUTED)
             rows_data.append((g.code, f"Byte {g.byte_idx}, Bit {g.bit_idx}", st_txt, tone))
 
         for p in rep.paco_ecus:
-            bit_txt = f"Byte {p.coding_byte}, Bit {p.coding_bit}" if p.coding_byte is not None else tr("Постоянно", "Always")
+            bit_txt = f"Byte {p.coding_byte}, Bit {p.coding_bit}" if p.coding_byte is not None else tr("Постоянно", "Always", "始终")
             st_txt = (
-                tr("Включён в кодировке", "Enabled in coding")
+                tr("Включён в кодировке", "Enabled in coding", "在编码中启用")
                 if p.coding_enabled is True
-                else (tr("Выключен в кодировке", "Off in coding") if p.coding_enabled is False else tr("Участник профилей", "Profile participant"))
+                else (tr("Выключен в кодировке", "Off in coding", "在编码中关闭") if p.coding_enabled is False else tr("Участник профилей", "Profile participant", "模式参与者"))
             )
             tone = theme.OK if p.coding_enabled is True else theme.TEXT_MUTED
             rows_data.append((p.sg_name, bit_txt, st_txt, tone))
@@ -1271,7 +1302,7 @@ class FpaEditorDialog(Dialog):
             self.ed_coding.setText(str(res.get("coding_hex", "")))
 
         self._run_live(
-            tr("Чтение кодировки блока", "Reading ECU coding"),
+            tr("Чтение кодировки блока", "Reading ECU coding", "读取控制单元编码"),
             lambda rep: can_read_gateway_coding(port, interface=iface, reporter=rep),
             done,
         )
@@ -1281,10 +1312,11 @@ class FpaEditorDialog(Dialog):
         if c30 is None:
             QMessageBox.information(
                 self,
-                tr("Сначала прочитайте кодировку", "Read coding first"),
+                tr("Сначала прочитайте кодировку", "Read coding first", "请先读取编码"),
                 tr(
                     "Нажмите «Прочитать из блока по CAN» или вставьте 30 байт кодировки (60 hex-символов).",
                     "Click “Read from ECU over CAN” first or paste the 30-byte coding (60 hex characters).",
+                    "请先点击“通过 CAN 从控制单元读取”，或粘贴 30 字节编码（60 个十六进制字符）。",
                 ),
             )
             return
@@ -1297,15 +1329,15 @@ class FpaEditorDialog(Dialog):
         if c30 is None:
             QMessageBox.warning(
                 self,
-                tr("Проверьте кодировку", "Invalid coding length"),
-                tr("Длинная кодировка должна содержать ровно 30 байт (60 hex-символов).", "Coding must be 30 bytes (60 hex characters)."),
+                tr("Проверьте кодировку", "Invalid coding length", "编码长度无效"),
+                tr("Длинная кодировка должна содержать ровно 30 байт (60 hex-символов).", "Coding must be 30 bytes (60 hex characters).", "长编码必须恰好为 30 字节（60 个十六进制字符）。"),
             )
             return
         if self._conn is None or not ensure_ready(self._conn, self):
             return
         port, iface = self._conn.port, self._conn.interface
         self._run_live(
-            tr("Запись кодировки в блок", "Writing coding to ECU"),
+            tr("Запись кодировки в блок", "Writing coding to ECU", "将编码写入控制单元"),
             lambda rep: can_write_gateway_coding(port, c30, interface=iface, reporter=rep),
         )
 
@@ -1316,8 +1348,8 @@ class FpaEditorDialog(Dialog):
         except ValueError as exc:  # no room for the knob or the buttons: say so and stay in the dialog
             knob_refused = self.chk_knob.isChecked() and not self.fpa.has_knob  # the knob goes in before the buttons
             self.fpa = before  # the knob may already be in: nothing of the failed attempt stays
-            title = (tr("Шайба 4MOTION Active Control", "4MOTION Active Control knob") if knob_refused
-                     else tr("Настройки не сохранены", "Settings not saved"))
+            title = (tr("Шайба 4MOTION Active Control", "4MOTION Active Control knob", "4MOTION Active Control 旋钮") if knob_refused
+                     else tr("Настройки не сохранены", "Settings not saved", "设置未保存"))
             QMessageBox.warning(self, title, str(exc))
             return
         self.accept()
@@ -1339,10 +1371,11 @@ class MkeEditorDialog(Dialog):
     def __init__(self, df: bytes, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Контроль усталости водителя (MKE)", "Driver Alert System (MKE)"),
+            tr("Контроль усталости водителя (MKE)", "Driver Alert System (MKE)", "驾驶员疲劳监测 (MKE)"),
             tr(
                 "Система следит за подруливаниями и предлагает перерыв, если замечает признаки усталости.",
                 "The system watches steering corrections and suggests a break when it sees signs of fatigue.",
+                "该系统监测转向修正，并在察觉到疲劳迹象时建议休息。",
             ),
             width=660,
         )
@@ -1360,30 +1393,31 @@ class MkeEditorDialog(Dialog):
                     "настройки».",
                     "The dump has no MKE section. The factory values are shown below; they go into the dump with "
                     "“Save settings”.",
+                    "转储中没有 MKE 分区。下面显示的是出厂值；点击“保存设置”后它们会写入转储。",
                 )
             )
             self.body.addWidget(empty_banner)
 
         self.body.addLayout(
             row(
-                button(tr("Восстановить заводские настройки", "Restore factory defaults"), "GhostBtn", slot=lambda: self._load_preset("86")),
-                button(tr("Пресет новых блоков", "Newer ECU preset"), "GhostBtn", slot=lambda: self._load_preset("84")),
+                button(tr("Восстановить заводские настройки", "Restore factory defaults", "恢复出厂设置"), "GhostBtn", slot=lambda: self._load_preset("86")),
+                button(tr("Пресет новых блоков", "Newer ECU preset", "较新控制单元预设"), "GhostBtn", slot=lambda: self._load_preset("84")),
                 1,
-                button(tr("Удалить из параметрии", "Remove from dataset"), "DangerBtn", slot=self._erase_and_accept),
+                button(tr("Удалить из параметрии", "Remove from dataset", "从数据集中移除"), "DangerBtn", slot=self._erase_and_accept),
             )
         )
 
         self._spins: dict[str, QSpinBox] = {}
         sec_main = Section()
-        sec_main.set_text(tr("Основные параметры работы", "Main operating parameters"))
+        sec_main.set_text(tr("Основные параметры работы", "Main operating parameters", "主要运行参数"))
         grid_main = QGridLayout()
         grid_main.setHorizontalSpacing(16)
         grid_main.setVerticalSpacing(10)
         main_fields = (
-            ("speed_on_kmh", tr("Нижний порог скорости (штатно 60 км/ч):", "Minimum operating speed (stock 60 km/h):")),
-            ("speed_off_high_kmh", tr("Верхний предел скорости (штатно 200 км/ч):", "Maximum operating speed (stock 200 km/h):")),
-            ("min_drive_min", tr("Начинать оценку через, мин поездки:", "Start evaluation after driving (min):")),
-            ("full_rest_min", tr("Длительность стоянки для сброса усталости, мин:", "Stop duration to reset fatigue (min):")),
+            ("speed_on_kmh", tr("Нижний порог скорости (штатно 60 км/ч):", "Minimum operating speed (stock 60 km/h):", "最低运行速度（出厂 60 km/h）：")),
+            ("speed_off_high_kmh", tr("Верхний предел скорости (штатно 200 км/ч):", "Maximum operating speed (stock 200 km/h):", "最高运行速度（出厂 200 km/h）：")),
+            ("min_drive_min", tr("Начинать оценку через, мин поездки:", "Start evaluation after driving (min):", "行驶多少分钟后开始评估：")),
+            ("full_rest_min", tr("Длительность стоянки для сброса усталости, мин:", "Stop duration to reset fatigue (min):", "停车多久后重置疲劳（分钟）：")),
         )
         for r, (attr, label) in enumerate(main_fields):
             spn = QSpinBox()
@@ -1397,7 +1431,7 @@ class MkeEditorDialog(Dialog):
         self.body.addWidget(sec_main)
 
         # Collapsible expert settings
-        self.btn_adv = button(tr("Дополнительные настройки чувствительности ▸", "Advanced sensitivity settings ▸"), "GhostBtn")
+        self.btn_adv = button(tr("Дополнительные настройки чувствительности ▸", "Advanced sensitivity settings ▸", "高级灵敏度设置 ▸"), "GhostBtn")
         self.btn_adv.setCheckable(True)
         self.pnl_adv = Section()
         self.pnl_adv.hide_head()
@@ -1405,15 +1439,15 @@ class MkeEditorDialog(Dialog):
         grid_adv.setHorizontalSpacing(16)
         grid_adv.setVerticalSpacing(8)
         adv_fields = (
-            ("speed_hyst_low_kmh", tr("Запас скорости при включении, км/ч:", "Activation speed hysteresis (km/h):")),
-            ("speed_hyst_high_kmh", tr("Задержка включения при наборе скорости, сек:", "Speed qualification delay (s):")),
-            ("speed_urban_reset_kmh", tr("Порог городского движения, км/ч:", "Urban driving threshold (km/h):")),
-            ("primary_window_min", tr("Шаг накопления оценки, мин:", "Accumulation step window (min):")),
-            ("short_break_min", tr("Короткая пауза, мин:", "Short break threshold (min):")),
-            ("suppress_stage1_min", tr("Пауза перед 1-м повтором сигнала, мин:", "Repeat suppression stage 1 (min):")),
-            ("suppress_stage2_min", tr("Пауза перед 2-м повтором сигнала, мин:", "Repeat suppression stage 2 (min):")),
-            ("stage1_threshold", tr("Порог 1-го предупреждения:", "Stage 1 alert threshold:")),
-            ("stage2_threshold", tr("Порог повторного предупреждения:", "Stage 2 alert threshold:")),
+            ("speed_hyst_low_kmh", tr("Запас скорости при включении, км/ч:", "Activation speed hysteresis (km/h):", "激活速度迟滞（km/h）：")),
+            ("speed_hyst_high_kmh", tr("Задержка включения при наборе скорости, сек:", "Speed qualification delay (s):", "速度确认延迟（秒）：")),
+            ("speed_urban_reset_kmh", tr("Порог городского движения, км/ч:", "Urban driving threshold (km/h):", "城市行驶阈值（km/h）：")),
+            ("primary_window_min", tr("Шаг накопления оценки, мин:", "Accumulation step window (min):", "评估累积步长（分钟）：")),
+            ("short_break_min", tr("Короткая пауза, мин:", "Short break threshold (min):", "短休息阈值（分钟）：")),
+            ("suppress_stage1_min", tr("Пауза перед 1-м повтором сигнала, мин:", "Repeat suppression stage 1 (min):", "第一次重复提示前的间隔（分钟）：")),
+            ("suppress_stage2_min", tr("Пауза перед 2-м повтором сигнала, мин:", "Repeat suppression stage 2 (min):", "第二次重复提示前的间隔（分钟）：")),
+            ("stage1_threshold", tr("Порог 1-го предупреждения:", "Stage 1 alert threshold:", "第一阶段警报阈值：")),
+            ("stage2_threshold", tr("Порог повторного предупреждения:", "Stage 2 alert threshold:", "第二阶段警报阈值：")),
         )
         for idx, (attr, label) in enumerate(adv_fields):
             r, c = divmod(idx, 2)
@@ -1431,15 +1465,15 @@ class MkeEditorDialog(Dialog):
         self.body.addLayout(row(self.btn_adv))
         self.body.addWidget(self.pnl_adv)
 
-        self.btn_ok = button(tr("Сохранить настройки", "Save settings"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Сохранить настройки", "Save settings", "保存设置"), "PrimaryBtn", slot=self.accept)
         self.finish(ok=self.btn_ok)
 
     def _toggle_adv(self, on: bool) -> None:
         self.pnl_adv.setVisible(on)
         self.btn_adv.setText(
-            tr("Дополнительные настройки чувствительности ▾", "Advanced sensitivity settings ▾")
+            tr("Дополнительные настройки чувствительности ▾", "Advanced sensitivity settings ▾", "高级灵敏度设置 ▾")
             if on
-            else tr("Дополнительные настройки чувствительности ▸", "Advanced sensitivity settings ▸")
+            else tr("Дополнительные настройки чувствительности ▸", "Advanced sensitivity settings ▸", "高级灵敏度设置 ▸")
         )
         self.fit_height()
 
@@ -1471,11 +1505,12 @@ class SsaEditorDialog(Dialog):
     def __init__(self, df: bytes, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Уведомления Старт-Стоп на магнитоле", "Start-Stop Messages on Head Unit"),
+            tr("Уведомления Старт-Стоп на магнитоле", "Start-Stop Messages on Head Unit", "主机上的起停消息"),
             tr(
                 "Как магнитола (раздел «Состояние автомобиля») показывает, почему Старт-Стоп не заглушил "
                 "двигатель или запустил его.",
                 "How the head unit (Vehicle status) shows why Start-Stop did not stop the engine or restarted it.",
+                "主机（车辆状态栏目）如何显示起停系统未关闭发动机或重新启动发动机的原因。",
             ),
             width=660,
         )
@@ -1492,6 +1527,7 @@ class SsaEditorDialog(Dialog):
                     "«Сохранить настройки».",
                     "The dump has no Start-Stop messages section. The factory values are shown below; they go into "
                     "the dump with “Save settings”.",
+                    "转储中没有起停消息分区。下面显示的是出厂值；点击“保存设置”后它们会写入转储。",
                 )
             )
             self.body.addWidget(empty_banner)
@@ -1504,27 +1540,28 @@ class SsaEditorDialog(Dialog):
                 " после выключения зажигания, включите память в разделе «Профили вождения и кнопки».",
                 "Only the on-screen messages are set here. To keep Start-Stop and the gearbox mode after the "
                 "ignition is off, enable the memory in “Driving profiles & buttons”.",
+                "这里只设置屏幕上的消息。要让起停和变速箱模式在熄火后不重置，请在“驾驶模式与按钮”分区中启用记忆。",
             )
         )
         self.body.addWidget(note)
 
         self.body.addLayout(
             row(
-                button(tr("Восстановить заводские настройки", "Restore factory defaults"), "GhostBtn", slot=self._load_stock),
+                button(tr("Восстановить заводские настройки", "Restore factory defaults", "恢复出厂设置"), "GhostBtn", slot=self._load_stock),
                 1,
-                button(tr("Удалить из параметрии", "Remove from dataset"), "DangerBtn", slot=self._erase_and_accept),
+                button(tr("Удалить из параметрии", "Remove from dataset", "从数据集中移除"), "DangerBtn", slot=self._erase_and_accept),
             )
         )
 
         sec = Section()
-        sec.set_text(tr("Отображение на экране магнитолы", "Head-unit display options"))
+        sec.set_text(tr("Отображение на экране магнитолы", "Head-unit display options", "主机显示选项"))
         grid = QGridLayout()
         grid.setHorizontalSpacing(14)
         grid.setVerticalSpacing(10)
 
         self.cmb_mode = QComboBox()
-        for val, ru, en in SSA_OUTPUT_MODES:
-            self.cmb_mode.addItem(en if get_lang() == "en" else ru, val)
+        for val, ru, en, zh in SSA_OUTPUT_MODES:
+            self.cmb_mode.addItem(tr(ru, en, zh), val)
         self.cmb_mode.setCurrentIndex(max(0, self.cmb_mode.findData(self._cfg.bap_output_mode)))
 
         self.spn_delay = QSpinBox()
@@ -1540,19 +1577,19 @@ class SsaEditorDialog(Dialog):
         self.spn_speed.setRange(0, 65535)
         self.spn_speed.setValue(self._cfg.summary_suppress_kmh)
 
-        grid.addWidget(QLabel(tr("Режим показа сообщений:", "Message display mode:")), 0, 0)
+        grid.addWidget(QLabel(tr("Режим показа сообщений:", "Message display mode:", "消息显示模式：")), 0, 0)
         grid.addWidget(self.cmb_mode, 0, 1)
-        grid.addWidget(QLabel(tr("Задержка подсказки после остановки, мс:", "Notice delay after stopping (ms):")), 1, 0)
+        grid.addWidget(QLabel(tr("Задержка подсказки после остановки, мс:", "Notice delay after stopping (ms):", "停车后提示延迟（毫秒）：")), 1, 0)
         grid.addWidget(self.spn_delay, 1, 1)
-        grid.addWidget(QLabel(tr("Скрывать статус при скорости выше, км/ч:", "Hide status above speed (km/h):")), 2, 0)
+        grid.addWidget(QLabel(tr("Скрывать статус при скорости выше, км/ч:", "Hide status above speed (km/h):", "高于此速度时隐藏状态（km/h）：")), 2, 0)
         grid.addWidget(self.spn_speed, 2, 1)
-        grid.addWidget(QLabel(tr("Автосброс текста ошибки, сек (0 = выкл):", "Auto-clear fault notice, s (0 = off):")), 3, 0)
+        grid.addWidget(QLabel(tr("Автосброс текста ошибки, сек (0 = выкл):", "Auto-clear fault notice, s (0 = off):", "自动清除故障提示（秒，0 = 关闭）：")), 3, 0)
         grid.addWidget(self.spn_fault, 3, 1)
         grid.setColumnStretch(1, 1)
         sec.body.addLayout(grid)
         self.body.addWidget(sec)
 
-        self.btn_ok = button(tr("Сохранить настройки", "Save settings"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Сохранить настройки", "Save settings", "保存设置"), "PrimaryBtn", slot=self.accept)
         self.finish(ok=self.btn_ok)
 
     def _load_stock(self) -> None:
@@ -1587,12 +1624,13 @@ class BemEditorDialog(Dialog):
     def __init__(self, df: bytes, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Генератор 14В и умная зарядка (BEM)", "14V Alternator & Smart Charging (BEM)"),
+            tr("Генератор 14В и умная зарядка (BEM)", "14V Alternator & Smart Charging (BEM)", "14V 发电机与智能充电 (BEM)"),
             tr(
                 "После замены генератора (например, на 180 или 250 А вместо 140 А) выберите его модель из "
                 "заводского каталога: по ней шлюз рассчитывает нагрузку и рекуперацию.",
                 "After an alternator change (to 180 or 250 A instead of 140 A, say) pick its model from the "
                 "factory catalogue: the gateway works out load and recuperation from it.",
+                "更换发电机后（例如从 140 A 换成 180 或 250 A），请从出厂目录中选择其型号：网关据此计算负载和能量回收。",
             ),
             width=820,
         )
@@ -1608,26 +1646,27 @@ class BemEditorDialog(Dialog):
                     "«Сохранить настройки».",
                     "The dump's 14 V alternator catalogue (BEM) is empty. The factory set is shown below; it goes "
                     "into the dump with “Save settings”.",
+                    "转储中的 14 V 发电机目录（BEM）为空。下面显示的是出厂组合；点击“保存设置”后它们会写入转储。",
                 )
             )
             self.body.addWidget(empty_banner)
 
         self.body.addLayout(
             row(
-                button(tr("Заводской набор (новые блоки)", "Factory set (newer ECUs)"), "GhostBtn", slot=lambda: self._load_preset("2222")),
-                button(tr("Заводской набор (ранние блоки)", "Factory set (earlier ECUs)"), "GhostBtn", slot=lambda: self._load_preset("0101")),
+                button(tr("Заводской набор (новые блоки)", "Factory set (newer ECUs)", "出厂组合（较新控制单元）"), "GhostBtn", slot=lambda: self._load_preset("2222")),
+                button(tr("Заводской набор (ранние блоки)", "Factory set (earlier ECUs)", "出厂组合（较早控制单元）"), "GhostBtn", slot=lambda: self._load_preset("0101")),
                 1,
-                button(tr("Очистить весь раздел", "Clear entire section"), "DangerBtn", slot=self._erase_all),
+                button(tr("Очистить весь раздел", "Clear entire section", "清空整个分区"), "DangerBtn", slot=self._erase_all),
             )
         )
 
         self.tbl = QTableWidget(9, 4)
         self.tbl.setHorizontalHeaderLabels(
             [
-                tr("Ячейка", "Slot"),
-                tr("Производитель", "Supplier"),
-                tr("Модель генератора", "Alternator Model"),
-                tr("Макс. мощность", "Max Power"),
+                tr("Ячейка", "Slot", "槽位"),
+                tr("Производитель", "Supplier", "供应商"),
+                tr("Модель генератора", "Alternator Model", "发电机型号"),
+                tr("Макс. мощность", "Max Power", "最大功率"),
             ]
         )
         self.tbl.verticalHeader().setVisible(False)
@@ -1647,18 +1686,18 @@ class BemEditorDialog(Dialog):
         self.body.addWidget(self.tbl)
 
         sec_pick = Section()
-        sec_pick.set_text(tr("Установить модель генератора в выбранную ячейку", "Assign alternator model to slot"))
+        sec_pick.set_text(tr("Установить модель генератора в выбранную ячейку", "Assign alternator model to slot", "将发电机型号分配给槽位"))
         self.cmb_slot = QComboBox()
         for i in range(9):
-            self.cmb_slot.addItem(tr(f"Ячейка #{i + 1}", f"Slot #{i + 1}"), i)
+            self.cmb_slot.addItem(tr(f"Ячейка #{i + 1}", f"Slot #{i + 1}", f"槽位 #{i + 1}"), i)
         self.cmb_rom = QComboBox()
         for item in ROM_BEM_CATALOG:
-            ridx, _sup, _cls, _amps, _rm, _ud, _pm, ru, en = item
-            self.cmb_rom.addItem(en if get_lang() == "en" else ru, ridx)
-        self.cmb_rom.addItem(tr("— Очистить ячейку —", "— Clear slot —"), None)
+            ridx, _sup, _cls, _amps, _rm, _ud, _pm, ru, en, zh = item
+            self.cmb_rom.addItem(tr(ru, en, zh), ridx)
+        self.cmb_rom.addItem(tr("— Очистить ячейку —", "— Clear slot —", "— 清空槽位 —"), None)
         self.cmb_rom.currentIndexChanged.connect(self._on_rom_model_picked)
 
-        self.btn_apply_slot = button(tr("Установить в ячейку", "Assign to slot"), slot=self._assign_slot)
+        self.btn_apply_slot = button(tr("Установить в ячейку", "Assign to slot", "分配到槽位"), slot=self._assign_slot)
         pick_row = QHBoxLayout()
         pick_row.setSpacing(10)
         pick_row.addWidget(self.cmb_slot)
@@ -1667,7 +1706,7 @@ class BemEditorDialog(Dialog):
         sec_pick.body.addLayout(pick_row)
 
         # Hidden-by-default manual LIN class/supplier override
-        self.btn_adv = button(tr("Ручной код LIN-класса (для специалистов) ▸", "Manual LIN class override ▸"), "GhostBtn")
+        self.btn_adv = button(tr("Ручной код LIN-класса (для специалистов) ▸", "Manual LIN class override ▸", "手动 LIN 类别代码（高级）▸"), "GhostBtn")
         self.btn_adv.setCheckable(True)
         self.pnl_adv = QWidget()
         adv_lay = QHBoxLayout(self.pnl_adv)
@@ -1678,11 +1717,11 @@ class BemEditorDialog(Dialog):
         self.spn_cls.setDisplayIntegerBase(16)
         self.spn_cls.setPrefix("0x")
         self.cmb_sup = QComboBox()
-        for sid, (sru, sen) in BEM_SUPPLIER_NAMES.items():
-            self.cmb_sup.addItem(sen if get_lang() == "en" else sru, sid)
-        adv_lay.addWidget(QLabel(tr("Класс LIN:", "LIN Class:")))
+        for sid, (sru, sen, szh) in BEM_SUPPLIER_NAMES.items():
+            self.cmb_sup.addItem(tr(sru, sen, szh), sid)
+        adv_lay.addWidget(QLabel(tr("Класс LIN:", "LIN Class:", "LIN 类别：")))
         adv_lay.addWidget(self.spn_cls)
-        adv_lay.addWidget(QLabel(tr("Поставщик:", "Supplier:")))
+        adv_lay.addWidget(QLabel(tr("Поставщик:", "Supplier:", "供应商：")))
         adv_lay.addWidget(self.cmb_sup)
         adv_lay.addStretch(1)
         self.pnl_adv.setVisible(False)
@@ -1691,7 +1730,7 @@ class BemEditorDialog(Dialog):
         sec_pick.body.addWidget(self.pnl_adv)
         self.body.addWidget(sec_pick)
 
-        self.btn_ok = button(tr("Сохранить настройки", "Save settings"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Сохранить настройки", "Save settings", "保存设置"), "PrimaryBtn", slot=self.accept)
         self.finish(ok=self.btn_ok)
         self._on_rom_model_picked(0)
         self._refresh_table()
@@ -1738,7 +1777,7 @@ class BemEditorDialog(Dialog):
             vals = (
                 f"  #{s.slot_idx + 1}",
                 "—" if s.empty else s.supplier_name,
-                tr("— свободна —", "— empty —") if s.empty else s.matched_label,
+                tr("— свободна —", "— empty —", "— 空 —") if s.empty else s.matched_label,
                 "—" if s.empty else f"{s.p_max_w} W",
             )
             for c, txt in enumerate(vals):
@@ -1764,12 +1803,13 @@ class ZdcPassportBlocksDialog(Dialog):
     def __init__(self, df: bytes, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Паспорт датасета и перенос разделов", "Dataset Passport & Section Transfer"),
+            tr("Паспорт датасета и перенос разделов", "Dataset Passport & Section Transfer", "数据集护照与分区迁移"),
             tr(
                 "Номер и версия датасета, которые показывают ODIS и VCDS, а также сохранение и перенос отдельных "
                 "разделов параметрии из другого дампа. Ключи CP и SWaP не затрагиваются.",
                 "The dataset number and version that ODIS and VCDS show, and saving or transferring single "
                 "dataset sections from another dump. The CP and SWaP keys are not touched.",
+                "ODIS 和 VCDS 显示的数据集编号与版本，以及从另一份转储保存或迁移单个参数化分区。不会触及 CP 和 SWaP 密钥。",
             ),
             width=820,
         )
@@ -1777,7 +1817,7 @@ class ZdcPassportBlocksDialog(Dialog):
         pp = parse_zdc_passport(self._df)
 
         sec_pp = Section()
-        sec_pp.set_text(tr("Идентификация датасета в диагностике", "Dataset diagnostic identification"))
+        sec_pp.set_text(tr("Идентификация датасета в диагностике", "Dataset diagnostic identification", "数据集诊断标识"))
         grid = QGridLayout()
         grid.setHorizontalSpacing(14)
         grid.setVerticalSpacing(10)
@@ -1790,34 +1830,34 @@ class ZdcPassportBlocksDialog(Dialog):
         init_equip = "" if pp.equip_bytes == b"\xff" * 12 else (pp.equip_ascii or pp.equip_hex)
         self.ed_equip = QLineEdit(init_equip)
         self.ed_equip.setFont(mono_font(12))
-        self.ed_equip.setPlaceholderText(tr("Необязательно", "Optional"))
+        self.ed_equip.setPlaceholderText(tr("Необязательно", "Optional", "可选"))
 
-        grid.addWidget(QLabel(tr("Номер датасета (F1A0):", "Dataset number (F1A0):")), 0, 0)
+        grid.addWidget(QLabel(tr("Номер датасета (F1A0):", "Dataset number (F1A0):", "数据集编号 (F1A0)：")), 0, 0)
         grid.addWidget(self.ed_pn, 0, 1)
-        grid.addWidget(QLabel(tr("Версия (F1A1):", "Version (F1A1):")), 0, 2)
+        grid.addWidget(QLabel(tr("Версия (F1A1):", "Version (F1A1):", "版本 (F1A1)：")), 0, 2)
         grid.addWidget(self.ed_ver, 0, 3)
-        grid.addWidget(QLabel(tr("Код комплектации (F1A4):", "Equipment code (F1A4):")), 1, 0)
+        grid.addWidget(QLabel(tr("Код комплектации (F1A4):", "Equipment code (F1A4):", "装备代码 (F1A4)：")), 1, 0)
         grid.addWidget(self.ed_equip, 1, 1, 1, 3)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(3, 1)
         sec_pp.body.addLayout(grid)
 
         self.chk_clean_pads = QCheckBox(
-            tr("Очистить служебные поля паспорта и пересчитать контрольную сумму", "Clean unused passport bytes & recalculate checksum")
+            tr("Очистить служебные поля паспорта и пересчитать контрольную сумму", "Clean unused passport bytes & recalculate checksum", "清空护照未用字节并重新计算校验和")
         )
         self.chk_clean_pads.setChecked(True)
         sec_pp.body.addWidget(self.chk_clean_pads)
         self.body.addWidget(sec_pp)
 
         sec_blks = Section()
-        sec_blks.set_text(tr("Разделы параметрии в DataFlash", "Parameterization sections in DataFlash"))
+        sec_blks.set_text(tr("Разделы параметрии в DataFlash", "Parameterization sections in DataFlash", "DataFlash 中的参数化分区"))
         self.tbl = QTableWidget(7, 4)
         self.tbl.setHorizontalHeaderLabels(
             [
-                tr("Раздел", "Section"),
-                tr("Назначение", "Subsystem"),
-                tr("Размер", "Size"),
-                tr("Состояние", "State"),
+                tr("Раздел", "Section", "分区"),
+                tr("Назначение", "Subsystem", "子系统"),
+                tr("Размер", "Size", "大小"),
+                tr("Состояние", "State", "状态"),
             ]
         )
         self.tbl.verticalHeader().setVisible(False)
@@ -1837,15 +1877,15 @@ class ZdcPassportBlocksDialog(Dialog):
 
         sec_blks.body.addLayout(
             row(
-                button(tr("Сохранить раздел в .bin…", "Export section .bin…"), "GhostBtn", slot=self._export_selected),
-                button(tr("Загрузить из файла или донорского дампа…", "Import from .bin or donor dump…"), slot=self._import_selected),
+                button(tr("Сохранить раздел в .bin…", "Export section .bin…", "导出分区为 .bin…"), "GhostBtn", slot=self._export_selected),
+                button(tr("Загрузить из файла или донорского дампа…", "Import from .bin or donor dump…", "从 .bin 或供体转储导入…"), slot=self._import_selected),
                 1,
-                button(tr("Очистить раздел", "Clear section"), "DangerBtn", slot=self._erase_selected),
+                button(tr("Очистить раздел", "Clear section", "清空分区"), "DangerBtn", slot=self._erase_selected),
             )
         )
         self.body.addWidget(sec_blks)
 
-        self.btn_ok = button(tr("Сохранить", "Save"), "PrimaryBtn", slot=self._on_accept)
+        self.btn_ok = button(tr("Сохранить", "Save", "保存"), "PrimaryBtn", slot=self._on_accept)
         self.finish(ok=self.btn_ok)
         self.tbl.selectRow(4)
         self._refresh_blocks_table()
@@ -1858,14 +1898,14 @@ class ZdcPassportBlocksDialog(Dialog):
         ds = analyze_dflash_datasets(self._df)
         for b in ds.blocks:
             if b.empty:
-                st = tr("не заполнен", "empty")
+                st = tr("не заполнен", "empty", "空")
                 col = theme.TEXT_MUTED
             elif b.crc_ok:
                 tag = f"({b.version_tag}) " if b.version_tag else ""
-                st = tr(f"✓ записан {tag}", f"✓ valid {tag}").strip()
+                st = tr(f"✓ записан {tag}", f"✓ valid {tag}", f"✓ 已写入 {tag}").strip()
                 col = theme.OK
             else:
-                st = tr("✗ ошибка контрольной суммы", "✗ checksum error")
+                st = tr("✗ ошибка контрольной суммы", "✗ checksum error", "✗ 校验和错误")
                 col = theme.ERR
             cells = (
                 f"  ZDC #{b.idx}",
@@ -1887,7 +1927,7 @@ class ZdcPassportBlocksDialog(Dialog):
         raw = export_zdc_block(self._df, idx)
         dest, _ = QFileDialog.getSaveFileName(
             self,
-            tr(f"Сохранить раздел ZDC #{idx}", f"Save section ZDC #{idx}"),
+            tr(f"Сохранить раздел ZDC #{idx}", f"Save section ZDC #{idx}", f"保存分区 ZDC #{idx}"),
             f"ZDC_block_{idx}.bin",
             "Binary (*.bin);;All files (*)",
         )
@@ -1901,6 +1941,7 @@ class ZdcPassportBlocksDialog(Dialog):
             tr(
                 f"Выберите файл раздела ZDC #{idx} (.bin) или полный дамп-донор DataFlash (64 КБ)",
                 f"Choose ZDC #{idx} block (.bin) or a 64 KB donor DataFlash dump",
+                f"选择 ZDC #{idx} 分区文件（.bin）或完整的 64 KB DataFlash 供体转储",
             ),
             "",
             "Binary (*.bin);;All files (*)",
@@ -1912,7 +1953,7 @@ class ZdcPassportBlocksDialog(Dialog):
             self._df = import_zdc_block(self._df, idx, blob, fix_crc=True)
             self._refresh_blocks_table()
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, tr("Ошибка импорта", "Import error"), str(exc))
+            QMessageBox.critical(self, tr("Ошибка импорта", "Import error", "导入错误"), str(exc))
 
     def _erase_selected(self) -> None:
         idx = self._selected_idx()
@@ -1929,7 +1970,7 @@ class ZdcPassportBlocksDialog(Dialog):
                 clean_pads=self.chk_clean_pads.isChecked(),
             )
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, tr("Проверьте паспорт датасета", "Check Dataset Passport"), str(exc))
+            QMessageBox.warning(self, tr("Проверьте паспорт датасета", "Check Dataset Passport", "请检查数据集护照"), str(exc))
             return
         self.accept()
 

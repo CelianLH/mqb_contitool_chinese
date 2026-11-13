@@ -1,4 +1,4 @@
-"""Bilingual RU / EN localization state with live UI observer support."""
+"""Trilingual RU / EN / ZH localization state with live UI observer support."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ _LISTENERS: list[Callable[[str], None] | weakref.WeakMethod] = []
 
 
 def normalize_lang_code(raw: str | None) -> str | None:
-    """Normalize arbitrary language code strings into 'ru' or 'en'."""
+    """Normalize arbitrary language code strings into 'ru', 'en' or 'zh'."""
     if raw is None:
         return None
     val = raw.strip().lower()
@@ -20,15 +20,19 @@ def normalize_lang_code(raw: str | None) -> str | None:
         return "ru"
     if val in ("en", "eng", "english", "англ", "2"):
         return "en"
+    if val in ("zh", "zho", "chi", "chinese", "cn", "кит", "中文", "汉语", "3"):
+        return "zh"
     return None
 
 
 def set_lang(lang: str) -> str:
-    """Set active language ('ru' or 'en') and notify registered UI listeners."""
+    """Set active language ('ru', 'en' or 'zh') and notify registered UI listeners."""
     global _LANG
     norm = normalize_lang_code(lang)
-    if norm not in ("ru", "en"):
-        raise ValueError(f"Unsupported language / Неподдерживаемый язык: {lang!r} (use 'ru' or 'en')")
+    if norm not in ("ru", "en", "zh"):
+        raise ValueError(
+            f"Unsupported language / Неподдерживаемый язык / 不支持的语言: {lang!r} (use 'ru', 'en' or 'zh')"
+        )
     changed = norm != _LANG
     _LANG = norm
     if changed:
@@ -56,13 +60,22 @@ def set_lang(lang: str) -> str:
 
 
 def get_lang() -> str:
-    """Return active language code ('ru' or 'en')."""
+    """Return active language code ('ru', 'en' or 'zh')."""
     return _LANG
 
 
-def tr(ru: str, en: str) -> str:
-    """Return Russian or English string depending on active language."""
-    return en if _LANG == "en" else ru
+def tr(ru: str, en: str, zh: str | None = None) -> str:
+    """Return Russian, English or Chinese string depending on active language.
+
+    `zh` defaults to `en` when omitted so that call sites which have not yet
+    been given an explicit Chinese translation degrade gracefully instead of
+    crashing or rendering an empty string.
+    """
+    if _LANG == "en":
+        return en
+    if _LANG == "zh":
+        return en if zh is None else zh
+    return ru
 
 
 def subscribe_lang_change(callback: Callable[[str], None]) -> Callable[[], None]:

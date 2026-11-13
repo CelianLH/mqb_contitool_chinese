@@ -48,7 +48,7 @@ from contitool.core.constants import (
     ZDC_PASSPORT_PN_OFF,
     ZDC_PASSPORT_VER_OFF,
 )
-from contitool.i18n import get_lang, tr
+from contitool.i18n import tr
 
 
 def encode_jr_disp22(pc: int, target: int) -> bytes:
@@ -59,6 +59,7 @@ def encode_jr_disp22(pc: int, target: int) -> bytes:
             tr(
                 f"jr disp22 вне диапазона: pc=0x{pc:06X} -> target=0x{target:06X}",
                 f"jr disp22 out of range: pc=0x{pc:06X} -> target=0x{target:06X}",
+                f"jr disp22 超出范围：pc=0x{pc:06X} -> target=0x{target:06X}",
             )
         )
     u22 = disp & 0x3FFFFF
@@ -177,6 +178,7 @@ def split_cflash_or_app(raw: bytes) -> tuple[bytes, bytearray]:
             tr(
                 "Указан файл размером 32 768 байт — это Uflash.bin (загрузчик FBL), а не CodeFlash.bin (1.5 МБ)!",
                 "32,768-byte file provided — this is Uflash.bin (Extended User Area FBL), not CodeFlash.bin (1.5 MB)!",
+                "提供的文件大小为 32,768 字节——这是 Uflash.bin（引导加载程序 FBL），而不是 CodeFlash.bin（1.5 MB）！",
             )
         )
     if len(raw) == DFLASH_SIZE:
@@ -184,6 +186,7 @@ def split_cflash_or_app(raw: bytes) -> tuple[bytes, bytearray]:
             tr(
                 "Указан файл размером 65 536 байт — это DataFlash.bin (ключи CP), а не CodeFlash.bin (1.5 МБ)!",
                 "65,536-byte file provided — this is DataFlash.bin (CP keys), not CodeFlash.bin (1.5 MB)!",
+                "提供的文件大小为 65,536 字节——这是 DataFlash.bin（CP 密钥），而不是 CodeFlash.bin（1.5 MB）！",
             )
         )
     if len(raw) == CFLASH_SIZE:
@@ -194,6 +197,7 @@ def split_cflash_or_app(raw: bytes) -> tuple[bytes, bytearray]:
         tr(
             f"Ожидался CodeFlash/Cflash.bin ({CFLASH_SIZE:,} Б) или FD_0DATA ({APP_SIZE:,} Б), получен файл {len(raw):,} Б",
             f"Expected CodeFlash/Cflash.bin ({CFLASH_SIZE:,} B) or FD_0DATA ({APP_SIZE:,} B), got {len(raw):,} B",
+            f"预期为 CodeFlash/Cflash.bin（{CFLASH_SIZE:,} 字节）或 FD_0DATA（{APP_SIZE:,} 字节），实际得到 {len(raw):,} 字节",
         )
     )
 
@@ -204,6 +208,7 @@ def validate_uflash_bytes(uf: bytes) -> None:
             tr(
                 f"Ожидался Uflash.bin размером 32 768 байт (32 КБ), получен {len(uf):,} Б",
                 f"Expected Uflash.bin of 32,768 bytes (32 KB), got {len(uf):,} B",
+                f"预期为 32,768 字节（32 KB）的 Uflash.bin，实际得到 {len(uf):,} 字节",
             )
         )
     anchor_pre = uf[UFLASH_RSA_CMP_OFFSET - 6 : UFLASH_RSA_CMP_OFFSET]
@@ -220,6 +225,8 @@ def validate_uflash_bytes(uf: bytes) -> None:
                 "(возможно, это обрезанный 32 КБ D-Flash от профиля R7F7010343AFP)!",
                 "RSA check signature @ Uflash+0x342A not found — this file is not a J533 FBL Uflash "
                 "(it may be a truncated 32 KB D-Flash read using R7F7010343AFP)!",
+                "未找到 @ Uflash+0x342A 处的 RSA 校验签名——此文件不是 J533 引导加载程序的 Uflash "
+                "（可能是使用 R7F7010343AFP 读取的截断 32 KB D-Flash）！",
             )
         )
 
@@ -237,6 +244,7 @@ def validate_dflash_bytes(df: bytes) -> None:
                 tr(
                     "Указан файл размером 32 768 байт — это Uflash.bin (загрузчик FBL), а не DataFlash.bin (65 536 Б)!",
                     "32,768-byte file provided — this is Uflash.bin (FBL bootloader), not DataFlash.bin (65,536 B)!",
+                    "提供的文件大小为 32,768 字节——这是 Uflash.bin（引导加载程序 FBL），而不是 DataFlash.bin（65,536 字节）！",
                 )
             )
         raise ValueError(
@@ -247,6 +255,9 @@ def validate_dflash_bytes(df: bytes) -> None:
                 "Got a truncated 32,768-byte (32 KB) file instead of the full 65,536-byte (64 KB) DataFlash! "
                 "R7F7010343AFP (32 KB D-Flash) was selected, cutting off 0xC000..0xFFFF where ALL CP keys and SWaP "
                 "reside. Re-read full 64 KB using the 3Q0907530 preset or R7F7010543 / R7F7010563!",
+                "得到的是被截断的 32,768 字节（32 KB）文件，而不是完整的 65,536 字节（64 KB）DataFlash！"
+                "读取时选择了 R7F7010343AFP（32 KB D-Flash），截掉了 0xC000..0xFFFF 区域，"
+                "其中存放着全部 CP 密钥和 SWaP。请使用 3Q0907530 预设或 R7F7010543 / R7F7010563 芯片重新读取完整的 64 KB！",
             )
         )
     if len(df) in (CFLASH_SIZE, APP_SIZE):
@@ -254,6 +265,7 @@ def validate_dflash_bytes(df: bytes) -> None:
             tr(
                 f"Указан файл прошивки CodeFlash ({len(df):,} Б) вместо DataFlash.bin (65 536 Б)!",
                 f"CodeFlash firmware file ({len(df):,} B) provided instead of DataFlash.bin (65,536 B)!",
+                f"提供的是 CodeFlash 固件文件（{len(df):,} 字节），而不是 DataFlash.bin（65,536 字节）！",
             )
         )
     if len(df) != DFLASH_SIZE:
@@ -261,6 +273,7 @@ def validate_dflash_bytes(df: bytes) -> None:
             tr(
                 f"Ожидался DataFlash/Dflash.bin размером 65 536 байт (64 КБ), получен {len(df):,} Б",
                 f"Expected DataFlash/Dflash.bin of 65,536 bytes (64 KB), got {len(df):,} B",
+                f"预期为 65,536 字节（64 KB）的 DataFlash/Dflash.bin，实际得到 {len(df):,} 字节",
             )
         )
 
@@ -356,6 +369,7 @@ class ZdcBlockInfo:
     size: int
     name_ru: str
     name_en: str
+    name_zh: str
     empty: bool
     crc_stored: int = 0
     crc_calc: int = 0
@@ -364,7 +378,7 @@ class ZdcBlockInfo:
 
     @property
     def name(self) -> str:
-        return self.name_en if get_lang() == "en" else self.name_ru
+        return tr(self.name_ru, self.name_en, self.name_zh)
 
     @property
     def label(self) -> str:
@@ -381,10 +395,11 @@ class FecDatasetSupport:
     supported: bool
     reason_ru: str
     reason_en: str
+    reason_zh: str
 
     @property
     def reason(self) -> str:
-        return self.reason_en if get_lang() == "en" else self.reason_ru
+        return tr(self.reason_ru, self.reason_en, self.reason_zh)
 
 
 @dataclasses.dataclass
@@ -616,11 +631,11 @@ def analyze_dflash_datasets(df: bytes) -> DflashDatasetSummary:
 
     blocks: list[ZdcBlockInfo] = []
     by_idx: dict[int, ZdcBlockInfo] = {}
-    for idx, code, off, sz, name_ru, name_en in ZDC_DATASET_SPECS:
+    for idx, code, off, sz, name_ru, name_en, name_zh in ZDC_DATASET_SPECS:
         blk = df[off : off + sz]
         empty = all(b == 0xFF for b in blk)
         if empty:
-            info = ZdcBlockInfo(idx=idx, code=code, offset=off, size=sz, name_ru=name_ru, name_en=name_en, empty=True)
+            info = ZdcBlockInfo(idx=idx, code=code, offset=off, size=sz, name_ru=name_ru, name_en=name_en, name_zh=name_zh, empty=True)
         else:
             crc_st, = struct.unpack_from("<I", blk, sz - 4)
             crc_ca = zlib.crc32(blk[:-4]) & 0xFFFFFFFF
@@ -632,6 +647,7 @@ def analyze_dflash_datasets(df: bytes) -> DflashDatasetSummary:
                 size=sz,
                 name_ru=name_ru,
                 name_en=name_en,
+                name_zh=name_zh,
                 empty=False,
                 crc_stored=crc_st,
                 crc_calc=crc_ca,
@@ -706,12 +722,14 @@ def check_fec_dataset_support(
                 supported=True,
                 reason_ru="Датасет MKE (ZDC #1 @ 0x0100) записан и корректен",
                 reason_en="MKE dataset (ZDC #1 @ 0x0100) is present and valid",
+                reason_zh="MKE 数据集（ZDC #1 @ 0x0100）已写入且有效",
             )
         return FecDatasetSupport(
             fec_code=fec_u32,
             supported=False,
             reason_ru="Датасет MKE (ZDC #1 @ 0x0100) пуст или имеет неверный CRC-32",
             reason_en="MKE dataset (ZDC #1 @ 0x0100) is empty or has invalid CRC-32",
+            reason_zh="MKE 数据集（ZDC #1 @ 0x0100）为空或 CRC-32 校验无效",
         )
 
     if fec_u32 == 0x10000100:
@@ -721,12 +739,14 @@ def check_fec_dataset_support(
                 supported=True,
                 reason_ru=f"Основной датасет шлюза ({ds_label}) записан и корректен",
                 reason_en=f"Main Gateway dataset ({ds_label}) is present and valid",
+                reason_zh=f"网关主数据集（{ds_label}）已写入且有效",
             )
         return FecDatasetSupport(
             fec_code=fec_u32,
             supported=False,
             reason_ru="Основной датасет шлюза (ZDC #4 @ 0x1340) пуст или не записан",
             reason_en="Main Gateway dataset (ZDC #4 @ 0x1340) is empty or missing",
+            reason_zh="网关主数据集（ZDC #4 @ 0x1340）为空或缺失",
         )
 
     if (fec_u32 & 0xFFFFF0FF) == 0x10001000:
@@ -738,6 +758,7 @@ def check_fec_dataset_support(
                     supported=False,
                     reason_ru="Датасет MainGW / FPA (ZDC #4 @ 0x1340) пуст или не записан",
                     reason_en="MainGW / FPA dataset (ZDC #4 @ 0x1340) is empty or missing",
+                    reason_zh="MainGW / FPA 数据集（ZDC #4 @ 0x1340）为空或缺失",
                 )
             mapped = summary.fpa_profile_map.get(prof_idx, 0)
             if prof_idx <= 9:
@@ -751,12 +772,14 @@ def check_fec_dataset_support(
                     supported=True,
                     reason_ru=f"Поддерживается датасетом {ds_label} (профиль FPA #{prof_idx} -> ID {mapped})",
                     reason_en=f"Supported by dataset {ds_label} (FPA profile #{prof_idx} -> ID {mapped})",
+                    reason_zh=f"受数据集 {ds_label} 支持（FPA 模式 #{prof_idx} -> ID {mapped}）",
                 )
             return FecDatasetSupport(
                 fec_code=fec_u32,
                 supported=False,
                 reason_ru=f"Профиль FPA #{prof_idx} отключён в текущем датасете {ds_label} (код 0x{mapped:02X})",
                 reason_en=f"FPA profile #{prof_idx} is disabled in current dataset {ds_label} (value 0x{mapped:02X})",
+                reason_zh=f"当前数据集 {ds_label} 中已禁用 FPA 模式 #{prof_idx}（值 0x{mapped:02X}）",
             )
 
     return FecDatasetSupport(
@@ -764,6 +787,7 @@ def check_fec_dataset_support(
         supported=False,
         reason_ru=f"Код FeC 0x{fec_u32:08X} отсутствует в таблице функций датасета {ds_label}",
         reason_en=f"FeC 0x{fec_u32:08X} is not configured in dataset {ds_label}",
+        reason_zh=f"数据集 {ds_label} 中未配置 FeC 0x{fec_u32:08X}",
     )
 
 
@@ -786,6 +810,7 @@ def analyze_uflash(uf: bytes) -> UflashSummary:
             tr(
                 f"Ожидался Uflash.bin размером 32 768 байт, получен {len(uf):,} Б",
                 f"Expected 32,768-byte Uflash.bin, got {len(uf):,} B",
+                f"预期为 32,768 字节的 Uflash.bin，实际得到 {len(uf):,} 字节",
             )
         )
     sha = hashlib.sha256(uf).hexdigest()
@@ -857,7 +882,7 @@ def detect_dump_file(path: Path) -> DetectedDumpFile:
             path=path,
             kind="unknown",
             valid=False,
-            summary_text=tr("Файл не найден", "File not found"),
+            summary_text=tr("Файл не найден", "File not found", "文件未找到"),
         )
     raw = path.read_bytes()
     sz = len(raw)
@@ -887,6 +912,7 @@ def detect_dump_file(path: Path) -> DetectedDumpFile:
             label = tr(
                 f"DataFlash 64 КБ • Активных банков CP: {active_cnt}/12{vin}{vcrn}",
                 f"DataFlash 64 KB • Active CP banks: {active_cnt}/12{vin}{vcrn}",
+                f"DataFlash 64 KB • 活跃 CP 存储区：{active_cnt}/12{vin}{vcrn}",
             )
             return DetectedDumpFile(
                 path=path,
@@ -905,9 +931,9 @@ def detect_dump_file(path: Path) -> DetectedDumpFile:
         # UFLASH_RSA_CMP_OFFSET. Another build (HW 518, say) is still a bootloader, not a cut DataFlash.
         if uinfo.signature_found or FBL_LIBRARY_ID in raw:
             state = (
-                tr("сборка не распознана", "unrecognised build") if not uinfo.signature_found
-                else tr("Инженерный RSA-Free", "Engineering RSA-Free") if uinfo.rsa_bypassed
-                else tr("Заводской RSA", "Stock RSA")
+                tr("сборка не распознана", "unrecognised build", "未识别的版本") if not uinfo.signature_found
+                else tr("Инженерный RSA-Free", "Engineering RSA-Free", "工程 RSA-Free") if uinfo.rsa_bypassed
+                else tr("Заводской RSA", "Stock RSA", "原厂 RSA")
             )
             return DetectedDumpFile(
                 path=path,
@@ -923,6 +949,7 @@ def detect_dump_file(path: Path) -> DetectedDumpFile:
             summary_text=tr(
                 "ОШИБКА: Обрезанный 32 КБ дамп (вероятно R7F7010343AFP вместо 64 КБ R7F7010543)!",
                 "ERROR: Truncated 32 KB dump (likely R7F7010343AFP instead of 64 KB R7F7010543)!",
+                "错误：被截断的 32 KB 转储（可能是 R7F7010343AFP 而非 64 KB 的 R7F7010543）！",
             ),
         )
     if path.suffix.lower() in (".json", ".pem") or sz == 128:
@@ -930,7 +957,7 @@ def detect_dump_file(path: Path) -> DetectedDumpFile:
             path=path,
             kind="rsa_key",
             valid=True,
-            summary_text=tr(f"Ключ RSA ({path.name}, {sz:,} Б)", f"RSA Key ({path.name}, {sz:,} B)"),
+            summary_text=tr(f"Ключ RSA ({path.name}, {sz:,} Б)", f"RSA Key ({path.name}, {sz:,} B)", f"RSA 密钥（{path.name}，{sz:,} 字节）"),
         )
     return DetectedDumpFile(
         path=path,
@@ -939,5 +966,6 @@ def detect_dump_file(path: Path) -> DetectedDumpFile:
         summary_text=tr(
             f"Неизвестный размер файла ({sz:,} Б) — ожидался 1.5 МБ CodeFlash, 64 КБ DataFlash или 32 КБ Uflash",
             f"Unrecognized file size ({sz:,} B) — expected 1.5 MB CodeFlash, 64 KB DataFlash, or 32 KB Uflash",
+            f"无法识别的文件大小（{sz:,} 字节）——预期为 1.5 MB CodeFlash、64 KB DataFlash 或 32 KB Uflash",
         ),
     )

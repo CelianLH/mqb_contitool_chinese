@@ -35,7 +35,7 @@ def _run_pending(app, win, timeout_ms: int = 8000) -> None:
 
 
 def test_t20_diagnosis_can_pinout_is_9_and_19() -> None:
-    pin_map = {pin: sig for pin, sig, _, _ in T20_BENCH_PINS}
+    pin_map = {pin: sig for pin, sig, _, _, _ in T20_BENCH_PINS}
     assert set(pin_map.keys()) == {1, 14, 11, 19, 9}
     assert pin_map[19] == "Diag CAN-H"
     assert pin_map[9] == "Diag CAN-L"

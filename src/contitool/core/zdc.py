@@ -44,11 +44,11 @@ from contitool.core.zdc_templates import (
     get_rom_bem_records,
     get_zdc_template_bytes,
 )
-from contitool.i18n import get_lang, tr
+from contitool.i18n import tr
 from contitool.progress import NULL_REPORTER, OperationReporter
 
 ZDC_REGION_END = 0x3040
-_SPEC_BY_IDX: dict[int, tuple[int, str, int, int, str, str]] = {spec[0]: spec for spec in ZDC_DATASET_SPECS}
+_SPEC_BY_IDX: dict[int, tuple[int, str, int, int, str, str, str]] = {spec[0]: spec for spec in ZDC_DATASET_SPECS}
 
 # Powertrain & Start-Stop logical SG IDs subject to WLTP Kl.15 reset in S075
 POWERTRAIN_KL15_SG_IDS: frozenset[int] = frozenset({0x21, 0x03, 0x01, 0x02, 0x04, 0x12, 0x4C})
@@ -144,7 +144,7 @@ def _encode_equip_12b(val: bytes | str | None, fallback: bytes) -> bytes:
         return fallback if len(fallback) == 12 else (b"\xff" * 12)
     if isinstance(val, bytes):
         if len(val) != 12:
-            raise ValueError(tr("DID 0xF1A4 должен быть ровно 12 байт", "DID 0xF1A4 must be exactly 12 bytes"))
+            raise ValueError(tr("DID 0xF1A4 должен быть ровно 12 байт", "DID 0xF1A4 must be exactly 12 bytes", "DID 0xF1A4 必须恰好为 12 字节"))
         return val
     s = val.strip()
     if not s:
@@ -158,6 +158,7 @@ def _encode_equip_12b(val: bytes | str | None, fallback: bytes) -> bytes:
             tr(
                 "Код комплектации F1A4 должен быть до 12 ASCII-символов или 24 hex-символа",
                 "Equipment code F1A4 must be at most 12 ASCII chars or 24 hex digits",
+                "装备代码 F1A4 最多 12 个 ASCII 字符或 24 个十六进制字符",
             )
         )
     return raw.ljust(12, b" ")
@@ -192,6 +193,7 @@ def apply_zdc_passport(
             tr(
                 "Номер датасета F1A0 должен содержать от 1 до 11 печатных ASCII-символов",
                 "Dataset number F1A0 must be 1..11 printable ASCII characters",
+                "数据集编号 F1A0 必须为 1..11 个可打印 ASCII 字符",
             )
         )
     ver_str = (cur.dataset_ver if zdc_ver_ok(cur.dataset_ver) else "0001") if dataset_ver is None else dataset_ver.strip().upper()
@@ -200,6 +202,7 @@ def apply_zdc_passport(
             tr(
                 "Версия датасета F1A1 должна состоять ровно из 4 цифр (или '----') и не быть '0000' (например '0001')",
                 "Dataset version F1A1 must be 4 ASCII digits (or '----') and not '0000' (e.g. '0001')",
+                "数据集版本 F1A1 必须为 4 位数字（或 '----'），且不能是 '0000'（如 '0001'）",
             )
         )
     eq_12 = _encode_equip_12b(equip, cur.equip_bytes)
@@ -215,6 +218,7 @@ def apply_zdc_passport(
         tr(
             f"Паспорт ZDC обновлён: F1A0={pn_str}, F1A1={ver_str}, CRC-32=0x{crc:08X}",
             f"Updated ZDC Passport: F1A0={pn_str}, F1A1={ver_str}, CRC-32=0x{crc:08X}",
+            f"已更新 ZDC 护照：F1A0={pn_str}，F1A1={ver_str}，CRC-32=0x{crc:08X}",
         )
     )
     return bytes(out)
@@ -285,7 +289,8 @@ def build_odis_zdc_file(df: bytes, idx: int) -> bytes:
     placeholder number and 0001 when the passport is blank)."""
     if idx not in populated_zdc_blocks(df):
         raise ValueError(tr(f"Блок ZDC #{idx} пуст или с неверной CRC-32 — экспортировать нечего",
-                            f"ZDC #{idx} is empty or has a bad CRC-32 — nothing to export"))
+                            f"ZDC #{idx} is empty or has a bad CRC-32 — nothing to export",
+                            f"ZDC #{idx} 为空或 CRC-32 无效 — 无可导出的内容"))
     pp = parse_zdc_passport(df)
     pn = (pp.dataset_pn or "").strip() or ZDC_PLACEHOLDER_PN
     ver = pp.dataset_ver if zdc_ver_ok(pp.dataset_ver) else "0001"
@@ -311,12 +316,13 @@ def parse_odis_zdc_file(data: bytes | str) -> OdisZdcFile:
             tr(
                 f"Файл параметризации слишком велик: {len(raw):,} Б (ожидается не больше {ODIS_ZDC_FILE_MAX_BYTES:,} Б)",
                 f"Parameterization file is too large: {len(raw):,} B (expected at most {ODIS_ZDC_FILE_MAX_BYTES:,} B)",
+                f"参数化文件过大：{len(raw):,} 字节（最多允许 {ODIS_ZDC_FILE_MAX_BYTES:,} 字节）",
             )
         )
     try:
         root = ET.fromstring(raw)  # noqa: S314 - a local file the user picked; no entities are resolved
     except ET.ParseError as exc:
-        raise ValueError(tr(f"Это не XML-файл параметризации ODIS: {exc}", f"Not an ODIS parameterization XML file: {exc}")) from exc
+        raise ValueError(tr(f"Это не XML-файл параметризации ODIS: {exc}", f"Not an ODIS parameterization XML file: {exc}", f"不是 ODIS 参数化 XML 文件：{exc}")) from exc
 
     node = next((el for el in root.iter() if el.tag.rpartition("}")[2] == "PARAMETER_DATA"), None)
     if node is None or not (node.text or "").strip():
@@ -324,13 +330,14 @@ def parse_odis_zdc_file(data: bytes | str) -> OdisZdcFile:
             tr(
                 "В файле нет элемента PARAMETER_DATA с данными датасета.",
                 "The file has no PARAMETER_DATA element carrying a dataset.",
+                "文件中没有承载数据集的 PARAMETER_DATA 元素。",
             )
         )
     hex_text = "".join((node.text or "").split())
     try:
         payload = bytes.fromhex(hex_text)
     except ValueError as exc:
-        raise ValueError(tr(f"Данные датасета не шестнадцатеричные: {exc}", f"The dataset payload is not hexadecimal: {exc}")) from exc
+        raise ValueError(tr(f"Данные датасета не шестнадцатеричные: {exc}", f"The dataset payload is not hexadecimal: {exc}", f"数据集内容不是十六进制：{exc}")) from exc
 
     def _addr(name: str) -> int:
         txt = (node.get(name) or "").strip()
@@ -351,6 +358,7 @@ def parse_odis_zdc_file(data: bytes | str) -> OdisZdcFile:
                 f"блоком ZDC ({expect}).",
                 f"Not a J533 gateway file: address 0x{start:04X} with {len(payload)} B matches no ZDC block "
                 f"({expect}).",
+                f"不是 J533 网关文件：地址 0x{start:04X}、长度 {len(payload)} 字节不匹配任何 ZDC 区块（{expect}）。",
             )
         )
     idx = known[0]
@@ -359,6 +367,7 @@ def parse_odis_zdc_file(data: bytes | str) -> OdisZdcFile:
             tr(
                 f"Файл параметризации адресован блоку {diag_txt}, а не шлюзу 0x19.",
                 f"This parameterization file addresses ECU {diag_txt}, not the gateway 0x19.",
+                f"此参数化文件面向控制单元 {diag_txt}，而非网关 0x19。",
             )
         )
     stored = int.from_bytes(payload[-4:], "little")
@@ -367,6 +376,7 @@ def parse_odis_zdc_file(data: bytes | str) -> OdisZdcFile:
             tr(
                 f"Не сходится CRC-32 датасета в файле (в файле 0x{stored:08X}, расчёт 0x{zdc_crc32_le(payload[:-4]):08X}).",
                 f"The dataset CRC-32 in the file does not match (file 0x{stored:08X}, calculated 0x{zdc_crc32_le(payload[:-4]):08X}).",
+                f"文件中数据集的 CRC-32 不匹配（文件 0x{stored:08X}，计算值 0x{zdc_crc32_le(payload[:-4]):08X}）。",
             )
         )
     pn = (node.get("ZDC_NAME") or "").strip().upper()
@@ -376,6 +386,7 @@ def parse_odis_zdc_file(data: bytes | str) -> OdisZdcFile:
             tr(
                 f"В файле нет пригодного номера датасета ZDC_NAME (получено {pn!r}).",
                 f"The file carries no usable ZDC_NAME dataset number (got {pn!r}).",
+                f"文件中没有可用的 ZDC_NAME 数据集编号（实际为 {pn!r}）。",
             )
         )
     return OdisZdcFile(
@@ -413,6 +424,8 @@ def apply_odis_zdc_file(
             f"(схема {parsed.header_tag or '—'}, {parsed.dataset_pn}/{parsed.dataset_ver}) вместе со своим паспортом",
             f"Wrote the ODIS dataset into ZDC #{parsed.zdc_idx} "
             f"(schema {parsed.header_tag or '—'}, {parsed.dataset_pn}/{parsed.dataset_ver}) together with its own passport",
+            f"已将 ODIS 文件中的数据集连同其护照写入 ZDC #{parsed.zdc_idx} "
+            f"（模式 {parsed.header_tag or '—'}，{parsed.dataset_pn}/{parsed.dataset_ver}）",
         )
     )
     return out
@@ -421,7 +434,7 @@ def apply_odis_zdc_file(
 def _block_alloc_and_uds_len(idx: int) -> tuple[int, int, int, str]:
     if idx not in _SPEC_BY_IDX:
         raise ValueError(f"Unknown ZDC block index: {idx}")
-    _, code, off, sz, _, _ = _SPEC_BY_IDX[idx]
+    _, code, off, sz, _, _, _ = _SPEC_BY_IDX[idx]
     uds_len = ZDC_UDS_UPLOAD_MAP[idx][1]
     # DataFlash allocation for ZDC #5 is 0x0140 (0x1200..0x133F), UDS payload is 0x012E
     alloc = 0x0140 if idx == 5 else sz
@@ -445,6 +458,7 @@ def erase_zdc_block(df: bytes, idx: int, *, reporter: OperationReporter = NULL_R
         tr(
             f"Блок ZDC #{idx} ({code}) стёрт в FF..FF (0x{off:04X}..0x{off + alloc - 1:04X})",
             f"Erased ZDC #{idx} ({code}) to FF..FF (0x{off:04X}..0x{off + alloc - 1:04X})",
+            f"已将 ZDC #{idx}（{code}）擦除为 FF..FF（0x{off:04X}..0x{off + alloc - 1:04X}）",
         )
     )
     return bytes(out)
@@ -491,12 +505,13 @@ def import_zdc_block(
             tr(
                 f"Неверный размер файла для ZDC #{idx} ({code}): ожидается {uds_len} Б (или 65 536 Б DataFlash), получено {len(blob_or_donor_df)} Б",
                 f"Invalid size for ZDC #{idx} ({code}): expected {uds_len} B (or 65,536 B DataFlash), got {len(blob_or_donor_df)} B",
+                f"ZDC #{idx}（{code}）的文件大小无效：应为 {uds_len} 字节（或 65,536 字节 DataFlash），实际 {len(blob_or_donor_df)} 字节",
             )
         )
 
     if all(b == 0xFF for b in raw_blk[:uds_len]):
         out[off : off + alloc] = b"\xff" * alloc
-        reporter.info(tr(f"Блок ZDC #{idx} ({code}) пуст в источнике -> очищен в FF..FF", f"Source ZDC #{idx} ({code}) is empty -> erased to FF..FF"))
+        reporter.info(tr(f"Блок ZDC #{idx} ({code}) пуст в источнике -> очищен в FF..FF", f"Source ZDC #{idx} ({code}) is empty -> erased to FF..FF", f"源 ZDC #{idx}（{code}）为空 -> 已擦除为 FF..FF"))
         return bytes(out)
 
     if fix_crc:
@@ -509,6 +524,7 @@ def import_zdc_block(
         tr(
             f"Импортирован блок ZDC #{idx} ({code}) @ 0x{off:04X} (CRC-32=0x{crc_val:08X})",
             f"Imported ZDC #{idx} ({code}) @ 0x{off:04X} (CRC-32=0x{crc_val:08X})",
+            f"已导入 ZDC #{idx}（{code}）@ 0x{off:04X}（CRC-32=0x{crc_val:08X}）",
         )
     )
     return bytes(out)
@@ -585,7 +601,7 @@ def inject_mke_preset(
     tpl = get_zdc_template_bytes(key)
     out = bytearray(df)
     out[0x0100:0x0200] = tpl
-    reporter.info(tr(f"Записан заводской пресет MKE '{variant}' (ZDC #1 @ 0x0100)", f"Injected stock MKE '{variant}' preset (ZDC #1 @ 0x0100)"))
+    reporter.info(tr(f"Записан заводской пресет MKE '{variant}' (ZDC #1 @ 0x0100)", f"Injected stock MKE '{variant}' preset (ZDC #1 @ 0x0100)", f"已写入原厂 MKE 预设 '{variant}'（ZDC #1 @ 0x0100）"))
     return bytes(out)
 
 
@@ -632,6 +648,7 @@ def apply_mke_config(
         tr(
             f"Параметры MKE (ZDC #1) обновлены: порог {buf[0xC4]}..{buf[0xC5]} км/ч, окно {buf[0x04]} мин",
             f"Updated MKE (ZDC #1): speed window {buf[0xC4]}..{buf[0xC5]} km/h, min drive {buf[0x04]} min",
+            f"已更新 MKE（ZDC #1）：速度区间 {buf[0xC4]}..{buf[0xC5]} km/h，最短行驶 {buf[0x04]} 分钟",
         )
     )
     return bytes(out)
@@ -642,11 +659,11 @@ def apply_mke_config(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-SSA_OUTPUT_MODES: tuple[tuple[int, str, str], ...] = (
-    (1, "Стандартно: краткий статус Старт-Стоп (заводская настройка)", "Standard: summary Start-Stop status (factory default)"),
-    (2, "Подробно: показывать полный список причин на экране магнитолы", "Detailed: show full list of Start-Stop reasons on screen"),
-    (0, "Только текстовые причины без сводного индикатора", "Reason messages only (without summary icon)"),
-    (3, "Скрыть уведомления и причины Старт-Стоп в меню магнитолы", "Hide Start-Stop reason messages on head unit"),
+SSA_OUTPUT_MODES: tuple[tuple[int, str, str, str], ...] = (
+    (1, "Стандартно: краткий статус Старт-Стоп (заводская настройка)", "Standard: summary Start-Stop status (factory default)", "标准：起停状态摘要（出厂默认）"),
+    (2, "Подробно: показывать полный список причин на экране магнитолы", "Detailed: show full list of Start-Stop reasons on screen", "详细：在屏幕上显示完整的起停原因列表"),
+    (0, "Только текстовые причины без сводного индикатора", "Reason messages only (without summary icon)", "仅显示文字原因（无摘要图标）"),
+    (3, "Скрыть уведомления и причины Старт-Стоп в меню магнитолы", "Hide Start-Stop reason messages on head unit", "在主机菜单中隐藏起停原因通知"),
 )
 
 
@@ -698,7 +715,7 @@ def inject_ssa_preset(df: bytes, *, reporter: OperationReporter = NULL_REPORTER)
     validate_dflash_bytes(df)
     out = bytearray(df)
     out[0x0200:0x0A00] = get_zdc_template_bytes("SSA_4C")
-    reporter.info(tr("Записан заводской пресет индикации Старт-Стоп '4C' (ZDC #2 @ 0x0200)", "Injected stock Start-Stop reasons preset '4C' (ZDC #2 @ 0x0200)"))
+    reporter.info(tr("Записан заводской пресет индикации Старт-Стоп '4C' (ZDC #2 @ 0x0200)", "Injected stock Start-Stop reasons preset '4C' (ZDC #2 @ 0x0200)", "已写入原厂起停原因显示预设 '4C'（ZDC #2 @ 0x0200）"))
     return bytes(out)
 
 
@@ -728,6 +745,7 @@ def apply_ssa_config(
         tr(
             f"Параметры индикации Старт-Стоп (ZDC #2) обновлены: режим BAP 0x27 = {mode_bits}",
             f"Updated Start-Stop HMI reasons (ZDC #2): BAP 0x27 mode = {mode_bits}",
+            f"已更新起停原因显示（ZDC #2）：BAP 0x27 模式 = {mode_bits}",
         )
     )
     return bytes(out)
@@ -750,6 +768,7 @@ class FpaSlotState:
     profile_id: int
     name_ru: str
     name_en: str
+    name_zh: str
     selectable: bool
     swap_gated: bool
     kl15_next_slot: int
@@ -759,7 +778,7 @@ class FpaSlotState:
 
     @property
     def name(self) -> str:
-        return self.name_en if get_lang() == "en" else self.name_ru
+        return tr(self.name_ru, self.name_en, self.name_zh)
 
     @property
     def kl15_persists(self) -> bool:
@@ -909,22 +928,22 @@ class FpaDataset:
             return "awd_dcc" if has_dcc_comfort else "awd"
         return "fwd_dcc" if has_dcc_comfort else "fwd"
 
-    def chassis_summary(self) -> tuple[str, str]:
-        """Human-readable `(ru, en)` summary of the chassis configuration stored in this `ZDC #4` dataset."""
+    def chassis_summary(self) -> tuple[str, str, str]:
+        """Human-readable `(ru, en, zh)` summary of the chassis configuration stored in this `ZDC #4` dataset."""
         if self.empty:
-            return ("не настроена (раздел пуст)", "not configured (empty)")
+            return ("не настроена (раздел пуст)", "not configured (empty)", "未配置（分区为空）")
         s028 = self.sec_bytes(28)
         s030 = self.menu_mask
         if s028[2] == 0x14 or sum(1 for s in range(1, 10) if s030 & (1 << s)) <= 1:
-            return ("базовый датасет без профилей движения", "base dataset without driving profiles")
-        ru, en = {
-            "fwd": ("передний привод, обычная подвеска", "front-wheel drive, standard suspension"),
-            "fwd_dcc": ("передний привод, DCC", "front-wheel drive, DCC"),
-            "awd": ("4Motion, обычная подвеска", "4Motion, standard suspension"),
-            "awd_dcc": ("4Motion, DCC", "4Motion, DCC"),
+            return ("базовый датасет без профилей движения", "base dataset without driving profiles", "无驾驶模式的基础数据集")
+        ru, en, zh = {
+            "fwd": ("передний привод, обычная подвеска", "front-wheel drive, standard suspension", "前驱，标准悬挂"),
+            "fwd_dcc": ("передний привод, DCC", "front-wheel drive, DCC", "前驱，DCC"),
+            "awd": ("4Motion, обычная подвеска", "4Motion, standard suspension", "4Motion，标准悬挂"),
+            "awd_dcc": ("4Motion, DCC", "4Motion, DCC", "4Motion，DCC"),
         }[self.detected_preset()]
         # a guess from the profiles the dataset holds: it describes the dataset, not the car
-        return (ru, en)
+        return (ru, en, zh)
 
     def slots(self) -> list[FpaSlotState]:
         if self.empty:
@@ -937,14 +956,15 @@ class FpaDataset:
         out: list[FpaSlotState] = []
         for slot in range(1, 13):
             pid = s028[slot]
-            def_pid, fec_code, _def_icon, _def_flg, _sru, _sen = FPA_SLOT_DEFAULTS[slot]
-            name_ru, name_en = FPA_PROFILE_NAMES.get(pid if pid != 0 else def_pid, (f"Профиль 0x{pid:02X}", f"Profile 0x{pid:02X}"))
+            def_pid, fec_code, _def_icon, _def_flg, _sru, _sen, _szh = FPA_SLOT_DEFAULTS[slot]
+            name_ru, name_en, name_zh = FPA_PROFILE_NAMES.get(pid if pid != 0 else def_pid, (f"Профиль 0x{pid:02X}", f"Profile 0x{pid:02X}", f"模式 0x{pid:02X}"))
             out.append(
                 FpaSlotState(
                     slot=slot,
                     profile_id=pid,
                     name_ru=name_ru,
                     name_en=name_en,
+                    name_zh=name_zh,
                     selectable=1 <= pid <= 0x13,  # in the head unit's menu (given the slot's FeC)
                     swap_gated=bool(s070 & (1 << slot)),
                     kl15_next_slot=s029[slot - 1],
@@ -1147,7 +1167,7 @@ class FpaDataset:
         is never touched; S073 gets its factory routing [1, 2] only when it is empty."""
         if not (1 <= slot <= 12):
             raise ValueError(f"FPA slot must be 1..12, got {slot}")
-        def_pid, _fec, def_icon, def_flg, _, _ = FPA_SLOT_DEFAULTS[slot]
+        def_pid, _fec, def_icon, def_flg, _, _, _ = FPA_SLOT_DEFAULTS[slot]
         s028 = self.sec_bytes(28)
         s029 = self.sec_bytes(29)
         s071 = self.sec_bytes(71)
@@ -1178,6 +1198,7 @@ class FpaDataset:
                 raise ValueError(tr(
                     f"Слот {slot} — положение шайбы или кнопки самой машины; без него это положение перестанет работать",
                     f"Slot {slot} is a position of the car's own knob or button; without it that position stops working",
+                    f"槽位 {slot} 是车辆自身旋钮或按钮的位置；移除后该位置将无法工作",
                 ))
             if s028[slot]:
                 self._parked_ids[slot] = s028[slot]
@@ -1206,7 +1227,7 @@ class FpaDataset:
         """
         if not (1 <= inst1_slot <= 6):
             raise ValueError(f"FPA Inst1 slot must be 1..6, got {inst1_slot}")
-        def_pid = FPA_INST1_SLOT_DEFAULTS.get(inst1_slot, (0x0A + inst1_slot, 0, "", ""))[0]
+        def_pid = FPA_INST1_SLOT_DEFAULTS.get(inst1_slot, (0x0A + inst1_slot, 0, "", "", ""))[0]
         s152 = self.sec_bytes(152)
         s153 = self.sec_bytes(153)
         s154 = self.sec_bytes(154)
@@ -1253,8 +1274,8 @@ class FpaDataset:
         out: list[tuple[int, int, str]] = []
         for idx, fg in enumerate(s032):
             if fg != 0:
-                ru, en = FPA_SG_CATALOG.get(fg, (f"Подсистема 0x{fg:02X}", f"Subsystem 0x{fg:02X}"))
-                out.append((idx, fg, en if get_lang() == "en" else ru))
+                ru, en, zh = FPA_SG_CATALOG.get(fg, (f"Подсистема 0x{fg:02X}", f"Subsystem 0x{fg:02X}", f"子系统 0x{fg:02X}"))
+                out.append((idx, fg, tr(ru, en, zh)))
         return out
 
     def get_target_mode(self, slot: int, log_idx: int) -> int:
@@ -1312,7 +1333,8 @@ class FpaDataset:
             return
         if self.empty or not self.menu_mask & 0x3FE:  # no profile in slots 1..9 (the CRC is stale while editing)
             raise ValueError(tr("Сначала настройте профили движения — в датасете их нет",
-                                "Set up the driving profiles first — the dataset has none"))
+                                "Set up the driving profiles first — the dataset has none",
+                                "请先设置驾驶模式 — 数据集中尚无可用的模式"))
         snapshot = bytes(self.buf)
         try:
             self._add_4motion_knob()
@@ -1325,7 +1347,8 @@ class FpaDataset:
         s028 = self.sec_bytes(28)
         if s028[8] not in (0, 0x0A) or s028[9] not in (0, 0x0B):
             raise ValueError(tr("Слоты 8 и 9 заняты другими профилями — шайбе нужны Snow и Offroad Individual",
-                                "Slots 8 and 9 hold other profiles — the knob needs Snow and Offroad Individual"))
+                                "Slots 8 and 9 hold other profiles — the knob needs Snow and Offroad Individual",
+                                "槽位 8 和 9 已被其他模式占用 — 旋钮需要雪地与越野自定义模式"))
         # 1. the knob's profiles: slots 4, 8, 9 as OZ00 has them, per group of this car
         g_self, g_oz = self.sec_bytes(32), oz.sec_bytes(32)
         s029, s031, s071, s074, s033 = (self.sec_bytes(29), self.sec_bytes(31), self.sec_bytes(71),
@@ -1364,7 +1387,8 @@ class FpaDataset:
         free_sw = [sw for sw in range(4) if sw not in taken]
         if not free_in or len(free_sw) < 2:
             raise ValueError(tr("Нет свободного входа или двух свободных переключателей для шайбы",
-                                "No free input or two free switches for the knob"))
+                                "No free input or two free switches for the knob",
+                                "没有空闲输入或两个空闲开关可供旋钮使用"))
         k, sw_knob, sw_menu = free_in[0], free_sw[0], free_sw[1]
         o036, o037, o038, o039, o040 = (oz.sec_bytes(i) for i in (36, 37, 38, 39, 40))
         o042, o043, o045, o044 = oz.sec_bytes(42), oz.sec_bytes(43), oz.sec_bytes(45), oz.sec_u16_be(44)
@@ -1526,6 +1550,8 @@ class FpaDataset:
                     "Выберите другой режим кнопок.",
                     "No free input or switch left for the button: the car's own controls use them all. "
                     "Choose another button mode.",
+                    "按钮已无空闲输入或开关：全部被车辆自身的控制元件占用。"
+                    "请选择其他按钮模式。",
                 )
             )
 
@@ -1618,11 +1644,11 @@ class FpaDataset:
         return seal_zdc_block_crc(self.buf, uds_len=4352)
 
 
-FPA_PRESET_CATALOG: tuple[tuple[str, str, str], ...] = (
-    ("fwd", "Передний привод — обычная подвеска (Normal, Sport, Eco, Individual)", "Front-wheel drive — standard suspension (Normal, Sport, Eco, Individual)"),
-    ("fwd_dcc", "Передний привод + адаптивная подвеска DCC (с режимом Comfort)", "Front-wheel drive + adaptive DCC (includes Comfort)"),
-    ("awd", "Полный привод 4Motion — обычная подвеска (+ Offroad и Snow)", "4Motion AWD — standard suspension (+ Offroad & Snow)"),
-    ("awd_dcc", "Полный привод 4Motion + адаптивная подвеска DCC (максимальный набор)", "4Motion AWD + adaptive DCC (full profile set)"),
+FPA_PRESET_CATALOG: tuple[tuple[str, str, str, str], ...] = (
+    ("fwd", "Передний привод — обычная подвеска (Normal, Sport, Eco, Individual)", "Front-wheel drive — standard suspension (Normal, Sport, Eco, Individual)", "前驱 — 标准悬挂（Normal、Sport、Eco、Individual）"),
+    ("fwd_dcc", "Передний привод + адаптивная подвеска DCC (с режимом Comfort)", "Front-wheel drive + adaptive DCC (includes Comfort)", "前驱 + 自适应悬挂 DCC（含 Comfort）"),
+    ("awd", "Полный привод 4Motion — обычная подвеска (+ Offroad и Snow)", "4Motion AWD — standard suspension (+ Offroad & Snow)", "四驱 4Motion — 标准悬挂（+ Offroad 与 Snow）"),
+    ("awd_dcc", "Полный привод 4Motion + адаптивная подвеска DCC (максимальный набор)", "4Motion AWD + adaptive DCC (full profile set)", "四驱 4Motion + 自适应悬挂 DCC（完整模式集）"),
 )
 
 
@@ -1679,6 +1705,7 @@ def apply_fpa_dataset(
         tr(
             f"Записан датасет FPA [{fpa.schema_tag}] (CRC-32=0x{crc_val:08X}, профилей: {len(active_names)})",
             f"Updated FPA dataset [{fpa.schema_tag}] (CRC-32=0x{crc_val:08X}, profiles: {len(active_names)})",
+            f"已更新 FPA 数据集 [{fpa.schema_tag}]（CRC-32=0x{crc_val:08X}，模式数量：{len(active_names)}）",
         )
     )
     return bytes(out)
@@ -1711,6 +1738,7 @@ class PacoParticipantInfo:
     sg_id: int
     sg_name_ru: str
     sg_name_en: str
+    sg_name_zh: str
     paco_bit_1based: int
     coding_byte: int | None
     coding_bit: int | None
@@ -1719,7 +1747,7 @@ class PacoParticipantInfo:
 
     @property
     def sg_name(self) -> str:
-        return self.sg_name_en if get_lang() == "en" else self.sg_name_ru
+        return tr(self.sg_name_ru, self.sg_name_en, self.sg_name_zh)
 
 
 @dataclasses.dataclass
@@ -1775,6 +1803,7 @@ def analyze_gateway_coding_consistency(
                         tr(
                             f"Byte {b_idx} Bit {bit_idx} ({label}) включён в 0x0600, но блок ZDC #{zidx} пуст -> ошибка B200500!",
                             f"Byte {b_idx} Bit {bit_idx} ({label}) is set in 0x0600 while ZDC #{zidx} is empty -> DTC B200500!",
+                            f"0x0600 中的字节 {b_idx} 位 {bit_idx}（{label}）已置位，但 ZDC #{zidx} 区块为空 -> 故障码 B200500！",
                         )
                     )
                 elif present and not c_en:
@@ -1782,6 +1811,7 @@ def analyze_gateway_coding_consistency(
                         tr(
                             f"Датасет FPA активен в ZDC #4, но Byte {b_idx} Bit {bit_idx} выключен в кодировке 0x0600 -> профили FPA не запустятся!",
                             f"Active FPA dataset in ZDC #4, but Byte {b_idx} Bit {bit_idx} is off in 0x0600 coding -> FPA will stay inactive!",
+                            f"FPA 数据集在 ZDC #4 中处于激活状态，但 0x0600 编码中的字节 {b_idx} 位 {bit_idx} 已关闭 -> FPA 将保持不激活！",
                         )
                     )
             else:
@@ -1790,6 +1820,7 @@ def analyze_gateway_coding_consistency(
                         tr(
                             f"Byte {b_idx} Bit {bit_idx} ({label}) включён в 0x0600, но блок ZDC #{zidx} пуст -> ошибка B200500!",
                             f"Byte {b_idx} Bit {bit_idx} ({label}) is set in 0x0600 while ZDC #{zidx} is empty -> DTC B200500!",
+                            f"0x0600 中的字节 {b_idx} 位 {bit_idx}（{label}）已置位，但 ZDC #{zidx} 区块为空 -> 故障码 B200500！",
                         )
                     )
                 elif blk.crc_ok and not c_en and zidx in (1, 2, 6):
@@ -1797,6 +1828,7 @@ def analyze_gateway_coding_consistency(
                         tr(
                             f"Блок ZDC #{zidx} ({label}) записан, но Byte {b_idx} Bit {bit_idx} выключен в кодировке 0x0600.",
                             f"ZDC #{zidx} ({label}) is present, but Byte {b_idx} Bit {bit_idx} is disabled in 0x0600 coding.",
+                            f"ZDC #{zidx}（{label}）已存在，但 0x0600 编码中的字节 {b_idx} 位 {bit_idx} 被禁用。",
                         )
                     )
 
@@ -1809,7 +1841,7 @@ def analyze_gateway_coding_consistency(
             sg = s076[i]
             if sg == 0:
                 continue
-            ru, en = FPA_SG_CATALOG.get(sg, (f"Блок 0x{sg:02X}", f"ECU 0x{sg:02X}"))
+            ru, en, zh = FPA_SG_CATALOG.get(sg, (f"Блок 0x{sg:02X}", f"ECU 0x{sg:02X}", f"模块 0x{sg:02X}"))
             pbit = s079[i]
             if 1 <= pbit <= 32:
                 # 1-based PaCo bit mapped across DID 0x0600 Bytes 9..12
@@ -1824,6 +1856,7 @@ def analyze_gateway_coding_consistency(
                     sg_id=sg,
                     sg_name_ru=ru,
                     sg_name_en=en,
+                    sg_name_zh=zh,
                     paco_bit_1based=pbit,
                     coding_byte=c_byte,
                     coding_bit=c_bit,
@@ -1875,7 +1908,7 @@ def sync_gateway_coding_for_zdc(df: bytes, coding30: bytes, blocks: Iterable[int
     byte 8 bit 0); a dataset written with its bit clear is never used — confirmed on the bench 2026-11-09: an
     active FPA dataset with byte 8 bit 0 clear stayed unused, setting the bit made the gateway accept it."""
     if len(coding30) != 30:
-        raise ValueError(tr(f"Кодировка 0x0600 должна быть ровно 30 байт, получено {len(coding30)} Б", f"Gateway coding 0x0600 must be 30 bytes, got {len(coding30)} B"))
+        raise ValueError(tr(f"Кодировка 0x0600 должна быть ровно 30 байт, получено {len(coding30)} Б", f"Gateway coding 0x0600 must be 30 bytes, got {len(coding30)} B", f"网关编码 0x0600 必须为 30 字节，实际 {len(coding30)} 字节"))
     ds = analyze_dflash_datasets(df)
     by_idx = {b.idx: b for b in ds.blocks}
     fpa = FpaDataset.from_dflash(df)
@@ -1940,13 +1973,14 @@ class BemSlotInfo:
     matched_diff_bytes: int = 332
     matched_label_ru: str = ""
     matched_label_en: str = ""
+    matched_label_zh: str = ""
     r_stator_mohm: float = 0.0
     u_diode_mv: int = 0
     p_max_w: int = 0
 
     @property
     def matched_label(self) -> str:
-        return self.matched_label_en if get_lang() == "en" else self.matched_label_ru
+        return tr(self.matched_label_ru, self.matched_label_en, self.matched_label_zh)
 
 
 @dataclasses.dataclass
@@ -1974,8 +2008,8 @@ def parse_bem_block(df: bytes) -> BemDataset:
     slots: list[BemSlotInfo] = []
     for sidx in range(9):
         cls_id, sup_id = struct.unpack_from("BB", buf, 0x0004 + sidx * 2)
-        sup_ru, sup_en = BEM_SUPPLIER_NAMES.get(sup_id, (f"Поставщик 0x{sup_id:02X}", f"Supplier 0x{sup_id:02X}"))
-        sup_name = sup_en if get_lang() == "en" else sup_ru
+        sup_ru, sup_en, sup_zh = BEM_SUPPLIER_NAMES.get(sup_id, (f"Поставщик 0x{sup_id:02X}", f"Supplier 0x{sup_id:02X}", f"供应商 0x{sup_id:02X}"))
+        sup_name = tr(sup_ru, sup_en, sup_zh)
         rec = buf[0x0018 + sidx * 332 : 0x0018 + (sidx + 1) * 332]
         if all(b == 0xFF for b in rec):
             slots.append(BemSlotInfo(slot_idx=sidx, empty=True, class_id=cls_id, supplier_id=sup_id, supplier_name=sup_name))
@@ -2011,6 +2045,7 @@ def parse_bem_block(df: bytes) -> BemDataset:
                 matched_diff_bytes=min_diff,
                 matched_label_ru=cat[7],
                 matched_label_en=cat[8],
+                matched_label_zh=cat[9],
                 r_stator_mohm=r_stat,
                 u_diode_mv=u_dio,
                 p_max_w=p_max,
@@ -2037,7 +2072,7 @@ def inject_bem_preset(
     key = "BEM_0101" if variant == "0101" else "BEM_2222"
     out = bytearray(df)
     out[0x2440:0x3040] = get_zdc_template_bytes(key)
-    reporter.info(tr(f"Записан заводской пресет генераторов BEM '{variant}' (ZDC #6 @ 0x2440)", f"Injected stock BEM alternator preset '{variant}' (ZDC #6 @ 0x2440)"))
+    reporter.info(tr(f"Записан заводской пресет генераторов BEM '{variant}' (ZDC #6 @ 0x2440)", f"Injected stock BEM alternator preset '{variant}' (ZDC #6 @ 0x2440)", f"已写入原厂 BEM 发电机预设 '{variant}'（ZDC #6 @ 0x2440）"))
     return bytes(out)
 
 
@@ -2072,6 +2107,7 @@ def replace_bem_slot_from_rom(
         buf[rec_off : rec_off + 332] = b"\xff" * 332
         msg_ru = f"Слот генератора #{slot_idx} в ZDC #6 очищен"
         msg_en = f"Cleared BEM alternator slot #{slot_idx} in ZDC #6"
+        msg_zh = f"已清空 ZDC #6 中的发电机槽位 #{slot_idx}"
     else:
         if not (0 <= rom_idx < 21):
             raise ValueError(f"ROM BEM index must be 0..20, got {rom_idx}")
@@ -2083,11 +2119,12 @@ def replace_bem_slot_from_rom(
         buf[rec_off : rec_off + 332] = rec_be
         msg_ru = f"Слот BEM #{slot_idx} обновлён -> {cat[7]} (кл. 0x{cls:02X}, пост. 0x{sup:02X})"
         msg_en = f"Updated BEM slot #{slot_idx} -> {cat[8]} (class 0x{cls:02X}, sup 0x{sup:02X})"
+        msg_zh = f"已更新 BEM 槽位 #{slot_idx} -> {cat[9]}（等级 0x{cls:02X}，供应商 0x{sup:02X}）"
 
     sealed = seal_zdc_block_crc(buf, uds_len=3072)
     out = bytearray(df)
     out[0x2440:0x3040] = sealed
-    reporter.info(tr(msg_ru, msg_en))
+    reporter.info(tr(msg_ru, msg_en, msg_zh))
     return bytes(out)
 
 
@@ -2207,7 +2244,7 @@ def parameterize_dflash_for_fecs(
             out_arr = bytearray(out)
             out_arr[0x1340:0x2440] = get_zdc_template_bytes("FPA_JC00_BASE")
             out = bytes(out_arr)
-            reporter.info(tr("Записан базовый датасет шлюза JC00 (ZDC #4) для поддержки GRA", "Injected base JC00 gateway dataset (ZDC #4) for GRA support"))
+            reporter.info(tr("Записан базовый датасет шлюза JC00 (ZDC #4) для поддержки GRA", "Injected base JC00 gateway dataset (ZDC #4) for GRA support", "已写入基础 JC00 网关数据集（ZDC #4）以支持 GRA"))
             actions_done.append("ZDC #4 (JC00 Base)")
 
     # 3. Ensure ZDC Passport (`0x0000..0x007F`) is valid if we wrote any ZDC block

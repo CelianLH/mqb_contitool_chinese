@@ -72,7 +72,7 @@ def discover_serial_ports() -> list[DetectedCanPort]:
         found.append(
             DetectedCanPort(
                 device=dev,
-                description=desc or tr("Последовательный порт", "Serial Port"),
+                description=desc or tr("Последовательный порт", "Serial Port", "串口"),
                 manufacturer=mfg,
                 vid=p.vid,
                 pid=p.pid,
@@ -125,7 +125,7 @@ def discover_adapters() -> list[FoundAdapter]:
         found.append(FoundAdapter("dpdu", api["name"], title, f"D-PDU {version} · {api['name']}",
                                   driver=api["version"]))
     for d in discover_j2534():
-        problem = "" if d.usable else tr(f"{d.bits}-битный драйвер — не подходит", f"{d.bits}-bit driver — not usable")
+        problem = "" if d.usable else tr(f"{d.bits}-битный драйвер — не подходит", f"{d.bits}-bit driver — not usable", f"{d.bits} 位驱动程序 — 不适用")
         found.append(FoundAdapter("j2534", d.name, d.name, " · ".join(filter(None, ("J2534", d.vendor))), problem))
     can_log = logging.getLogger("can")
     level = can_log.level

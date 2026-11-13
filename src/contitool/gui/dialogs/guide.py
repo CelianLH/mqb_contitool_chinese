@@ -23,10 +23,11 @@ class GuideDialog(Dialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Памятка по стенду", "Bench guide"),
+            tr("Памятка по стенду", "Bench guide", "台架指南"),
             tr(
                 "Как подключить шлюз по Diagnosis CAN, откуда берётся ключ модуля и как работать с внешними дампами.",
                 "How to wire the gateway over Diagnosis CAN, where the module key comes from, and how to handle external dumps.",
+                "如何通过诊断 CAN 连接网关、模块密钥从何而来，以及如何处理外部转储。",
             ),
             width=1200,  # wide enough for the T20 diagram and its legend
         )
@@ -41,7 +42,7 @@ class GuideDialog(Dialog):
 
         body.addWidget(PinoutCard())
 
-        body.addWidget(group_label(tr("ЧТЕНИЕ ПРОГРАММАТОРОМ", "READING WITH A PROGRAMMER")))
+        body.addWidget(group_label(tr("ЧТЕНИЕ ПРОГРАММАТОРОМ", "READING WITH A PROGRAMMER", "用编程器读取")))
         rule = Callout("err")
         rule.label.setText(
             tr(
@@ -59,11 +60,18 @@ class GuideDialog(Dialog):
                 "The R7F7010343AFP profile reads only the first 32 KB and loses them. Use the <b>3Q0907530</b> "
                 "preset or profile <b>R7F7010543 / R7F7010563</b>.<br>"
                 "Reading over CAN, ContiTool always takes all 64 KB.",
+                "<b>请选择带 64 KB DataFlash 的配置文件。</b><br>"
+                "3Q0 907 530 网关微控制器的封装上标注为 <b>R7F7010343AFP</b>，但芯片内部实际带有完整的 "
+                "<b>64 KB DataFlash（65,536 字节）</b>。模块密钥和功能数据位于上半区——"
+                "<b>0xC000..0xFFFF</b>。<br>"
+                "R7F7010343AFP 配置文件只读取前 32 KB，会丢失这些数据。请使用 <b>3Q0907530</b> "
+                "预设或 <b>R7F7010543 / R7F7010563</b> 配置文件。<br>"
+                "通过 CAN 读取时，ContiTool 始终读取完整的 64 KB。",
             )
         )
         body.addWidget(rule)
 
-        body.addWidget(group_label(tr("КЛЮЧ МОДУЛЯ (IKA)", "MODULE KEY (IKA)")))
+        body.addWidget(group_label(tr("КЛЮЧ МОДУЛЯ (IKA)", "MODULE KEY (IKA)", "模块密钥 (IKA)")))
         ika = _text()
         ika.setText(
             tr(
@@ -83,11 +91,18 @@ class GuideDialog(Dialog):
                 "the gateway and the module's IKA slot.<br><br>"
                 "All zeros (<code>00..00</code>) and the string <code>000000000000000000000000000000E5</code> are not "
                 "keys — the latter is an encrypted container header.",
+                "配对校验由模块自身完成——信息娱乐主机、仪表盘、功放等。"
+                "模块会将网关的应答与自身的 16 字节 <b>IKA</b> 密钥进行比对，因此密钥必须在两侧一致。<br><br>"
+                "<b>原车密钥。</b> 从模块自身的转储中读取明文 IKA 密钥，并在适配时输入。<br>"
+                "<b>自定义密钥对。</b> 在适配窗口中点击「生成」，然后将同一密钥同时写入"
+                "网关和模块的 IKA 槽位。<br><br>"
+                "全零（<code>00..00</code>）和字符串 <code>000000000000000000000000000000E5</code> 都不能作为密钥——"
+                "后者是加密容器的头。",
             )
         )
         body.addWidget(ika)
 
-        body.addWidget(group_label(tr("ПОРЯДОК РАБОТЫ", "ORDER OF WORK")))
+        body.addWidget(group_label(tr("ПОРЯДОК РАБОТЫ", "ORDER OF WORK", "操作步骤")))
         order = _text()
         order.setText(
             tr(
@@ -103,11 +118,17 @@ class GuideDialog(Dialog):
                 "4. Click “Write to ECU”. Each area to be written is read from the ECU first and verified by reading it back after.<br><br>"
                 "All three memory regions (<b>CodeFlash</b> including boot blocks, <b>DataFlash</b> 64 KB, and <b>Uflash</b> 32 KB) "
                 "are read and written over CAN; no programmer is needed.",
+                "1. 按上图接线连接模块，并配置好适配器。<br>"
+                "2. 读取模块——ContiTool 会保存完整的内存副本并打开它。<br>"
+                "3. 进行所需修改：改动只写入文件副本，备份原件不会被改动。<br>"
+                "4. 点击「写入模块」。每个待写入区域都会先从模块读取，写入后再通过回读校验。<br><br>"
+                "三个内存区域（<b>CodeFlash</b>（含引导区）、<b>DataFlash</b> 64 KB 和 <b>Uflash</b> 32 KB）"
+                "均通过 CAN 读取和写入，无需编程器。",
             )
         )
         body.addWidget(order)
 
-        body.addWidget(group_label(tr("ЧАСТЫЕ ВОПРОСЫ", "FAQ")))
+        body.addWidget(group_label(tr("ЧАСТЫЕ ВОПРОСЫ", "FAQ", "常见问题")))
         faq = _text()
         faq.setText(tr(
             "<b>VNCI не подключается, хотя драйвер поддерживается.</b><br>"
@@ -170,10 +191,39 @@ class GuideDialog(Dialog):
             "<b>How do I report a problem?</b><br>"
             "After an error ContiTool offers a report itself (or Help → Report a problem…): it collects an archive with "
             "the logs and opens a new issue on GitHub. Please do not message the author directly.",
+            "<b>VNCI 无法连接，尽管驱动程序受支持。</b><br>"
+            "重新连接适配器，或连续多次点击「检查连接」。连接时 D-PDU 驱动会自行将适配器"
+            "刷写为其自身版本（约 30 秒），而 ContiTool 会将其误判为 CAN 连接错误。"
+            "若仍无效——请重启电脑。<br><br>"
+            "<b>我的廉价国产适配器「能用」——那就可以用它了吗？</b><br>"
+            "不可以。任何廉价国产适配器都不被视为安全，即使程序与之「兼容」。"
+            "一个 2 美元的适配器会让设备变砖的概率提高 99.9%。<br><br>"
+            "<b>首次读取过程中连接中断，网关不再响应。</b><br>"
+            "关闭点火几秒后重新打开；万不得已时断开蓄电池端子。"
+            "在台架上，可断开 +12 V 电源几秒。总之，在实车上最好别这么折腾。<br><br>"
+            "<b>使用 VAS 6154 / VNCI 需要 ODIS 吗？</b><br>"
+            "不需要。D-PDU 驱动 27.2 随 ContiTool 提供（程序旁的 <code>dpdu/</code> 文件夹）。系统中只需"
+            "适配器自带的 USB 驱动——即「VW D-PDU API」包中的 VAS 6154 附加组件；ODIS 本身并非"
+            "必需。<br><br>"
+            "<b>电脑上装了多个 D-PDU 驱动——程序会用哪一个？</b><br>"
+            "所有找到的驱动都会在「连接」窗口中各自成行显示，并标注版本。默认选择 ContiTool 自带的 27.2 驱动，"
+            "但也可以选择其他任意驱动，选择会被记住。对于 30 及更新版本的驱动，目前工作不稳定："
+            "适配器会在 UDS 刷写过程中卡住，因此它们需要单独勾选。<br><br>"
+            "<b>驱动会重新刷写适配器——这正常吗？</b><br>"
+            "正常。连接时 D-PDU 驱动会自行将自身版本的固件写入 VAS 6154 / VNCI（约 30 秒）——"
+            "请等待完成，不要拔下适配器。这是安全的：ODIS 下次连接时也会将自身版本写回"
+            "适配器。ContiTool 工作期间，ODIS 和 VCTool 必须保持关闭。<br><br>"
+            "<b>我需要其他版本的驱动。</b><br>"
+            "将已安装驱动的文件夹复制到 ContiTool 旁的 <code>dpdu/</code>，放在已有的 "
+            "<code>VW_PDUAPI_27.2</code> 旁边——程序会自动找到它。无需写入注册表，也无需管理员权限，"
+            "但必须是 64 位版本。<br><br>"
+            "<b>如何报告问题？</b><br>"
+            "出错后 ContiTool 会主动提议生成报告（或通过「帮助 → 报告问题…」）：它会收集包含日志的压缩包，"
+            "并打开 GitHub 上的新 issue 页面。请勿直接私信作者。",
         ))
         body.addWidget(faq)
         body.addStretch(1)
 
         self.body.addWidget(area, 1)
-        self.finish(cancel_text=tr("Закрыть", "Close"))
+        self.finish(cancel_text=tr("Закрыть", "Close", "关闭"))
         self.resize(1200, 780)

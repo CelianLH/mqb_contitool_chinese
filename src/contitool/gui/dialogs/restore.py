@@ -18,15 +18,16 @@ class RestoreDialog(Dialog):
     def __init__(self, parent: QWidget | None = None, start_dir: str = "") -> None:
         super().__init__(
             parent,
-            tr("Залить бэкап в блок", "Write a backup to the ECU"),
+            tr("Залить бэкап в блок", "Write a backup to the ECU", "将备份写入模块"),
             tr(
                 "Укажите файлы бэкапа, снятого с этого же блока. Тип файла определяется по содержимому.",
                 "Pick the files of a backup taken from this very ECU. The file type is detected from its content.",
+                "请选择从该模块本身提取的备份文件。文件类型按内容自动识别。",
             ),
         )
         self.files: dict[str, Path] = {}
         self._dir = start_dir
-        self.body.addWidget(button(tr("Выбрать файлы бэкапа…", "Choose backup files…"), slot=self._pick), 0, Qt.AlignmentFlag.AlignLeft)
+        self.body.addWidget(button(tr("Выбрать файлы бэкапа…", "Choose backup files…", "选择备份文件…"), slot=self._pick), 0, Qt.AlignmentFlag.AlignLeft)
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(14)
@@ -63,11 +64,16 @@ class RestoreDialog(Dialog):
                 "written, and the result is read back. CodeFlash goes in through the engineering bootloader; then"
                 " the backup's bootloader is written back, or, if Uflash is not selected, the one the ECU "
                 "had.<br><br>Keep the +12 V supply (Pin 1 and 14) on until the end.",
+                "ContiTool 会先从模块读取 <b>FAZIT</b> 和 <b>VCRN</b>，并与备份进行比对。"
+                "其他模块的备份会在第一条写入命令前被拒绝。<br><br>之后与「写入模块」相同："
+                "每个区域写入前都先从模块读取，只写入有差异的内存块，写入后再回读校验。"
+                "CodeFlash 通过工程引导加载程序写入；随后写回备份中的引导加载程序，"
+                "若未选择 Uflash，则写回模块原本的引导加载程序。<br><br>请始终保持 +12 V 供电（Pin 1 和 14）直到结束。",
             )
         )
         self.body.addWidget(note)
 
-        self.ok = button(tr("Залить в блок", "Write to ECU"), "PrimaryBtn", slot=self.accept)
+        self.ok = button(tr("Залить в блок", "Write to ECU", "写入模块"), "PrimaryBtn", slot=self.accept)
         self._refresh()  # before finish(): the dialog is sized without the hidden hints
         self.finish(ok=self.ok)
 
@@ -86,7 +92,11 @@ class RestoreDialog(Dialog):
             self.files[kind] = p
             self.boxes[kind].setChecked(True)
         self.lbl_rejected.setText(
-            tr(f"Не дампы шлюза, пропущены: {', '.join(rejected)}", f"Not gateway dumps, skipped: {', '.join(rejected)}")
+            tr(
+                f"Не дампы шлюза, пропущены: {', '.join(rejected)}",
+                f"Not gateway dumps, skipped: {', '.join(rejected)}",
+                f"非网关转储，已跳过：{', '.join(rejected)}",
+            )
         )
         self.lbl_rejected.setVisible(bool(rejected))
         self._refresh()
@@ -94,7 +104,10 @@ class RestoreDialog(Dialog):
 
     def _pick(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
-            self, tr("Файлы бэкапа", "Backup files"), self._dir, tr("Дампы (*.bin);;Все файлы (*)", "Dumps (*.bin);;All files (*)")
+            self,
+            tr("Файлы бэкапа", "Backup files", "备份文件"),
+            self._dir,
+            tr("Дампы (*.bin);;Все файлы (*)", "Dumps (*.bin);;All files (*)", "转储 (*.bin);;所有文件 (*)"),
         )
         if paths:
             self._dir = str(Path(paths[0]).parent)
@@ -104,7 +117,7 @@ class RestoreDialog(Dialog):
         for kind, box in self.boxes.items():
             p = self.files.get(kind)
             box.setEnabled(p is not None)
-            self._paths[kind].setText(str(p) if p else tr("не выбран", "not chosen"))
+            self._paths[kind].setText(str(p) if p else tr("не выбран", "not chosen", "未选择"))
         if self.files:
             cf, df = self.files.get("cflash"), self.files.get("dflash")
             ident = backup_identity(cf.read_bytes() if cf else None, df.read_bytes() if df else None)

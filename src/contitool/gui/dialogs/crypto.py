@@ -32,6 +32,7 @@ from contitool.core import (
     MFL_KEYCODE_PRESETS,
     UNSUPPORTED_DATASET_RU,
     UNSUPPORTED_DATASET_WARNING,
+    UNSUPPORTED_DATASET_ZH,
     ZdcAutoParamConfig,
     check_fec_dataset_support,
 )
@@ -48,8 +49,10 @@ def key_selector(private: bool, path: Path | None = None) -> DumpFileSelector:
     sel = DumpFileSelector(
         title_ru="Приватный ключ RSA-1024" if private else "Ключ RSA-1024",
         title_en="Private RSA-1024 key" if private else "RSA-1024 key",
+        title_zh="RSA-1024 私钥" if private else "RSA-1024 密钥",
         hint_ru=".json / .private.pem" if private else ".json / .pem / 128 Б .bin",
         hint_en=".json / .private.pem" if private else ".json / .pem / 128 B .bin",
+        hint_zh=".json / .private.pem" if private else ".json / .pem / 128 B .bin",
         expected_kinds=("rsa_key",),
     )
     if path is not None and path.is_file():
@@ -71,12 +74,15 @@ class SwapActivateDialog(Dialog):
             tr(
                 "Активация SWaP/FEC в DataFlash",
                 "SWaP/FEC activation in DataFlash",
+                "在 DataFlash 中激活 SWaP/FEC",
             ),
             tr(
                 "Отметьте FEC, которые должны быть активны в шлюзе. ContiTool запишет их в слоты Multi-FSC в "
                 "DataFlash; ключ RSA, сертификаты и изменение CodeFlash не нужны.",
                 "Tick the FECs that should be active in the gateway. ContiTool writes them into the Multi-FSC "
                 "slots in DataFlash; no RSA key, certificate or CodeFlash change is needed.",
+                "勾选应在网关中激活的 FEC。ContiTool 会将其写入 DataFlash 中的 Multi-FSC 槽位；"
+                "无需 RSA 密钥、证书或改动 CodeFlash。",
             ),
             width=780,
         )
@@ -99,6 +105,7 @@ class SwapActivateDialog(Dialog):
                     supported=False,
                     reason_ru="Данные параметрии ZDC недоступны",
                     reason_en="ZDC dataset information unavailable",
+                    reason_zh="ZDC 参数化数据不可用",
                 )
 
         if dataset_summary is not None and dataset_summary.has_any_valid_dataset:
@@ -108,27 +115,29 @@ class SwapActivateDialog(Dialog):
             ds_line = tr(
                 f"Текущий датасет ZDC: {pn}{ver}{tag}, поддерживает FEC: {len(dataset_summary.supported_fecs)}",
                 f"Current ZDC dataset: {pn}{ver}{tag}, FECs supported: {len(dataset_summary.supported_fecs)}",
+                f"当前 ZDC 数据集：{pn}{ver}{tag}，支持的 FEC：{len(dataset_summary.supported_fecs)}",
             )
         else:
             ds_line = tr(
                 "Текущий датасет ZDC: область 0x0000..0x303F пуста (параметрия не записана)",
                 "Current ZDC dataset: region 0x0000..0x303F is empty (no dataset flashed)",
+                "当前 ZDC 数据集：区域 0x0000..0x303F 为空（未写入参数化数据）",
             )
         self.lbl_dataset = hint(ds_line)
         self.body.addWidget(self.lbl_dataset)
 
         # 1. Feature table + quick selection buttons
         self.btn_supported = button(
-            tr("Поддерживаемые датасетом", "Dataset-supported"),
+            tr("Поддерживаемые датасетом", "Dataset-supported", "数据集支持的功能"),
             "GhostBtn",
             slot=self._select_supported,
         )
         self.btn_supported.setEnabled(bool(dataset_summary and dataset_summary.supported_fecs))
-        self.btn_all = button(tr("Выбрать все", "Select all"), "GhostBtn", slot=self._select_all)
-        self.btn_none = button(tr("Снять все", "Clear all"), "GhostBtn", slot=self._select_none)
+        self.btn_all = button(tr("Выбрать все", "Select all", "全选"), "GhostBtn", slot=self._select_all)
+        self.btn_none = button(tr("Снять все", "Clear all", "取消全选"), "GhostBtn", slot=self._select_none)
         self.body.addLayout(
             row(
-                group_label(tr("1. ФУНКЦИИ SWAP / FEC", "1. SWAP / FEC FEATURES")),
+                group_label(tr("1. ФУНКЦИИ SWAP / FEC", "1. SWAP / FEC FEATURES", "1. SWAP / FEC 功能")),
                 1,
                 self.btn_supported,
                 self.btn_all,
@@ -139,9 +148,9 @@ class SwapActivateDialog(Dialog):
         self.tbl = QTableWidget(len(self._fecs), 3)
         self.tbl.setHorizontalHeaderLabels(
             [
-                tr("Код FeC", "FeC"),
-                tr("Функция шлюза", "Gateway feature"),
-                tr("Текущий датасет", "Current dataset"),
+                tr("Код FeC", "FeC", "FeC 代码"),
+                tr("Функция шлюза", "Gateway feature", "网关功能"),
+                tr("Текущий датасет", "Current dataset", "当前数据集"),
             ]
         )
         self.tbl.verticalHeader().setVisible(False)
@@ -165,18 +174,20 @@ class SwapActivateDialog(Dialog):
             it_code.setCheckState(Qt.CheckState.Checked if code in active_set else Qt.CheckState.Unchecked)
             it_code.setFont(mono_font(12, bold=True))
 
-            ru_d, en_d = KNOWN_GATEWAY_FECS.get(code, (f"Пользовательский FeC (0x{code:08X})", f"Custom FeC (0x{code:08X})"))
-            feat_label = (en_d if get_lang() == "en" else ru_d).replace(f" (0x{code:08X})", "")
+            ru_d, en_d, zh_d = KNOWN_GATEWAY_FECS.get(
+                code, (f"Пользовательский FeC (0x{code:08X})", f"Custom FeC (0x{code:08X})", f"自定义 FeC (0x{code:08X})")
+            )
+            feat_label = tr(ru_d, en_d, zh_d).replace(f" (0x{code:08X})", "")
             it_name = QTableWidgetItem(feat_label)
             it_name.setFlags(Qt.ItemFlag.ItemIsEnabled)
 
             sup = self._support_by_fec[code]
             it_ds = QTableWidgetItem(
-                tr("✓ Поддерживается", "✓ Supported") if sup.supported else tr("⚠ Не в датасете", "⚠ Unsupported")
+                tr("✓ Поддерживается", "✓ Supported", "✓ 受支持") if sup.supported else tr("⚠ Не в датасете", "⚠ Unsupported", "⚠ 不在数据集中")
             )
             it_ds.setFlags(Qt.ItemFlag.ItemIsEnabled)
             it_ds.setForeground(QColor(theme.OK if sup.supported else theme.WARN))
-            tip = sup.reason if sup.supported else f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING)}\n{sup.reason}"
+            tip = sup.reason if sup.supported else f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING, UNSUPPORTED_DATASET_ZH)}\n{sup.reason}"
             it_name.setToolTip(tip)
             it_ds.setToolTip(tip)
 
@@ -204,6 +215,7 @@ class SwapActivateDialog(Dialog):
             tr(
                 "Добавить в параметрию данные для выбранных FEC",
                 "Add data for the selected FECs to the parameterization",
+                "为选定的 FEC 在参数化数据中添加内容",
             )
         )
         self.chk_auto_param.setChecked(True)
@@ -217,29 +229,30 @@ class SwapActivateDialog(Dialog):
             tr(
                 "Добавить в текущую параметрию",
                 "Add to the current parameterization",
+                "添加到当前参数化数据",
             ),
             "surgical",
         )
-        for pkey, pru, pen in FPA_PRESET_CATALOG:
-            self.cmb_param_preset.addItem(pen if get_lang() == "en" else pru, pkey)
+        for pkey, pru, pen, pzh in FPA_PRESET_CATALOG:
+            self.cmb_param_preset.addItem(tr(pru, pen, pzh), pkey)
 
         self.cmb_param_btn = QComboBox()
-        for bkey, bru, ben in (
-            ("keep", "Оставить как есть (или штатная кнопка MODE)", "Keep existing setting (or console MODE)"),
-            ("console", "Только штатная кнопка MODE на консоли", "Console MODE button only"),
-            ("both", "Кнопка MODE на консоли + кнопка на руле", "Console MODE + steering-wheel button"),
-            ("mfl", "Только кнопка на руле", "Steering-wheel button only"),
+        for bkey, bru, ben, bzh in (
+            ("keep", "Оставить как есть (или штатная кнопка MODE)", "Keep existing setting (or console MODE)", "保持现有设置（或原厂 MODE 键）"),
+            ("console", "Только штатная кнопка MODE на консоли", "Console MODE button only", "仅使用中控台上的原厂 MODE 键"),
+            ("both", "Кнопка MODE на консоли + кнопка на руле", "Console MODE + steering-wheel button", "中控 MODE 键 + 方向盘按键"),
+            ("mfl", "Только кнопка на руле", "Steering-wheel button only", "仅使用方向盘按键"),
         ):
-            self.cmb_param_btn.addItem(ben if get_lang() == "en" else bru, bkey)
+            self.cmb_param_btn.addItem(tr(bru, ben, bzh), bkey)
 
-        self.lbl_param_wheel = QLabel(tr("Кнопка на руле:", "Wheel button:"))
+        self.lbl_param_wheel = QLabel(tr("Кнопка на руле:", "Wheel button:", "方向盘按钮："))
         self.cmb_param_mfl_key = QComboBox()
-        for kcode, kru, ken in MFL_KEYCODE_PRESETS:
-            self.cmb_param_mfl_key.addItem(ken if get_lang() == "en" else kru, kcode)
+        for kcode, kru, ken, kzh in MFL_KEYCODE_PRESETS:
+            self.cmb_param_mfl_key.addItem(tr(kru, ken, kzh), kcode)
 
-        pf_grid.addWidget(QLabel(tr("Шаблон профилей:", "Profile template:")), 0, 0)
+        pf_grid.addWidget(QLabel(tr("Шаблон профилей:", "Profile template:", "驾驶模式模板：")), 0, 0)
         pf_grid.addWidget(self.cmb_param_preset, 0, 1)
-        pf_grid.addWidget(QLabel(tr("Переключение кнопками:", "Physical buttons:")), 1, 0)
+        pf_grid.addWidget(QLabel(tr("Переключение кнопками:", "Physical buttons:", "实体按键切换：")), 1, 0)
         pf_grid.addWidget(self.cmb_param_btn, 1, 1)
         pf_grid.addWidget(self.lbl_param_wheel, 2, 0)
         pf_grid.addWidget(self.cmb_param_mfl_key, 2, 1)
@@ -250,6 +263,7 @@ class SwapActivateDialog(Dialog):
             tr(
                 "Оставлять выбранный профиль после выключения зажигания",
                 "Keep the selected profile after the ignition is switched off",
+                "熄火后保留所选驾驶模式",
             )
         )
         pf_lay.addWidget(self.chk_param_kl15)
@@ -260,7 +274,7 @@ class SwapActivateDialog(Dialog):
         self.cmb_param_btn.currentIndexChanged.connect(lambda _i: self._sync())
 
         # 2. Vehicle identity (VCRN + optional VIN)
-        self.body.addWidget(group_label(tr("2. ИДЕНТИФИКАТОРЫ БЛОКА", "2. ECU IDENTITY")))
+        self.body.addWidget(group_label(tr("2. ИДЕНТИФИКАТОРЫ БЛОКА", "2. ECU IDENTITY", "2. 模块标识符")))
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(6)
@@ -279,7 +293,7 @@ class SwapActivateDialog(Dialog):
         grid.addWidget(self.ed_vin, 0, 3)
         self.body.addLayout(grid)
 
-        self.chk_no_vin = QCheckBox(tr("Без привязки к VIN", "No VIN binding"))
+        self.chk_no_vin = QCheckBox(tr("Без привязки к VIN", "No VIN binding", "不绑定 VIN"))
         self.chk_no_vin.toggled.connect(lambda _c: self._sync())
         self.ed_vin.textChanged.connect(lambda _t: self._sync())
         self.body.addWidget(self.chk_no_vin)
@@ -289,7 +303,7 @@ class SwapActivateDialog(Dialog):
         self.lbl_vin_guard.setVisible(False)
         self.body.addWidget(self.lbl_vin_guard)
 
-        self.btn_ok = button(tr("Применить в DataFlash", "Apply to DataFlash"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Применить в DataFlash", "Apply to DataFlash", "应用到 DataFlash"), "PrimaryBtn", slot=self.accept)
         self.finish(ok=self.btn_ok)
         self._sync()
 
@@ -368,7 +382,11 @@ class SwapActivateDialog(Dialog):
             return True
         set_tone(self.lbl_vin_guard, "err")
         self.lbl_vin_guard.setText(
-            tr("✗  VIN должен содержать ровно 17 ASCII-символов (или очистите поле)", "✗  VIN must be 17 ASCII characters (or leave empty)")
+            tr(
+                "✗  VIN должен содержать ровно 17 ASCII-символов (или очистите поле)",
+                "✗  VIN must be 17 ASCII characters (or leave empty)",
+                "✗  VIN 必须为 17 位 ASCII 字符（或留空）",
+            )
         )
         self.lbl_vin_guard.setVisible(True)
         return False
@@ -379,10 +397,11 @@ class SwapActivateDialog(Dialog):
         if unsup:
             codes_txt = ", ".join(f"{c:08X}" for c in unsup)
             self.warn_callout.label.setText(
-                f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING)}\n"
+                f"{tr(UNSUPPORTED_DATASET_RU, UNSUPPORTED_DATASET_WARNING, UNSUPPORTED_DATASET_ZH)}\n"
                 + tr(
                     f"Для выбранных FEC ({codes_txt}) в параметрии нет данных. Их можно добавить галочкой ниже.",
                     f"The parameterization has no data for the selected FECs ({codes_txt}). The option below adds it.",
+                    f"参数化数据中没有所选 FEC（{codes_txt}）的数据。可通过下方选项添加。",
                 )
             )
             self.warn_callout.setVisible(True)
@@ -403,9 +422,9 @@ class SwapActivateDialog(Dialog):
 
         sel_cnt = len(self.selected_fecs)
         self.btn_ok.setText(
-            tr(f"Применить в DataFlash ({sel_cnt})", f"Apply to DataFlash ({sel_cnt})")
+            tr(f"Применить в DataFlash ({sel_cnt})", f"Apply to DataFlash ({sel_cnt})", f"应用到 DataFlash ({sel_cnt})")
             if sel_cnt
-            else tr("Отключить все в DataFlash", "Disable all in DataFlash")
+            else tr("Отключить все в DataFlash", "Disable all in DataFlash", "在 DataFlash 中全部停用")
         )
         self.btn_ok.setEnabled(self._vin_valid())
 
@@ -417,12 +436,14 @@ class RsaKeyDialog(Dialog):
         swap = target == "swap"
         super().__init__(
             parent,
-            tr("Свой ключ SWaP", "Your SWaP key") if swap else tr("Свой ключ FBL", "Your FBL key"),
+            tr("Свой ключ SWaP", "Your SWaP key", "你的 SWaP 密钥") if swap else tr("Свой ключ FBL", "Your FBL key", "你的 FBL 密钥"),
             tr(
                 "В CodeFlash вшивается публичная часть ключа RSA-1024 (e = 3). После записи в блок шлюз принимает "
                 "сертификаты функций, подписанные этим ключом.",
                 "The public part of an RSA-1024 (e = 3) key is embedded into CodeFlash. Once written to the ECU, "
                 "the gateway accepts feature certificates signed with this key.",
+                "将 RSA-1024（e = 3）密钥的公钥部分嵌入 CodeFlash。写入模块后，"
+                "网关将接受由该密钥签名的功能证书。",
             )
             if swap
             else tr(
@@ -430,10 +451,12 @@ class RsaKeyDialog(Dialog):
                 "принимать прошивки, подписанные этим ключом.",
                 "The public part of an RSA-1024 (e = 3) key is embedded into the CodeFlash bootloader area. The "
                 "bootloader will accept firmware signed with this key.",
+                "将 RSA-1024（e = 3）密钥的公钥部分嵌入 CodeFlash 的引导加载程序区域。"
+                "引导加载程序将接受由该密钥签名的固件。",
             ),
         )
-        self.rb_new = QRadioButton(tr("Создать новую пару ключей", "Create a new keypair"))
-        self.rb_file = QRadioButton(tr("Взять из файла", "Use a key file"))
+        self.rb_new = QRadioButton(tr("Создать новую пару ключей", "Create a new keypair", "生成新的密钥对"))
+        self.rb_file = QRadioButton(tr("Взять из файла", "Use a key file", "从文件加载"))
         grp = QButtonGroup(self)
         for rb in (self.rb_new, self.rb_file):
             grp.addButton(rb)
@@ -446,13 +469,15 @@ class RsaKeyDialog(Dialog):
                 ".public.pem), каждый раз в новые файлы. Приватный ключ нужен для подписи — сохраните его.",
                 "The key pair is saved in the ContiTool_keys folder next to the dumps (.json, .private.pem, "
                 ".public.pem), in new files each time. The private key is needed to sign — keep it.",
+                "密钥对会保存到转储旁的 ContiTool_keys 文件夹（.json、.private.pem、"
+                ".public.pem），每次都写入新文件。私钥用于签名——请妥善保管。",
             )
         )
         self.body.addWidget(self.lbl_new)
         self.sel_key = key_selector(private=False)
         self.body.addWidget(self.sel_key)
 
-        self.btn_ok = button(tr("Вшить ключ", "Embed key"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Вшить ключ", "Embed key", "嵌入密钥"), "PrimaryBtn", slot=self.accept)
         self.finish(ok=self.btn_ok)
         for rb in (self.rb_new, self.rb_file):
             rb.toggled.connect(lambda _c: self._sync())
@@ -478,19 +503,21 @@ class FscDialog(Dialog):
     ) -> None:
         super().__init__(
             parent,
-            tr("Выпустить сертификат функции", "Issue a feature certificate"),
+            tr("Выпустить сертификат функции", "Issue a feature certificate", "签发功能证书"),
             tr(
                 "Сертификат SWaP (FSC, 171 байт) включает функцию в шлюзе. Он подписывается приватным ключом, "
                 "публичная часть которого уже вшита в прошивку.",
                 "A SWaP certificate (FSC, 171 bytes) enables a feature in the gateway. It is signed with the private "
                 "key whose public part is already embedded in the firmware.",
+                "SWaP 证书（FSC，171 字节）用于在网关中启用某项功能。它使用私钥签名，"
+                "其公钥部分已嵌入固件中。",
             ),
             width=720,
         )
         self.sel_key = key_selector(private=True, path=key_path)
         self.body.addWidget(self.sel_key)
 
-        self.body.addWidget(group_label(tr("ПАРАМЕТРЫ", "PARAMETERS")))
+        self.body.addWidget(group_label(tr("ПАРАМЕТРЫ", "PARAMETERS", "参数")))
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(8)
@@ -501,9 +528,9 @@ class FscDialog(Dialog):
         self.cmb_fec.setEditable(True)
         self.cmb_fec.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.cmb_fec.setMinimumContentsLength(28)
-        for code, (ru_d, en_d) in KNOWN_GATEWAY_FECS.items():
-            self.cmb_fec.addItem(f"{code:08X} — {en_d if get_lang() == 'en' else ru_d}", f"{code:08X}")
-        grid.addWidget(QLabel(tr("Функция", "Feature")), 0, 0)
+        for code, (ru_d, en_d, zh_d) in KNOWN_GATEWAY_FECS.items():
+            self.cmb_fec.addItem(f"{code:08X} — {tr(ru_d, en_d, zh_d)}", f"{code:08X}")
+        grid.addWidget(QLabel(tr("Функция", "Feature", "功能")), 0, 0)
         grid.addWidget(self.cmb_fec, 0, 1, 1, 3)
 
         self.ed_vcrn = QLineEdit(vcrn)
@@ -518,7 +545,7 @@ class FscDialog(Dialog):
         grid.addWidget(self.ed_vin, 1, 3)
         self.body.addLayout(grid)
 
-        self.chk_no_vin = QCheckBox(tr("Без привязки к VIN", "No VIN binding"))
+        self.chk_no_vin = QCheckBox(tr("Без привязки к VIN", "No VIN binding", "不绑定 VIN"))
         self.chk_no_vin.toggled.connect(self._sync)
         self.body.addWidget(self.chk_no_vin)
         self.body.addWidget(
@@ -526,16 +553,18 @@ class FscDialog(Dialog):
                 tr(
                     "VCRN и VIN подставлены из DataFlash этого блока. Сертификат действует только для них.",
                     "VCRN and VIN are taken from this ECU's DataFlash. The certificate is valid for those only.",
+                    "VCRN 和 VIN 取自该模块的 DataFlash。证书仅对它们有效。",
                 )
                 if vcrn or vin
                 else tr(
                     "VCRN (5 байт) и VIN (17 символов) берутся из DataFlash автомобиля.",
                     "VCRN (5 bytes) and VIN (17 characters) come from the vehicle's DataFlash.",
+                    "VCRN（5 字节）和 VIN（17 个字符）取自车辆的 DataFlash。",
                 )
             )
         )
 
-        self.btn_ok = button(tr("Подписать", "Sign"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Подписать", "Sign", "签名"), "PrimaryBtn", slot=self.accept)
         self.finish(ok=self.btn_ok)
         self.sel_key.file_changed.connect(lambda _d: self._sync())
         for ed in (self.ed_vcrn, self.ed_vin):
@@ -578,17 +607,19 @@ class OdxSignDialog(Dialog):
     def __init__(self, key_path: Path | None = None, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
-            tr("Подписать прошивку для ODX", "Sign firmware for ODX"),
+            tr("Подписать прошивку для ODX", "Sign firmware for ODX", "为 ODX 签名固件"),
             tr(
                 "Считает значение <FW-SIGNATURE> для текущего CodeFlash — его вставляют в контейнер .odx, "
                 "чтобы заводской загрузчик принял прошивку.",
                 "Computes the <FW-SIGNATURE> value for the current CodeFlash — paste it into the .odx container "
                 "so the stock bootloader accepts the firmware.",
+                "计算当前 CodeFlash 的 <FW-SIGNATURE> 值——将其填入 .odx 容器，"
+                "使原厂引导加载程序接受该固件。",
             ),
         )
         self.sel_key = key_selector(private=True, path=key_path)
         self.body.addWidget(self.sel_key)
-        self.btn_ok = button(tr("Подписать", "Sign"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Подписать", "Sign", "签名"), "PrimaryBtn", slot=self.accept)
         self.finish(ok=self.btn_ok)
         self.sel_key.file_changed.connect(lambda _d: self._sync())
         self._sync()

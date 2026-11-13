@@ -15,7 +15,7 @@ _SETTING = "disclaimer/accepted_version"
 
 class DisclaimerDialog(Dialog):
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent, tr("Прочитайте перед началом работы", "Read this before you start"), width=720)
+        super().__init__(parent, tr("Прочитайте перед началом работы", "Read this before you start", "开始前请阅读"), width=720)
 
         risk = Callout("err")
         risk.label.setText(tr(
@@ -23,6 +23,8 @@ class DisclaimerDialog(Dialog):
             "питания во время записи могут необратимо вывести блок из строя («кирпич»).",
             "<b>ContiTool reads and rewrites the memory of the J533 gateway directly.</b> A mistake, a dropped link or a "
             "power dip during a write can damage the ECU for good (a “brick”).",
+            "<b>ContiTool 会直接读取并重写 J533 网关的内存。</b>写入过程中的操作失误、连接中断或供电波动"
+            "都可能永久损坏模块（即「变砖」）。",
         ))
         self.body.addWidget(risk)
 
@@ -37,6 +39,11 @@ class DisclaimerDialog(Dialog):
             "• you cannot work with ODIS or VCTool;<br>"
             "• you have ANY, even the slightest doubt that the adapter, the wiring or the power supply is sound;<br>"
             "• you have a cheap Chinese adapter — even if the program “gets along” with it, it is not considered safe.",
+            "<b>以下情况请勿使用本程序：</b><br>"
+            "• 你不明白自己为何「需要」它；<br>"
+            "• 你不会使用 ODIS 或 VCTool；<br>"
+            "• 你对适配器、线束或供电有任何哪怕最轻微的疑虑；<br>"
+            "• 你使用的是廉价国产适配器——即使程序与之「兼容」，它也不被视为安全。",
         )))
 
         self.body.addWidget(self._text(tr(
@@ -50,6 +57,10 @@ class DisclaimerDialog(Dialog):
             "modules stop seeing each other — the car may not start or drive, and you are stuck wherever it stands. "
             "Besides, the car's voltage sags during a long write, and any dip or dropout during a write is a straight "
             "road to a brick.",
+            "<b>为什么不要在实车上操作。</b>请拆下网关，在台架上配合稳压电源操作。"
+            "在车上，网关连接着所有模块：当它处于引导加载程序时，或写入失败时，各模块之间会彼此失去联系——"
+            "车辆可能无法启动或行驶，你就被困在原地。此外，长时间写入期间车载电压会跌落，"
+            "写入过程中的任何电压跌落或中断都会直接导致变砖。",
         )))
 
         self.body.addWidget(self._text(tr(
@@ -61,20 +72,29 @@ class DisclaimerDialog(Dialog):
             "<b>no</b> responsibility whatsoever for a damaged ECU or car. Do not message the author about it — "
             f'<a href="{ISSUES_PAGE}">open an issue on GitHub</a> and wait for an answer.<br>'
             "The program is free, not for sale, and provided “as is”, without warranty of any kind.",
+            "<b>责任声明。</b>如果你将本程序连接到车辆，一切后果自负：作者对损坏的模块或车辆不承担"
+            "<b>任何</b>责任。请勿因此私信作者——"
+            f'请在 <a href="{ISSUES_PAGE}">GitHub 上创建 issue</a> 并等待回复。<br>'
+            "本程序免费、不用于销售，并「按现状」提供，不附带任何形式的保证。",
         )))
 
         self.chk_agree = QCheckBox(tr(
             "Я прочитал(а) всё выше, понимаю риски и беру ответственность на себя",
             "I have read all of the above, understand the risks and take responsibility",
+            "我已阅读以上全部内容，了解风险并自行承担责任",
         ))
-        self.chk_quiet = QCheckBox(tr("Не показывать до следующей версии", "Do not show again until the next version"))
+        self.chk_quiet = QCheckBox(tr(
+            "Не показывать до следующей версии",
+            "Do not show again until the next version",
+            "在下个版本前不再显示",
+        ))
         self.body.addWidget(self.chk_agree)
         self.body.addWidget(self.chk_quiet)
 
-        self.btn_ok = button(tr("Продолжить", "Continue"), "PrimaryBtn", slot=self.accept)
+        self.btn_ok = button(tr("Продолжить", "Continue", "继续"), "PrimaryBtn", slot=self.accept)
         self.btn_ok.setEnabled(False)
         self.chk_agree.toggled.connect(self.btn_ok.setEnabled)
-        self.finish(ok=self.btn_ok, cancel_text=tr("Выйти", "Quit"))
+        self.finish(ok=self.btn_ok, cancel_text=tr("Выйти", "Quit", "退出"))
 
     @staticmethod
     def _text(html: str) -> QLabel:

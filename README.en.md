@@ -4,6 +4,7 @@
 ### Renesas RH850/F1L — Diagnosis CAN Studio, Component Protection (`KSCHUTZ`), Engineering Mode & `SWaP / RSA-1024`
 
 [![Russian README](https://img.shields.io/badge/lang-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-2563EB?style=for-the-badge)](README.md)
+[![中文 README](https://img.shields.io/badge/lang-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-2563EB?style=for-the-badge)](README.zh.md)
 [![GUI + CLI](https://img.shields.io/badge/Desktop%20GUI%20%2B%20CLI-Windows%20%7C%20macOS%20%7C%20Linux-0EA5E9?style=for-the-badge)](#quick-start)
 [![MCU RH850/F1L](https://img.shields.io/badge/MCU-Renesas%20RH850%2FF1L%20(64KB%20DFlash)-0284C7?style=for-the-badge)](#the-64-kb-dataflash-rule-for-bench-programmers)
 [![Free](https://img.shields.io/badge/Status-FREE-D97706?style=for-the-badge)](#intended-use--terms)
@@ -13,7 +14,7 @@
 [![Drive2](https://img.shields.io/badge/Drive2-PerkTheFox-E31E24?style=flat-square&logo=rss&logoColor=white)](https://www.drive2.ru/users/perkthefox/)
 [![Telegram](https://img.shields.io/badge/Telegram-%40perkthefox-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/perkthefox)
 
-**Made by PerkTheFox** • **[🇷🇺 Читать на русском (`README.md`)](README.md) | 🇬🇧 English** • **[📚 Deep Technical Docs (`docs/`)](docs/README.md)**
+**Made by PerkTheFox** • **[🇷🇺 Читать на русском (`README.md`)](README.md) | [🇨🇳 简体中文 (`README.zh.md`)](README.zh.md) | 🇬🇧 English** • **[📚 Deep Technical Docs (`docs/`)](docs/README.md)**
 
 </div>
 
