@@ -44,10 +44,10 @@
    - **写回备份**（包括网关在刷写中断后**卡在其 `FBL` 引导加载程序**中的情况）与 **`F15B` 指纹修复**：你选择备份文件，ContiTool 会通过 UDS 校验 `FAZIT` / `VCRN`，并在发出第一条写入命令前拒绝其他 ECU 的备份；若网关因旧的、非零的 `F15B` 指纹而在阶段 1 静默，ContiTool 会自动提议用其自身的 `CodeFlash` 进行一次 UDS 重刷来修复。**导出备份**将转储按读取原样复制到任意文件夹。
    - **引导式 CAN 参数集上传与 ECU 自身的接受结果**：**“通过 CAN 写入参数集”**会检查实时的 `SWaP` 功能（`22 3C 00`）与编码（`22 06 00`），可选择直接在网关的 `DataFlash` 中开启缺失的 `SWaP` 功能，通过 UDS 上传 `ZDC` 块，并对齐 `0x0600` 编码位。SWaP/FEC 激活页面读取 `22 3C 00`——哪些功能已激活，哪些被拒绝及其原因。
    - 每次操作都会在状态栏显示当前步骤、进度（`%`）、字节计数、传输速度（`KB/s`）、已用时间与 `ETA`，并且 ContiTool 会在启动时静默检查 GitHub Releases 是否有新版本。底部的日志默认是简短摘要——操作、步骤与结果；“详细”模式则显示带地址、UDS 与 CAN 的完整技术日志。
-   - 顶栏提供一键即时切换 **Русский ⇄ English** 语言。
+   - 顶栏提供一键即时切换 **Русский ⇄ English ⇄ 中文** 语言（默认中文）。
 2. **通过 Diagnosis CAN（`500 kbit/s`）完全替代台架编程器——无需拆开 ECU**：
    - 自动发现适配器：`CANable` / `SLCAN`、`SocketCAN`、`PCAN`、`Vector`、`Kvaser`，以及在 Windows 上的 `J2534 PassThru`（Tactrix、Mongoose 等），并通过 ODIS D-PDU 驱动支持 `VAS 6154` / `VNCI 6154A`（使用适配器管理的硬件 `ISO-TP` 进行 UDS 刷写），带有一键链路检查、对不支持的 `5Q0` 和 `Lear`（`PowerPC`）网关的自动检测/拒绝、内置的 **20 针 J533 `T20`** 接线图，以及 CAN 终端电阻确认（`VAS 6154` / `VNCI` 和 `J2534` 适配器会自行终结总线）。操作进行期间，不会向适配器打开第二条链路。使用已安装的 D-PDU 驱动；版本 `27.2` 与 `31.0` / `31.1` 可直接运行，其他版本仅在明确确认后使用（连接时驱动会将 VCI 重刷为其自身版本）。读取内存需要原生 USB 适配器：串口 SLCAN 克隆（CH340 等）会丢失帧。
-   - 完整的只读 CAN 备份：**`Cflash.bin`（`1.5 MB`，经批量 `FED_READER` 用时 `~61 s`）** + **`Uflash.bin`（`32 KB`）** + **`Dflash.bin`（`64 KB`，经 `FACI Blank Check` 确定性读取）**，附带 `SHA-256` 清单，此外还支持读取任意物理地址范围（`can read-mem`——闪存、`Local RAM`、MMIO 寄存器）。
+   - 完整的只读 CAN 备份：**`Cflash.bin`（`1.5 MB`，经批量 `FED_READER` 用时 `~61 s`）** + **`Uflash.bin`（`32 KB`）** + **`Dflash.bin`（`64 KB`，经 `FACI Blank Check` 确定性读取）** + **`Eeprom.bin`（`8 KB`，外部 SPI EEPROM `ST M95640`，只读）** + **`Opbt.bin`（`36 B`，`OPBT0..OPBT8`、`Extra Area @ 0xFF300050` 的 `IDCODE` 与 `0xFFCD00E0` 的 `CHIP ID`，只读）**，附带 `SHA-256` 清单，此外还支持读取任意物理地址范围（`can read-mem`——闪存、`Local RAM`、MMIO 寄存器）。
    - 通过原生 RAM `FACI` 驱动对 **`DataFlash.bin`（`64 KB`，`0xFF200000..0xFF20FFFF`）**进行直接差分 CAN 写入（`FENTRYR = 0xAA80`，`64` 字节块，对 `ZDC < 0x3040` 进行完整 16 字编程以防止 `DTC 000401`，保留 `R_FDL` 硬件 `ECC`，保护 `ICUSB 0xF800..0xFFFF`，自动同步 `0x0600` 编码，以及完整的 `64 KB` 回读校验）。
    - 通过 RAM `FACI` 原子编程 **`Uflash`（`32 KB`）**引导加载程序，带自动预备份、完整的 `32 KB` 回读校验，以及实时的 `RSA` 状态探测。
    - 完整的 **`CodeFlash.bin`（`1.5 MB`）**编程：引导块 `0x00000000..0x0000BFFF`（包括位于 `0x0000A2F7` 处含 `FBL RSA` 模数的 `Sector 5`，以及自动保留位于 `0x0000AB00` 的 MCU 128 位 `SELFID`）通过 `FACI` 写入，`FD_0DATA` 通过标准 UDS（或纯 `--raw-faci`）刷写，带完整的 `1.5 MB` 回读校验、应用健康检查（`10 03` / `3E 00`）以及 `DTC` 读取/清除。
@@ -108,9 +108,9 @@ flowchart LR
 ### 方案一 — 独立可执行文件（推荐）
 
 从 **GitHub Releases** 下载：
-- **Windows**：解压 `ContiTool-v2.0.4-windows-amd64.zip`，运行 **`ContiTool.exe`**。
-- **macOS**：打开 `ContiTool-v2.0.4-macos-arm64.dmg`（或 `.zip`），运行 **`ContiTool.app`**。
-- **Linux**：解压 `ContiTool-v2.0.4-linux-x86_64.tar.gz`，运行 **`ContiTool/ContiTool`**。
+- **Windows**：解压 `ContiTool-v2.1.2-windows-amd64.zip`，运行 **`ContiTool.exe`**。
+- **macOS**：打开 `ContiTool-v2.1.2-macos-arm64.dmg`（或 `.zip`），运行 **`ContiTool.app`**。
+- **Linux**：解压 `ContiTool-v2.1.2-linux-x86_64.tar.gz`，运行 **`ContiTool/ContiTool`**。
 
 ### 方案二 — 从源码运行（`Python 3.12+`）
 

@@ -1,5 +1,39 @@
 # Changelog / История изменений / 变更日志
 
+## 2.1.2 — 2026-11-15
+
+### 🇷🇺 Исправлено
+- **Запись `Uflash` и `CodeFlash` через `FACI` на новых шлюзах `3Q0907530G` HW `527` (`A3C09035702`, #31):** устранена ошибка `FACI status error: marker=2, FSTATR=0x0000C000` на блоках свежей ревизии Vitesco (`3Q0907530AR` / `AS`, `SW 5502+`), где вывод `FLMD0` остаётся в `Low` при `FLMDCNT = 0`. Перед входом в режим `Code Flash P/E` стабы `FACI` теперь программно выставляют `FLMDCNT = 1` через защищённую последовательность `FLMDPCMD = 0xA5` с ожиданием `FPMON.FWE == 1` (`0xFFA10000` бит 7) и фиксации `FENTRYR == 0x0001`, сбрасывают застарелый `ILGLERR`, обслуживают сторожевые таймеры `WDTA0` / `WDTA1` при стирании и программировании страниц, а при выходе гарантированно возвращают `FENTRYR = 0x0000`, очищают кэш инструкций (`CFCNT` + `synci`) и снимают `FLMDCNT = 0` даже в случае ошибки.
+- **Диагностика ошибок `FACI` при записи флеш-памяти:** в `uflash_write_result.json` / `cflash_write_result.json` и текст ошибки добавлен снимок регистров контроллера (`FPMON`, `FLMDPS`, `FASTAT`, `FENTRYR`, `FPCKAR`).
+
+### 🇬🇧 Fixed
+- **`Uflash` and `CodeFlash` `FACI` programming on newer `3Q0907530G` HW `527` gateways (`A3C09035702`, #31):** fixed `FACI status error: marker=2, FSTATR=0x0000C000` on late Vitesco hardware revisions (`3Q0907530AR` / `AS`, `SW 5502+`) where `FLMD0` remains `Low` while `FLMDCNT = 0`. Before entering `Code Flash P/E`, both `FACI` stubs now assert `FLMDCNT = 1` via the `FLMDPCMD = 0xA5` protected write sequence, poll `FPMON.FWE == 1` (`0xFFA10000` bit 7) and `FENTRYR == 0x0001`, clear any stale `ILGLERR` latch, service `WDTA0` / `WDTA1` during block erase and page programming, and unconditionally restore `FENTRYR = 0x0000`, flush the code flash cache (`CFCNT` + `synci`), and clear `FLMDCNT = 0` on both completion and error paths.
+- **`FACI` flash-write error diagnostics:** `uflash_write_result.json` / `cflash_write_result.json` and raised error messages now capture a snapshot of the `FACI` state registers (`FPMON`, `FLMDPS`, `FASTAT`, `FENTRYR`, `FPCKAR`).
+
+### 🇨🇳 修复
+- **新型 `3Q0907530G` HW `527` 网关（`A3C09035702`，#31）的 `Uflash` / `CodeFlash` FACI 烧录：** 修复在 Vitesco 新版本硬件（`3Q0907530AR` / `AS`，`SW 5502+`）上 `FLMDCNT=0` 时 `FLMD0` 保持低电平导致的 `FACI status error: marker=2, FSTATR=0x0000C000`。进入 `Code Flash P/E` 模式前，FACI 桩程序现通过 `FLMDPCMD=0xA5` 保护写序列置 `FLMDCNT=1`，轮询 `FPMON.FWE==1` 与 `FENTRYR==0x0001`，清除遗留 `ILGLERR`，在擦除/编程期间喂狗 `WDTA0` / `WDTA1`，并在完成与错误路径都无条件恢复 `FENTRYR=0x0000`、刷新代码缓存（`CFCNT` + `synci`）、清除 `FLMDCNT=0`。
+- **FACI 烧录错误诊断：** `uflash_write_result.json` / `cflash_write_result.json` 及错误文本现记录 FACI 状态寄存器快照（`FPMON`、`FLMDPS`、`FASTAT`、`FENTRYR`、`FPCKAR`）。
+
+## 2.1.1 — 2026-11-14
+
+### 🇷🇺 Добавлено
+- **Отображение и чтение аппаратных идентификаторов процессора RH850/F1L (`IDCODE` и `CHIP ID`):**
+  - **128-битный `IDCODE` (`SELFID`, 16 Б):** автоматически извлекается из `CodeFlash` (`0x0000AB00..0x0000AB0F`), а также из `Extra Area` (`0xFF300050..0xFF30005F`, смещение `+0x50`) при чтении `OPBT` по CAN или открытии 256-байтного дампа `ExtraArea.bin` с автоматической сверкой совпадения обоих значений.
+  - **Кремниевый `CHIP ID` (`0xFFCD00E0..0xFFCD00FF`, 32 Б в блоке `SCDS0`):** автоматически вычитывается в режиме `RAM-Loader` при чтении `OPBT` (`can read-opbt`) и полном чтении блока (`can backup`), сохраняется в `manifest.json` / `read_opbt.json` и отображается с расшифровкой ASCII-кода партии пластины (`Wafer / Lot`).
+  - Оба идентификатора выводятся отдельной строкой в верхней панели паспорта блока, в сводной таблице раздела **«EEPROM и OPBT»**, в подробном отчёте GUI и в выводе команд CLI (`inspect` и `can read-opbt`).
+
+### 🇬🇧 Added
+- **RH850/F1L silicon hardware identifier readout and display (`IDCODE` & `CHIP ID`):**
+  - **128-bit `IDCODE` (`SELFID`, 16 B):** automatically extracted from `CodeFlash` (`0x0000AB00..0x0000AB0F`) as well as `Extra Area` (`0xFF300050..0xFF30005F`, offset `+0x50`) during CAN `OPBT` reads or from 256-byte `ExtraArea.bin` dumps, with automatic cross-verification between `CodeFlash` and `Extra Area`.
+  - **Silicon `CHIP ID` (`0xFFCD00E0..0xFFCD00FF`, 32 B in `SCDS0`):** automatically read inside `RAM-Loader` during `OPBT` reads (`can read-opbt`) and full ECU backups (`can backup`), recorded in `manifest.json` / `read_opbt.json`, and formatted alongside its decoded ASCII wafer/lot tag.
+  - Both identifiers are shown in a dedicated row of the top ECU identity bar, in the **“EEPROM & OPBT”** register summary table, in the full GUI report, and in CLI output (`inspect` and `can read-opbt`).
+
+### 🇨🇳 新增
+- **RH850/F1L 硬件标识符 `IDCODE` 与 `CHIP ID` 读取与显示：**
+  - **128 位 `IDCODE`（`SELFID`，16 字节）：** 通过 CAN 读 `OPBT` 或打开 256 字节 `ExtraArea.bin` 转储时，自动从 `CodeFlash`（`0x0000AB00..0x0000AB0F`）和 `Extra Area`（`0xFF300050..0xFF30005F`，偏移 `+0x50`）提取，并交叉比对两者是否一致。
+  - **硅片 `CHIP ID`（`0xFFCD00E0..0xFFCD00FF`，`SCDS0` 中 32 字节）：** 在 `RAM-Loader` 模式下随 `OPBT` 读取（`can read-opbt`）和完整备份（`can backup`）读出，写入 `manifest.json` / `read_opbt.json`，并显示晶圆/批次 ASCII 解码。
+  - 两者显示在 ECU 顶部标识栏、EEPROM/OPBT 汇总表、GUI 完整报告和 CLI 输出（`inspect` 与 `can read-opbt`）中。
+
 ## 2.1.0 — 2026-11-13
 
 ### 🇷🇺 Добавлено
@@ -39,6 +73,19 @@
   - Added reconnect retries while the VCI reboots over USB right after a D-PDU firmware update, and dynamic `RawCAN` resource ID lookup from the driver's `MDF` file with fallback to `0x10000`.
 - **CANable / SLCAN on Windows (RAM-Loader memory reads):** fixed `0x6F1` stream frame loss (`Stream stopped after ~30000/65536 bytes`) on genuine USB-CDC CANable adapters (`0x16D0:0x117E`). Replaced `python-can`'s byte-by-byte `serialPortOrig.read(1)` loop (~70,000 Win32 `ReadFile` IRPs/s) with bulk `in_waiting` reads and enlarged the `usbser.sys` `SetupComm` RX buffer to 256 KB.
 - **Unsupported `5Q0` and `Lear` gateways (#8, #13, #14, #15):** added an upfront platform check inside `enter_ram_loader` across all CAN workflows so MPC5607B / MPC5748G units report a clear unsupported-hardware error instead of failing with `7F 22 31`.
+
+### 🇨🇳 新增
+- **外部 SPI EEPROM（`ST M95640`，8 KB）与 RH850 选项字节（`OPBT0..OPBT8`，36 B）的只读备份与解码：** 通过固件无关的 RH850/F1L 硬件小程序（`CSIH1` SPI 与 `Extra Area` 窗口）在诊断 CAN 上读取，返回前恢复所有外设寄存器。完整 CAN 备份自动包含 `Eeprom.bin` 与 `Opbt.bin`（CLI 用 `--no-extras` 跳过）；`EEPROM` / `OPBT` 读取失败不中断主备份。新增 GUI「EEPROM 与 OPBT」页面，解码 `NvM 0x00` 护照、VIN、编码 `0x0600`、安装清单 `0x04A3`、`BEM` 电池数据、`NvM 0x5E` 安全状态、逐条 `CRC-16/CCITT-FALSE` 校验与 `OPBT0` / `OPBT8 (ICU-S)` 位域；新增 CLI 命令 `can read-eeprom`、`can read-opbt` 及 `inspect --eeprom` / `--opbt`。
+- **驾驶模式编辑器（`FPA`）：** 支持 `On` / `Off`（`0x0300`）目标模式与 15 级连续 `DCC` 阻尼滑块（`Step 1..15`，`Individual` 中 `0xFFFE`）。
+- **软件零件号与字母索引（`F187`）：** 从 `FD_0DATA` 八级变体表与 `0x0000A600` 硬件级别索引解析精确软件零件号（`3Q0907530AA` / `AC` / `AG` / `AL` / `AR` / `AS` / `8S0907468N` 等），显示在 ECU 标识栏、护照专栏与完整报告中。
+- **焕新的工程工作台 GUI：** 中性碳锌配色层级、抗锯齿字体与等宽排版、`PassThrough` HiDPI 缩放、简洁卡片与寄存器表、两行式 ECU 标识头、侧栏内存转储清单及可折叠操作日志抽屉（`Ctrl+J`）。
+
+### 🇨🇳 修复
+- **驾驶模式编辑器（`FPA`，#24）：** 修正 `CharismaFunctions` 功能组目录（`0x01..0x1C`）、目标模式映射（`8: On`、`9: Off`、`10: Snow`）、`PaCo` 字节 Big-Endian 索引（`12 - (pbit - 1) // 8`）及 `KL15` 动力总成分组标记。
+- **通过 CAN 上传 ZDC 数据集（#26）：** UDS 仅上传相对基准 `DataFlash` 实际修改过的块；有 `CodeFlash` 转储时动态解析 `RequestDownload (0x34)` 地址；`7F 34 31` / `7F 34 70` 拒绝时给出清晰说明并建议通过 RAM-Loader 写入 `DataFlash`。
+- **VAS 6154 / VNCI（D-PDU，#10、#23、#28）：** 当适配器以 `RawMode` 打开但监视器收不到 `0x77A` 应答时，自动回退到 ODIS 固定 ID 链路或硬件 `ISO_15765`（ISO-TP），`FRF` / `ODX` 烧录全程走 ISO-TP 会话；修复 D-PDU 27.2 下 1.5 MB `CodeFlash` RAM-Loader 读取在约 1.1 MB 处停滞的问题（移除逐帧 `can.jsonl` 序列化、读包从 64 KB 降至 16 KB、严格匹配 `00 00` 结束帧、失败时自动退回应用模式）；新增 VCI 固件更新后 USB 重启的重连重试及从驱动 `MDF` 文件动态查找 `RawCAN` 资源 ID。
+- **Windows 上的 CANable / SLCAN（RAM-Loader 内存读取）：** 通过批量 `in_waiting` 读取并将 `usbser.sys` `SetupComm` 接收缓冲区扩大到 256 KB，修复原厂 USB-CDC CANable（`0x16D0:0x117E`）上 `0x6F1` 流帧丢失问题。
+- **不支持的 `5Q0` 与 `Lear` 网关（#8、#13、#14、#15）：** 在所有 CAN 流程进入 RAM-Loader 前增加平台检查，MPC5607B / MPC5748G 单元现给出明确的「硬件不支持」错误，而非 `7F 22 31`。
 
 ## 2.0.4 — 2026-11-11
 
